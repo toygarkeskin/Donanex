@@ -1,11 +1,20 @@
 "use strict";
 
+/**
+ * API süreci.
+ *
+ * Açılış sırası bilinçlidir: ayarlar doğrulanmadan hiçbir bağlantı kurulmaz,
+ * şema hazır olmadan istek kabul edilmez.
+ */
 const { loadConfig, validateConfig } = require("./config/env");
 const { createPool, waitForDatabase } = require("./infrastructure/persistence/postgres/pool");
 const { runMigrations } = require("./infrastructure/persistence/postgres/migrate");
-const { seedProductsIfEmpty } = require("./infrastructure/persistence/postgres/seed");
+const { RedisCache } = require("./infrastructure/cache/RedisCache");
+const { SeqLogger } = require("./infrastructure/logging/SeqLogger");
 const { buildContainer } = require("./bootstrap/container");
-const { startScheduler } = require("./bootstrap/scheduler");
+const { syncRolesAndPermissions, ensureSystemAdmin } = require("./bootstrap/syncAccessControl");
+const { syncOAuthClients } = require("./bootstrap/syncOAuthClients");
+const { seedDemoData } = require("./bootstrap/demoSeed");
 const { createApp } = require("./presentation/http/app");
 
 async function start() {
@@ -13,36 +22,60 @@ async function start() {
 
   const problems = validateConfig(config);
   if (problems.length) {
-    throw new Error(`Geçersiz ayarlar:\n - ${problems.join("\n - ")}`);
+    console.error(`Geçersiz ayarlar:\n - ${problems.join("\n - ")}`);
+    process.exit(1);
   }
 
+  const logger = new SeqLogger({ ...config.logging, service: "pazar-api" });
   const pool = createPool(config.db);
+  const cache = new RedisCache(config.redisUrl, logger);
 
-  await waitForDatabase(pool);
-  await runMigrations(pool);
-  await seedProductsIfEmpty(pool);
+  await waitForDatabase(pool, { log: (message) => logger.info(message) });
+  await runMigrations(pool, (message) => logger.info(message));
 
-  const { commands, queries } = buildContainer({ pool, config });
-  const app = createApp({ commands, queries, config });
-  const stopScheduler = startScheduler({ commands, config });
+  if (config.redisUrl) {
+    try {
+      await cache.connect();
+      logger.info("Redis bağlantısı kuruldu");
+    } catch (error) {
+      logger.warn("Redis'e bağlanılamadı, önbellek devre dışı: {Reason}", { Reason: error.message });
+    }
+  }
+
+  const { commands, queries, services } = buildContainer({ pool, cache, logger, config });
+  services.redisClient = cache.available ? cache.client : null;
+
+  await syncRolesAndPermissions(services.unitOfWork, logger);
+  await syncOAuthClients({ ...services, config, logger });
+  await ensureSystemAdmin({ ...services, config, logger });
+  if (config.seedDemoData) await seedDemoData({ ...services, config, logger });
+
+  const app = createApp({ commands, queries, services, config });
 
   const server = app.listen(config.port, () => {
-    console.log(`API çalışıyor: http://localhost:${config.port}/api`);
-    if (config.testPaymentsEnabled) console.warn("UYARI: Test ödeme uçları AÇIK (ENABLE_TEST_PAYMENTS).");
-    if (!config.cookieSecure) console.warn("UYARI: Çerezler Secure değil. HTTPS arkasında COOKIE_SECURE=true yapın.");
+    logger.info("API hazır: {Url}", { Url: `http://localhost:${config.port}/api`, PublicUrl: config.publicUrl });
+    if (config.paymentsMode === "simulated") {
+      logger.warn("Ödeme BENZETİM kipinde: gerçek para hareketi yok");
+    }
+    if (!config.cookieSecure) {
+      logger.warn("Çerezler Secure değil — HTTPS arkasında COOKIE_SECURE=true yapın");
+    }
   });
 
-  const shutdown = (signal) => {
-    console.log(`${signal} alındı, kapatılıyor...`);
-    stopScheduler();
-    server.close(() => pool.end().finally(() => process.exit(0)));
+  const shutdown = async (signal) => {
+    logger.info("{Signal} alındı, kapatılıyor", { Signal: signal });
+    server.close(async () => {
+      await Promise.allSettled([pool.end(), cache.close(), logger.close()]);
+      process.exit(0);
+    });
     setTimeout(() => process.exit(1), 10_000).unref();
   };
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 start().catch((error) => {
   console.error("Sunucu başlatılamadı:", error.message);
+  console.error(error.stack);
   process.exit(1);
 });

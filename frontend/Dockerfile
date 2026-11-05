@@ -1,15 +1,17 @@
-# ---- Üçüncü taraf CSS/JS: npm kilit dosyasından (bütünlük özetiyle) kurulur, CDN kullanılmaz ----
-FROM node:22-alpine AS vendor
+# ---- Vue uygulamasını derle ----
+FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY scripts ./scripts
-RUN npm ci --ignore-scripts && node scripts/copy-vendor.js /vendor
+RUN npm ci
+COPY . .
+ARG VITE_API_BASE=/api
+ENV VITE_API_BASE=$VITE_API_BASE
+RUN npm run build
 
 # ---- Root olmayan nginx ----
 FROM nginxinc/nginx-unprivileged:1.29-alpine
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY public /usr/share/nginx/html
-COPY --from=vendor /vendor /usr/share/nginx/html/assets/vendor
+COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 8080
 

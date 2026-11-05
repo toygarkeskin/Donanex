@@ -1,12 +1,16 @@
-# Bilgisayar Bilgileri — tüm sistem tek komutla:
+# Pazar — çok satıcılı pazar yeri. Tüm sistem tek komutla:
 #   docker compose up --build -d
-# Site:  http://localhost:${WEB_PORT}
-# Admin: http://localhost:${WEB_PORT}/admin
+#
+# Demo adresleri (varsayılan portlarla):
+#   Site        http://localhost:8090
+#   Günlükler   http://localhost:8092        (Seq)
+#   E-postalar  http://localhost:8093        (Mailpit — giden her e-posta burada görünür)
+#   Kuyruklar   http://localhost:8094        (RabbitMQ yönetim arayüzü)
 #
 # Değerler proje kökündeki .env dosyasından okunur (.env.example'a bakın).
-# Veritabanı dışarıya açılmaz; pgAdmin vb. için docker-compose.dev.yml'yi kullanın.
+# Veritabanı, Redis ve RabbitMQ dışarıya açılmaz; yalnızca Docker ağı içinden erişilir.
 
-name: bilgisayar-bilgileri
+name: pazar
 
 x-hardening: &hardening
   restart: unless-stopped
@@ -18,76 +22,180 @@ x-hardening: &hardening
       max-size: "10m"
       max-file: "3"
 
+x-backend-env: &backend-env
+  NODE_ENV: ${NODE_ENV:-production}
+  PORT: 3000
+  TRUST_PROXY: 1
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_NAME: ${DB_NAME:?.env içinde tanımlı olmalı}
+  DB_USER: ${DB_USER:?.env içinde tanımlı olmalı}
+  DB_PASSWORD: ${DB_PASSWORD:?.env içinde tanımlı olmalı}
+  REDIS_URL: redis://cache:6379
+  RABBITMQ_URL: amqp://${RABBITMQ_USER:-pazar}:${RABBITMQ_PASSWORD:?.env içinde tanımlı olmalı}@queue:5672
+  SEQ_URL: http://logs:5341
+  SEQ_API_KEY: ${SEQ_API_KEY:-}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  SMTP_HOST: ${SMTP_HOST:-mail}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM: ${SMTP_FROM:-Pazar <bildirim@pazar.test>}
+  PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8090}
+  JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?.env içinde tanımlı olmalı — generate-env.js ile üretin}
+  JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?.env içinde tanımlı olmalı}
+  TOKEN_PEPPER: ${TOKEN_PEPPER:?.env içinde tanımlı olmalı}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@pazar.test}
+  BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+  SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+  PAYMENTS_MODE: ${PAYMENTS_MODE:-simulated}
+
 services:
   db:
     <<: *hardening
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${DB_NAME:?DB_NAME .env içinde tanımlı olmalı}
-      POSTGRES_USER: ${DB_USER:?DB_USER .env içinde tanımlı olmalı}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD .env içinde tanımlı olmalı}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - db-data:/var/lib/postgresql/data
-    networks:
-      - data
+    networks: [data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 3s
       retries: 20
 
-  backend:
+  cache:
+    <<: *hardening
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    networks: [data]
+    # Doğrudan redis kullanıcısıyla başlar: imajın root'tan yetki düşürmesi
+    # gerekmez, böylece tüm capability'ler kaldırılabilir.
+    user: "redis"
+    read_only: true
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  queue:
+    <<: *hardening
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-pazar}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - queue-data:/var/lib/rabbitmq
+    # admin ağı yönetim arayüzünü bu bilgisayara açmak için; "data" internal
+    # olduğundan oradan port yayınlanamaz.
+    networks: [data, admin]
+    ports:
+      # Yönetim arayüzü yalnızca bu bilgisayardan erişilebilir
+      - "127.0.0.1:${RABBITMQ_PORT:-8094}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  logs:
+    <<: *hardening
+    image: datalust/seq:2024.3
+    environment:
+      ACCEPT_EULA: "Y"
+    volumes:
+      - seq-data:/data
+    networks: [data, admin]
+    ports:
+      - "127.0.0.1:${SEQ_PORT:-8092}:80"
+
+  mail:
+    <<: *hardening
+    # Demo için sahte SMTP sunucusu: e-posta GERÇEKTEN gönderilir ve
+    # web arayüzünde görünür, ama internete çıkmaz.
+    image: axllent/mailpit:v1.21
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+      MP_MAX_MESSAGES: "2000"
+    networks: [data, admin]
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8093}:8025"
+
+  api:
     <<: *hardening
     build:
       context: ./backend
       target: runtime
-    env_file: .env
     environment:
-      # .env'deki yerel ayarları Docker ağı için ezer
-      DB_HOST: db
-      DB_PORT: 5432
-      PORT: 3000
-      TRUST_PROXY: 1
-      NODE_ENV: ${NODE_ENV:-production}
-      # Yerelde HTTP ile çalışır. Canlıda: COOKIE_SECURE=true, ENABLE_TEST_PAYMENTS=false
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      ENABLE_TEST_PAYMENTS: ${ENABLE_TEST_PAYMENTS:-true}
-      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${WEB_PORT:-8080}}
+      <<: *backend-env
+      ROLE: api
     depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - data
-      - edge
+      db: {condition: service_healthy}
+      cache: {condition: service_healthy}
+      queue: {condition: service_healthy}
+    networks: [data, edge]
     read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
-    expose:
-      - "3000"
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    volumes:
+      # İlk kurulumda üretilen yönetici parolası buraya yazılır
+      - bootstrap:/app/var
+    expose: ["3000"]
 
-  frontend:
+  worker:
     <<: *hardening
-    build: ./frontend
+    build:
+      context: ./backend
+      target: runtime
+    command: ["node", "src/worker.js"]
+    environment:
+      <<: *backend-env
+      ROLE: worker
+    # Worker HTTP sunmaz; imajdan gelen HTTP sağlık kontrolü geçerli değil.
+    healthcheck:
+      disable: true
     depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - edge
+      api: {condition: service_healthy}
+    networks: [data]
     read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+
+  web:
+    <<: *hardening
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: /api
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [edge]
+    read_only: true
+    tmpfs: [/tmp, /var/cache/nginx, /var/run]
+    cap_drop: [ALL]
     ports:
-      - "${WEB_PORT:-8080}:8080"
+      - "${WEB_PORT:-8090}:8080"
 
 networks:
-  # Veritabanı yalnızca backend'den görünür, dış ağa çıkamaz.
+  # Veritabanı, önbellek ve kuyruk yalnızca burada; dış ağa çıkışı yoktur.
   data:
     internal: true
+  # Web konteyneri ile API arasındaki bağlantı.
   edge:
+  # Yalnızca gözlem araçlarının arayüzlerini bu bilgisayara açmak için.
+  admin:
 
 volumes:
   db-data:
+  queue-data:
+  seq-data:
+  bootstrap:

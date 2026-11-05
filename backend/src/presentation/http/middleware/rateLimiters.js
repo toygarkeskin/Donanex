@@ -1,38 +1,62 @@
 "use strict";
 
 const rateLimit = require("express-rate-limit");
+const { RedisStore } = require("rate-limit-redis");
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 const passThrough = (_req, _res, next) => next();
 
-function createRateLimiters({ enabled = true } = {}) {
-  const limiter = (limit, error, options = {}) =>
+/**
+ * İstek sınırları.
+ *
+ * Sayaçlar Redis'te tutulur: birden çok API konteyneri çalıştığında sınır
+ * ortak sayılır ve sunucu yeniden başlayınca sıfırlanmaz.
+ *
+ * Giriş ve parola uçlarında yalnızca BAŞARISIZ denemeler sayılır; doğru
+ * parolayla çalışan kullanıcı sınıra takılmaz.
+ */
+function createRateLimiters({ enabled = true, redisClient = null } = {}) {
+  /**
+   * Her limitin KENDİ Redis öneki olmalıdır. Ortak önek kullanılırsa bütün
+   * limitler tek bir sayacı paylaşır ve en dar limit (ör. kayıt) tüm siteyi
+   * kilitler — sessiz ama yıkıcı bir hata.
+   */
+  const storeFor = (name) =>
+    redisClient
+      ? new RedisStore({
+          prefix: `rl:${name}:`,
+          sendCommand: (...args) => redisClient.sendCommand(args)
+        })
+      : undefined;
+
+  const limiter = (name, limit, message, options = {}) =>
     enabled
       ? rateLimit({
           windowMs: FIFTEEN_MINUTES,
           limit,
           standardHeaders: "draft-8",
           legacyHeaders: false,
-          message: { success: false, message: error },
+          store: storeFor(name),
+          message: { error: "rate_limited", message },
           ...options
         })
       : passThrough;
 
-  const TRY_LATER = "Lütfen daha sonra tekrar deneyin.";
+  const LATER = "Lütfen daha sonra tekrar deneyin.";
   const failedOnly = { skipSuccessfulRequests: true };
 
   return {
-    api: limiter(600, `Çok fazla istek gönderildi. ${TRY_LATER}`),
-    // Her form kendi sayacını kullanır; başarılı girişler sayılmaz.
-    adminLogin: limiter(5, `Çok fazla hatalı giriş. ${TRY_LATER}`, failedOnly),
-    customerLogin: limiter(10, `Çok fazla hatalı giriş. ${TRY_LATER}`, failedOnly),
-    passwordChange: limiter(10, `Çok fazla deneme. ${TRY_LATER}`, failedOnly),
-    passwordReset: limiter(5, `Çok fazla parola sıfırlama isteği. ${TRY_LATER}`),
-    tracking: limiter(30, `Çok fazla takip denemesi. ${TRY_LATER}`),
-    registration: limiter(5, `Çok fazla kayıt denemesi. ${TRY_LATER}`),
-    support: limiter(5, `Çok fazla destek talebi gönderdiniz. ${TRY_LATER}`),
-    // Stok ayırma suistimalini (sahte siparişlerle stoğu kilitleme) sınırlar.
-    orders: limiter(10, `Çok fazla sipariş denemesi. ${TRY_LATER}`)
+    api: limiter("api", 900, `Çok fazla istek gönderildi. ${LATER}`),
+    signIn: limiter("signin", 10, `Çok fazla hatalı giriş denemesi. ${LATER}`, failedOnly),
+    register: limiter("register", 10, `Çok fazla kayıt denemesi. ${LATER}`),
+    token: limiter("token", 120, `Çok fazla jeton isteği. ${LATER}`),
+    passwordReset: limiter("pwreset", 5, `Çok fazla parola sıfırlama isteği. ${LATER}`),
+    passwordChange: limiter("pwchange", 10, `Çok fazla deneme. ${LATER}`, failedOnly),
+    // Sahte siparişlerle stok kilitlemeyi sınırlar.
+    checkout: limiter("checkout", 30, `Çok fazla sipariş denemesi. ${LATER}`),
+    tracking: limiter("tracking", 30, `Çok fazla takip denemesi. ${LATER}`),
+    support: limiter("support", 10, `Çok fazla destek talebi gönderdiniz. ${LATER}`),
+    storeApplication: limiter("storeapp", 3, `Çok fazla mağaza başvurusu. ${LATER}`)
   };
 }
 

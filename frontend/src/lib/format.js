@@ -1,0 +1,90 @@
+const currency = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" });
+const dateTime = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" });
+const dateOnly = new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" });
+
+/** Sunucu parayı { cents, amount, currency } nesnesi olarak döndürür. */
+export function money(value) {
+  if (value === null || value === undefined) return "—";
+  const cents = typeof value === "object" ? value.cents : value;
+  return currency.format(Number(cents || 0) / 100);
+}
+
+/** Form alanlarında kullanılacak düz sayı (ör. 199.90). */
+export const toAmount = (value) =>
+  value && typeof value === "object" ? (Number(value.cents || 0) / 100).toFixed(2) : "";
+
+export function formatDate(value, withTime = true) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return (withTime ? dateTime : dateOnly).format(date);
+}
+
+/** Yalnızca http/https adresini döndürür; aksi halde boş metin. */
+export function safeUrl(value) {
+  try {
+    const url = new URL(String(value));
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+export const ORDER_STATUS = {
+  pending_payment: { label: "Ödeme bekleniyor", tone: "warn" },
+  paid: { label: "Ödendi", tone: "info" },
+  payment_failed: { label: "Ödeme başarısız", tone: "bad" },
+  cancelled: { label: "İptal edildi", tone: "bad" },
+  completed: { label: "Tamamlandı", tone: "good" }
+};
+
+export const PACKAGE_STATUS = {
+  pending: { label: "Bekliyor", tone: "warn" },
+  preparing: { label: "Hazırlanıyor", tone: "info" },
+  shipped: { label: "Kargoya verildi", tone: "info" },
+  delivered: { label: "Teslim edildi", tone: "good" },
+  cancelled: { label: "İptal edildi", tone: "bad" },
+  refunded: { label: "İade edildi", tone: "bad" }
+};
+
+export const PRODUCT_STATUS = {
+  draft: { label: "Taslak", tone: "neutral" },
+  active: { label: "Yayında", tone: "good" },
+  archived: { label: "Arşivde", tone: "neutral" }
+};
+
+export const STORE_STATUS = {
+  pending: { label: "Onay bekliyor", tone: "warn" },
+  active: { label: "Aktif", tone: "good" },
+  suspended: { label: "Askıda", tone: "bad" }
+};
+
+export const TICKET_STATUS = {
+  open: { label: "Açık", tone: "warn" },
+  in_progress: { label: "İnceleniyor", tone: "info" },
+  answered: { label: "Yanıtlandı", tone: "good" },
+  closed: { label: "Kapatıldı", tone: "neutral" }
+};
+
+export const USER_STATUS = {
+  active: { label: "Aktif", tone: "good" },
+  suspended: { label: "Askıda", tone: "bad" }
+};
+
+export const ROLE_LABELS = {
+  SYSTEM_ADMIN: "Sistem Yöneticisi",
+  STORE_OWNER: "Mağaza Sahibi",
+  STORE_STAFF: "Mağaza Çalışanı",
+  CUSTOMER: "Müşteri"
+};
+
+export const CARRIERS = [
+  "Yurtiçi Kargo",
+  "Aras Kargo",
+  "MNG Kargo",
+  "PTT Kargo",
+  "Sürat Kargo",
+  "UPS",
+  "Diğer"
+];
+
+export const describe = (map, key) => map[key] || { label: key || "—", tone: "neutral" };

@@ -3,28 +3,32 @@
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
- * CSRF için ikinci savunma hattı (ilki SameSite=Strict çerezler):
- * durum değiştiren isteklerde başka bir siteden gelen Origin reddedilir.
+ * CSRF'e karşı ikinci savunma hattı.
+ *
+ * Birinci hat SameSite çerezleridir. Burada ayrıca, durum değiştiren
+ * isteklerde Origin başlığının kendi sunucumuzu göstermesi aranır.
+ * Tarayıcı Origin'i taklit edilemez; başka bir siteden gönderilen istek
+ * çerezleri taşısa bile burada durur.
  */
 function originGuard(req, res, next) {
   if (SAFE_METHODS.has(req.method)) return next();
 
+  const reject = () =>
+    res.status(403).json({ error: "forbidden_origin", message: "Bu kaynaktan gelen istek kabul edilmiyor." });
+
   const origin = req.get("origin");
   if (origin) {
-    let originHost = null;
+    let host = null;
     try {
-      originHost = new URL(origin).host;
+      host = new URL(origin).host;
     } catch {
-      /* aşağıda reddedilir */
+      return reject();
     }
-    if (originHost !== req.get("host")) {
-      return res.status(403).json({ success: false, message: "Bu kaynaktan gelen istek kabul edilmiyor." });
-    }
+    if (host !== req.get("host")) return reject();
   }
-  if (req.get("sec-fetch-site") === "cross-site") {
-    return res.status(403).json({ success: false, message: "Bu kaynaktan gelen istek kabul edilmiyor." });
-  }
-  next();
+
+  if (req.get("sec-fetch-site") === "cross-site") return reject();
+  return next();
 }
 
 module.exports = { originGuard };

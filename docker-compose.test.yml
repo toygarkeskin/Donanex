@@ -1,10 +1,11 @@
-# Tüm backend testleri (birim + mimari + gerçek PostgreSQL ile API):
+# Tüm backend testleri (birim + mimari + gerçek Postgres/Redis ile API testleri):
 #   docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
 #   docker compose -f docker-compose.test.yml down -v
 #
-# Tek kullanımlık veritabanı kullanır; gerçek veriye ve gerçek SMTP'ye dokunmaz.
+# Tek kullanımlık veritabanı kullanır; gerçek veriye, gerçek SMTP'ye ve
+# çalışan sisteme dokunmaz.
 
-name: bilgisayar-bilgileri-test
+name: pazar-test
 
 services:
   test-db:
@@ -13,10 +14,18 @@ services:
       POSTGRES_DB: test
       POSTGRES_USER: test
       POSTGRES_PASSWORD: test-only-password
-    tmpfs:
-      - /var/lib/postgresql/data
+    tmpfs: [/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test -d test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  test-cache:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -32,6 +41,7 @@ services:
       TEST_DB_NAME: test
       TEST_DB_USER: test
       TEST_DB_PASSWORD: test-only-password
+      TEST_REDIS_URL: redis://test-cache:6379
     depends_on:
-      test-db:
-        condition: service_healthy
+      test-db: {condition: service_healthy}
+      test-cache: {condition: service_healthy}

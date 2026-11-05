@@ -2,59 +2,102 @@
 
 const { ConflictError } = require("../shared/errors");
 
+/**
+ * Sipariş iki seviyelidir:
+ *
+ *   Order   — müşterinin tek seferde verdiği sipariş ve ödemesi
+ *   Package — her mağazaya düşen parça; kargoyu mağaza kendi yönetir
+ *
+ * Çok satıcılı yapıda bir sipariş birden çok mağazaya bölünebildiği için
+ * kargo ve hazırlık durumu paket seviyesindedir.
+ */
 const OrderStatus = Object.freeze({
-  AWAITING_PAYMENT: "Ödeme bekleniyor",
-  TEST_SUCCEEDED: "Test başarılı",
-  TEST_FAILED: "Test başarısız",
-  PREPARING: "Hazırlanıyor",
-  SHIPPED: "Kargoya verildi",
-  DELIVERED: "Teslim edildi",
-  COMPLETED: "Tamamlandı",
-  CANCELLED: "İptal edildi"
+  PENDING_PAYMENT: "pending_payment",
+  PAID: "paid",
+  PAYMENT_FAILED: "payment_failed",
+  CANCELLED: "cancelled",
+  COMPLETED: "completed"
 });
 
-const ALL_STATUSES = Object.freeze(Object.values(OrderStatus));
-
-/** Sipariş yaşam döngüsü: her durumdan yalnızca buradaki durumlara geçilebilir. */
-const TRANSITIONS = Object.freeze({
-  [OrderStatus.AWAITING_PAYMENT]: [
-    OrderStatus.TEST_SUCCEEDED,
-    OrderStatus.TEST_FAILED,
-    OrderStatus.PREPARING,
-    OrderStatus.CANCELLED
-  ],
-  [OrderStatus.TEST_SUCCEEDED]: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
-  [OrderStatus.TEST_FAILED]: [],
-  [OrderStatus.PREPARING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
-  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
-  [OrderStatus.DELIVERED]: [OrderStatus.COMPLETED],
-  [OrderStatus.COMPLETED]: [],
-  [OrderStatus.CANCELLED]: []
+const PackageStatus = Object.freeze({
+  // Ödeme bekleniyor ya da ödendi ama mağaza henüz hazırlığa başlamadı
+  PENDING: "pending",
+  PREPARING: "preparing",
+  SHIPPED: "shipped",
+  DELIVERED: "delivered",
+  CANCELLED: "cancelled",
+  REFUNDED: "refunded"
 });
 
-/** Bu durumlara geçen siparişin ayırdığı stok ürünlere geri verilir. */
-const STOCK_RELEASING_STATUSES = Object.freeze([OrderStatus.TEST_FAILED, OrderStatus.CANCELLED]);
+const ORDER_TRANSITIONS = Object.freeze({
+  [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.PAYMENT_FAILED, OrderStatus.CANCELLED],
+  [OrderStatus.PAID]: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+  [OrderStatus.PAYMENT_FAILED]: [],
+  [OrderStatus.CANCELLED]: [],
+  [OrderStatus.COMPLETED]: []
+});
 
-/** Müşterinin kendi başına iptal edebileceği durumlar (henüz hazırlanmamış). */
-const CUSTOMER_CANCELLABLE = Object.freeze([OrderStatus.AWAITING_PAYMENT, OrderStatus.TEST_SUCCEEDED]);
+const PACKAGE_TRANSITIONS = Object.freeze({
+  [PackageStatus.PENDING]: [PackageStatus.PREPARING, PackageStatus.CANCELLED],
+  [PackageStatus.PREPARING]: [PackageStatus.SHIPPED, PackageStatus.CANCELLED],
+  [PackageStatus.SHIPPED]: [PackageStatus.DELIVERED],
+  [PackageStatus.DELIVERED]: [PackageStatus.REFUNDED],
+  [PackageStatus.CANCELLED]: [],
+  [PackageStatus.REFUNDED]: []
+});
 
-const isValidStatus = (status) => ALL_STATUSES.includes(status);
-const releasesStock = (status) => STOCK_RELEASING_STATUSES.includes(status);
-const nextStatuses = (status) => TRANSITIONS[status] || [];
+/** Bu durumlara geçen paketin ayırdığı stok ürüne geri verilir. */
+const STOCK_RELEASING = Object.freeze([PackageStatus.CANCELLED, PackageStatus.REFUNDED]);
+
+/** Müşteri kendi siparişini yalnızca hazırlık başlamadan iptal edebilir. */
+const CUSTOMER_CANCELLABLE = Object.freeze([PackageStatus.PENDING, PackageStatus.PREPARING]);
+
+const isOrderStatus = (status) => Object.values(OrderStatus).includes(status);
+const isPackageStatus = (status) => Object.values(PackageStatus).includes(status);
+const releasesStock = (status) => STOCK_RELEASING.includes(status);
 const canCustomerCancel = (status) => CUSTOMER_CANCELLABLE.includes(status);
+const nextOrderStatuses = (status) => ORDER_TRANSITIONS[status] || [];
+const nextPackageStatuses = (status) => PACKAGE_TRANSITIONS[status] || [];
 
-function assertTransition(from, to) {
-  if (!nextStatuses(from).includes(to)) {
-    throw new ConflictError(`Sipariş "${from}" durumundan "${to}" durumuna alınamaz.`);
+function assertOrderTransition(from, to) {
+  if (from === to) return;
+  if (!nextOrderStatuses(from).includes(to)) {
+    throw new ConflictError(`Sipariş "${from}" durumundan "${to}" durumuna geçemez.`);
   }
+}
+
+function assertPackageTransition(from, to) {
+  if (from === to) return;
+  if (!nextPackageStatuses(from).includes(to)) {
+    throw new ConflictError(`Paket "${from}" durumundan "${to}" durumuna geçemez.`);
+  }
+}
+
+/** Paketlerin durumundan siparişin genel durumunu türetir. */
+function deriveOrderStatus(current, packageStatuses) {
+  if (current === OrderStatus.PENDING_PAYMENT || current === OrderStatus.PAYMENT_FAILED) return current;
+  if (!packageStatuses.length) return current;
+
+  const every = (status) => packageStatuses.every((value) => value === status);
+  const all = (statuses) => packageStatuses.every((value) => statuses.includes(value));
+
+  if (every(PackageStatus.CANCELLED)) return OrderStatus.CANCELLED;
+  if (all([PackageStatus.DELIVERED, PackageStatus.CANCELLED, PackageStatus.REFUNDED])) {
+    return OrderStatus.COMPLETED;
+  }
+  return OrderStatus.PAID;
 }
 
 module.exports = {
   OrderStatus,
-  ALL_STATUSES,
-  isValidStatus,
+  PackageStatus,
+  isOrderStatus,
+  isPackageStatus,
   releasesStock,
-  nextStatuses,
   canCustomerCancel,
-  assertTransition
+  nextOrderStatuses,
+  nextPackageStatuses,
+  assertOrderTransition,
+  assertPackageTransition,
+  deriveOrderStatus
 };

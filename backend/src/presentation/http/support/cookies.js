@@ -1,16 +1,32 @@
 "use strict";
 
-const ADMIN_COOKIE = "admin_session";
-const CUSTOMER_COOKIE = "customer_session";
+/**
+ * Çerez adları ve üretimi tek yerde.
+ *
+ *  sso  — tarayıcı oturumu; /oauth/authorize adımında "zaten giriş yapılmış"
+ *         demeye yarar. SameSite=Lax, çünkü OAuth yönlendirmesi üst düzey
+ *         gezinmeyle gelir.
+ *  rt   — yenileme jetonu. SameSite=Strict; yalnızca kendi sayfamızdan
+ *         yapılan XHR ile kullanılır. Tarayıcıdaki JavaScript okuyamaz.
+ *  cart — misafir sepetinin kimliği. Sepetin kendisi sunucudadır.
+ *
+ * Erişim jetonu ÇEREZDE TUTULMAZ: arayüz onu bellekte tutar, böylece
+ * CSRF yüzeyi daralır ve jeton sekme kapanınca kaybolur.
+ */
+const COOKIES = Object.freeze({
+  SSO: "pzr_sso",
+  REFRESH: "pzr_rt",
+  CART: "pzr_cart"
+});
 
 function parseCookies(req) {
   const result = Object.create(null);
-  for (const item of (req.headers.cookie || "").split(";")) {
-    const index = item.indexOf("=");
+  for (const part of (req.headers.cookie || "").split(";")) {
+    const index = part.indexOf("=");
     if (index < 0) continue;
-    const key = item.slice(0, index).trim();
+    const key = part.slice(0, index).trim();
     try {
-      result[key] = decodeURIComponent(item.slice(index + 1).trim());
+      result[key] = decodeURIComponent(part.slice(index + 1).trim());
     } catch {
       /* bozuk çerez yok sayılır */
     }
@@ -19,13 +35,25 @@ function parseCookies(req) {
 }
 
 /** maxAgeSeconds null ise tarayıcı kapanınca silinen oturum çerezi olur. */
-function sessionCookie(name, value, maxAgeSeconds, secure) {
-  const age = maxAgeSeconds === null ? "" : `; Max-Age=${maxAgeSeconds}`;
-  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Strict; Path=/${age}${secure ? "; Secure" : ""}`;
+function buildCookie(name, value, { maxAgeSeconds = null, secure, sameSite = "Strict", path = "/" } = {}) {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    "HttpOnly",
+    `SameSite=${sameSite}`,
+    `Path=${path}`
+  ];
+  if (maxAgeSeconds !== null) parts.push(`Max-Age=${Math.floor(maxAgeSeconds)}`);
+  if (secure) parts.push("Secure");
+  return parts.join("; ");
 }
 
-function clearCookie(name, secure) {
-  return sessionCookie(name, "", 0, secure);
+const clearCookie = (name, options) => buildCookie(name, "", { ...options, maxAgeSeconds: 0 });
+
+/** Aynı yanıtta birden çok çerez gönderebilmek için. */
+function appendCookie(res, cookie) {
+  const existing = res.getHeader("Set-Cookie");
+  if (!existing) res.setHeader("Set-Cookie", [cookie]);
+  else res.setHeader("Set-Cookie", [...(Array.isArray(existing) ? existing : [existing]), cookie]);
 }
 
-module.exports = { ADMIN_COOKIE, CUSTOMER_COOKIE, parseCookies, sessionCookie, clearCookie };
+module.exports = { COOKIES, parseCookies, buildCookie, clearCookie, appendCookie };

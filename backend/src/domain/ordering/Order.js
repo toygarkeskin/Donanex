@@ -1,101 +1,105 @@
 "use strict";
 
 const { ValidationError, ConflictError } = require("../shared/errors");
-const { isNonEmptyString, isEmail, isPhone, isId } = require("../shared/guards");
-const { toCents, centsToDecimalString } = require("../shared/money");
-const { OrderStatus } = require("./OrderStatus");
+const { Money } = require("../shared/Money");
+const { requireText, requireEmail, isPhone } = require("../shared/guards");
+const { OrderStatus, PackageStatus } = require("./OrderStatus");
 
-const MAX_LINES = 100;
-const MAX_QUANTITY = 99;
-
-/** Sipariş oluşturma kuralları (saf iş mantığı, veritabanı bilmez). */
+/**
+ * Sipariş oluşturma kuralları. Tutar ve stok kontrolü tamamen sunucuda yapılır;
+ * istemciden gelen fiyat hiçbir aşamada kullanılmaz.
+ *
+ * Kayıtsız (misafir) kullanıcı da sipariş verebilir: userId null olur,
+ * iletişim bilgisi siparişin üzerinde taşınır.
+ */
 class Order {
-  /** Alıcı bilgisini ve sepet satırlarını doğrular; aynı ürünün satırlarını birleştirir. */
+  /** Teslimat ve iletişim bilgisini doğrular. */
   static validateCheckout(input) {
-    const { fullName, email, phone, address, items } = input || {};
+    const data = input || {};
+    const contact = data.contact || {};
+    const address = data.shippingAddress || {};
 
-    const valid =
-      isNonEmptyString(fullName, 150) &&
-      isEmail(email) &&
-      isPhone(phone) &&
-      isNonEmptyString(address, 1000) &&
-      Array.isArray(items) &&
-      items.length > 0 &&
-      items.length <= MAX_LINES &&
-      items.every(
-        (item) =>
-          item &&
-          isId(item.productId) &&
-          Number.isInteger(item.quantity) &&
-          item.quantity >= 1 &&
-          item.quantity <= MAX_QUANTITY
-      );
+    if (!isPhone(contact.phone)) throw new ValidationError("Telefon numarası geçersiz.");
 
-    if (!valid) {
-      throw new ValidationError("Lütfen alıcı bilgilerini ve sepetinizi kontrol edin.");
-    }
-
-    const quantities = new Map();
-    for (const item of items) {
-      const id = Number(item.productId);
-      quantities.set(id, (quantities.get(id) || 0) + item.quantity);
-    }
-
-    return {
-      recipient: {
-        name: fullName.trim(),
-        email: email.trim().toLowerCase(),
-        phone: phone.trim(),
-        address: address.trim()
-      },
-      items: [...quantities].map(([productId, quantity]) => ({ productId, quantity }))
-    };
+    return Object.freeze({
+      contact: Object.freeze({
+        email: requireEmail(contact.email),
+        fullName: requireText(contact.fullName, "Ad Soyad", 150),
+        phone: String(contact.phone).trim()
+      }),
+      shippingAddress: Object.freeze({
+        fullName: requireText(address.fullName, "Teslim alacak kişi", 150),
+        phone: isPhone(address.phone) ? String(address.phone).trim() : String(contact.phone).trim(),
+        city: requireText(address.city, "İl", 80),
+        district: requireText(address.district, "İlçe", 80),
+        line: requireText(address.line, "Açık adres", 500),
+        postalCode: address.postalCode ? requireText(address.postalCode, "Posta kodu", 20) : null
+      }),
+      note: data.note ? requireText(data.note, "Sipariş notu", 500) : null
+    });
   }
 
   /**
-   * Miktar, stok ve toplamı sunucuda hesaplar (istemci fiyatına güvenilmez).
+   * Sepeti mağazalara göre paketlere böler ve tutarları hesaplar.
    *
-   * @param {Array<{productId:number,quantity:number}>} items
-   * @param {Array<{id:number,name:string,price:string|number,stock:number}>} products
+   * @param {object} checkout  validateCheckout sonucu
+   * @param {Array}  lines     [{productId, quantity}]
+   * @param {Map}    products  veritabanından KİLİTLENEREK okunmuş güncel ürünler
    */
-  static place({ customerId, recipient, items, products }) {
-    const byId = new Map(products.map((p) => [Number(p.id), p]));
+  static place({ userId = null, checkout, lines, products }) {
+    if (!lines.length) throw new ValidationError("Sepetiniz boş.");
 
-    let totalCents = 0;
-    const lines = items.map(({ productId, quantity }) => {
-      const product = byId.get(productId);
-      if (!product) {
-        throw new ValidationError("Sepetinizde satışta olmayan bir ürün var.");
+    const byStore = new Map();
+
+    for (const line of lines) {
+      const product = products.get(line.productId);
+      if (!product || product.status !== "active") {
+        throw new ConflictError("Sepetinizde satışta olmayan bir ürün var.");
       }
-      if (Number(product.stock) < quantity) {
+      if (product.storeStatus !== "active") {
+        throw new ConflictError(`"${product.storeName}" mağazası şu anda satış yapmıyor.`);
+      }
+      if (product.stock < line.quantity) {
         throw new ConflictError(
-          `"${product.name}" ürününden yeterli stok yok. Mevcut stok: ${product.stock}`
+          `"${product.name}" ürününden yeterli stok yok. Kalan: ${product.stock} adet`
         );
       }
-      const unitCents = toCents(product.price);
-      if (unitCents === null) throw new Error("Ürün fiyatı geçersiz.");
 
-      totalCents += unitCents * quantity;
-      return {
+      const unitPrice = Money.fromCents(product.priceCents);
+      const item = {
         productId: product.id,
         productName: product.name,
-        quantity,
-        unitPrice: centsToDecimalString(unitCents)
+        productImageUrl: product.imageUrl,
+        unitPrice,
+        quantity: line.quantity,
+        lineTotal: unitPrice.multiply(line.quantity)
       };
-    });
 
-    if (!Number.isSafeInteger(totalCents) || totalCents > 999_999_999_999) {
-      throw new ValidationError("Sipariş tutarı izin verilen sınırı aşıyor.");
+      if (!byStore.has(product.storeId)) {
+        byStore.set(product.storeId, { storeId: product.storeId, storeName: product.storeName, items: [] });
+      }
+      byStore.get(product.storeId).items.push(item);
     }
 
-    return {
-      customerId: customerId || null,
-      recipient,
-      lines,
-      total: centsToDecimalString(totalCents),
-      status: OrderStatus.AWAITING_PAYMENT
-    };
+    const packages = [...byStore.values()].map((pkg) => ({
+      ...pkg,
+      subtotal: Money.sum(pkg.items.map((item) => item.lineTotal)),
+      status: PackageStatus.PENDING
+    }));
+
+    const total = Money.sum(packages.map((pkg) => pkg.subtotal));
+    if (total.isZero()) throw new ValidationError("Sipariş tutarı sıfır olamaz.");
+
+    return Object.freeze({
+      userId,
+      contact: checkout.contact,
+      shippingAddress: checkout.shippingAddress,
+      note: checkout.note,
+      packages,
+      total,
+      status: OrderStatus.PENDING_PAYMENT
+    });
   }
 }
 
-module.exports = { Order, MAX_QUANTITY };
+module.exports = { Order };

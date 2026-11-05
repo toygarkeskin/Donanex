@@ -1,13 +1,24 @@
-# İsteğe bağlı: veritabanını yalnızca bu bilgisayara açar (pgAdmin vb. için).
+# İsteğe bağlı: veritabanını ve önbelleği yalnızca bu bilgisayara açar
+# (pgAdmin, psql, redis-cli gibi araçlarla bakmak için).
+#
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# "data" ağı internal olduğu için port yayınlanamaz; bu yüzden her iki servis
+# de ayrıca "admin" ağına alınır.
 
 services:
   db:
-    networks:
-      - data
-      - db-admin
+    networks: [data, admin]
     ports:
       - "127.0.0.1:${DB_PUBLISH_PORT:-5434}:5432"
 
-networks:
-  db-admin:
+  cache:
+    networks: [data, admin]
+    ports:
+      - "127.0.0.1:${REDIS_PUBLISH_PORT:-6380}:6379"
+
+  # API'yi nginx'e uğramadan doğrudan çağırmak için (curl, Postman, testler).
+  api:
+    networks: [data, edge, admin]
+    ports:
+      - "127.0.0.1:${API_PUBLISH_PORT:-8095}:3000"

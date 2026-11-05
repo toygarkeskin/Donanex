@@ -1,37 +1,84 @@
-# Security
+# Güvenlik
 
-## Controls in place
+## Alınan önlemler
 
-| Risk | Control | Verified by |
+Her satırdaki "nerede sınanıyor" sütunu, önlemin bir testle korunduğunu gösterir; kod değişince
+test kırılır.
+
+| Risk | Önlem | Nerede sınanıyor |
 |---|---|---|
-| Order tampering / IDOR | Payment and order summary endpoints need the order's tracking code; customers can only act on their own orders; other people's orders return the same 404 as missing ones | `tests/integration/api.test.js` |
-| Price tampering | Totals are computed on the server; client prices are ignored | integration |
-| Overselling | Row locks inside one transaction | integration (10 concurrent orders, stock 3) |
-| Stock lockup | Order rate limit; unpaid orders expire and return stock | integration |
-| SQL injection | Parameterized queries only; `LIKE` wildcards escaped; IDs range-checked | integration |
-| XSS | `html` template tag escapes by default; `setHtml` accepts nothing else; strict CSP with no inline script or style | browser test, `npm run check` |
-| Third-party scripts | Bootstrap and icons are installed from the npm lockfile and self-hosted; `script-src 'self'` | CSP header |
-| CSRF | `SameSite=Strict` cookies plus an `Origin` / `Sec-Fetch-Site` check on state-changing requests | integration |
-| Session theft | `HttpOnly` signed cookies; logout revokes the token server-side; password change ends other sessions; customer tokens cannot act as admin | integration, unit |
-| Password storage | scrypt (N=2^16, r=8, p=2) with a per-user salt; older hashes upgrade at login | unit, integration |
-| Brute force | Per-IP limits on login, registration, tracking, reset and support; nginx request limit | integration |
-| Account discovery | Login takes the same work for unknown e-mails; password reset always gives the same response | integration |
-| Password reset | Single-use, 30 minutes, hash stored; token travels in the URL fragment; link built from `PUBLIC_URL`, not the Host header | integration |
-| CSV formula injection | Exported cells starting with `= + - @` are neutralized | code review |
-| Container escape / lateral movement | Non-root, read-only filesystem, all capabilities dropped, `no-new-privileges`; database on an internal network with no published port | `docker compose ps`, manual check |
-| Secret leakage | `.env` is git-ignored and excluded from images; error responses hide details; logs omit query strings and bodies | manual check |
+| Başkasının siparişine erişim (IDOR) | Sahiplik sorgunun parçasıdır; "başkasının" ile "olmayan" aynı 404'ü döner | entegrasyon |
+| Misafir siparişinin ele geçirilmesi | Ödeme ve görüntüleme takip kodu ister; kodun yalnızca HMAC özeti saklanır | entegrasyon |
+| Mağazalar arası veri sızması | Her uç `{ storeId }` kapsamıyla yetki sorar; sorgular `store_id` ile sınırlıdır | entegrasyon, birim |
+| Yetki yükseltme | Mağazaya bağlı rol sistem geneli izni veremez | birim (`AccessPolicy`) |
+| Fiyat oynaması | Tutar sunucuda hesaplanır; istemciden gelen fiyat ve toplam yok sayılır | entegrasyon |
+| Fazla satış (overselling) | `SELECT … FOR UPDATE` ile satır kilidi, tek transaction | entegrasyon (10 eş zamanlı istek) |
+| **Transaction sızması** | Açık transaction `AsyncLocalStorage`'da; istekler birbirinin transaction'ını kullanamaz | entegrasyon |
+| Stok kilitleme suistimali | Sipariş hız sınırı; ödenmeyen sipariş süre sonunda iptal edilir, stok iade edilir | birim, entegrasyon |
+| SQL enjeksiyonu | Yalnızca parametreli sorgu; `LIKE` jokerleri kaçırılır; kimlikler UUID doğrulamasından geçer | entegrasyon |
+| XSS | Vue varsayılan olarak kaçırır; `v-html` hiç kullanılmaz; katı CSP (`script-src 'self'`) | tarayıcı denetimi |
+| CSRF | `SameSite` çerezler + durum değiştiren isteklerde `Origin` / `Sec-Fetch-Site` denetimi | entegrasyon |
+| Jeton çalınması | 15 dk erişim jetonu; yenileme jetonu HttpOnly çerezde; döndürmeli yenileme + aile iptali | entegrasyon |
+| Yetkilendirme kodu çalınması | PKCE S256 **zorunlu**; kod tek kullanımlık ve doğrulamadan önce tüketilir | entegrasyon |
+| Açık yönlendirme | `redirect_uri` **tam eşleşme**; doğrulanmadan hiçbir yönlendirme yapılmaz | birim, entegrasyon |
+| Jeton sahteciliği | RS256 sabit; `alg: none` ve HMAC'e düşürme reddedilir; `iss`/`aud`/`exp` denetlenir | birim |
+| Yetki değişiminin gecikmesi | İzinler jetona gömülmez, her istekte çözülür; değişimde önbellek silinir | entegrasyon |
+| Parola çalınması | scrypt (N=2^16, r=8, p=2), kullanıcıya özel tuz, girişte otomatik yükseltme | birim |
+| Kaba kuvvet | Uç başına ayrı Redis önekli hız sınırı; başarılı giriş sayılmaz; nginx istek sınırı | entegrasyon |
+| Hesap sayımı | Giriş ve parola sıfırlama kayıtlı e-postayı ele vermez; aynı süre, aynı yanıt | entegrasyon |
+| Oturum devamlılığı | Parola değişimi diğer oturumları düşürür; çıkış sunucuda iptal eder | entegrasyon |
+| Askıya alınan hesap | Oturumlar kapatılır, erişim anında kesilir | entegrasyon |
+| Sıfırlama jetonunun sızması | Jeton adresin `#` kısmında taşınır — günlüklere ve `Referer`'a düşmez; tek kullanımlık, 30 dk | entegrasyon |
+| Zararlı ürün görseli | Yalnızca `/images/…` ya da `https://`; `javascript:`, `data:`, yol çıkışı reddedilir | birim, entegrasyon |
+| Zararlı kargo bağlantısı | Yalnızca `http`/`https` | birim |
+| Hata ayrıntısının sızması | Beklenmeyen hatalarda yığın izi ve SQL gizlenir; istek numarasıyla günlüğe yazılır | entegrasyon |
+| Günlükten kişisel veri sızması | Sorgu dizesi ve gövde yazılmaz; mesaj içeriği günlüğe girmez | kod |
+| Konteyner kaçışı | Root olmayan kullanıcı, salt okunur dosya sistemi, tüm capability'ler kaldırıldı, `no-new-privileges` | manuel |
+| Veritabanına dışarıdan erişim | `data` ağı `internal`; DB, Redis ve kuyruk dışarı açılmaz | manuel |
+| Gizli değerlerin sızması | `.env` git ve imaj dışında; zayıf ayarlarla sunucu başlamaz | birim (config) |
 
-## Before going live
+## Katı CSP
 
-1. Put a TLS-terminating proxy in front and set `COOKIE_SECURE=true` and `PUBLIC_URL=https://…`. HSTS turns on automatically with `COOKIE_SECURE`.
-2. Set `ENABLE_TEST_PAYMENTS=false` and integrate a real payment provider. **With test payments on, anyone holding an order's tracking code can mark it paid.**
-3. Rotate every secret in `.env`: database, admin, `SESSION_SECRET`, SMTP.
-4. Set up database backups. Nothing backs up the `db-data` volume today.
+```text
+default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';
+font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self';
+form-action 'self'; base-uri 'none'; frame-ancestors 'none'
+```
 
-## Known limitations
+Satır içi script yoktur. `style-src 'unsafe-inline'` Vue'nun `:style` bağlamaları için gereklidir;
+script çalıştırmaya izin vermez.
 
-- **Single admin account from environment variables.** There are no per-user roles, no audit log and no 2FA.
-- **Rate limits live in memory.** They reset on restart and do not work across several backend instances; use a shared store such as Redis if you scale out.
-- **No e-mail verification.** Registration answers "already registered", which reveals that an address has an account. Rate limited, but closing this fully needs a verification flow.
-- **Favorites are stored in the browser**, not the account, so they do not follow a customer across devices.
-- **Legal pages are missing.** KVKK, returns and FAQ footer entries are plain text. These need real text from the business.
+## Canlıya almadan önce
+
+1. **HTTPS zorunlu.** Önüne TLS sonlandıran bir vekil koyun, sonra `COOKIE_SECURE=true` ve
+   `PUBLIC_URL=https://…` yapın. HSTS `COOKIE_SECURE` ile kendiliğinden açılır.
+2. **Gerçek ödeme sağlayıcısı bağlayın**, `PAYMENTS_MODE` değerini benzetimden çıkarın.
+   Benzetim açıkken, bir siparişin takip kodunu bilen herkes onu "ödendi" yapabilir.
+3. `SEED_DEMO_DATA=false` yapın ve demo hesaplarını silin.
+4. **Tüm gizli değerleri yenileyin:** veritabanı, `TOKEN_PEPPER`, JWT anahtar çifti, RabbitMQ, SMTP.
+5. **Veritabanı yedeği kurun.** Şu an `db-data` volume'ünü yedekleyen hiçbir şey yok.
+6. Seq ve RabbitMQ arayüzlerine erişimi kısıtlayın (şu an yalnızca `127.0.0.1`'e açık).
+7. Ürün görselleri için dosya yükleme eklenecekse boyut, tür ve içerik denetimi gerekir;
+   bugün yalnızca adres girilebiliyor.
+
+## Bilinen sınırlar
+
+Bunlar bilinçli olarak kapsam dışında bırakıldı; bir saldırı yüzeyi değil, eksik özelliktir.
+
+- **E-posta doğrulaması zorunlu değil.** Doğrulama bağlantısı gönderilir ama doğrulanmamış hesap da
+  alışveriş yapabilir. Kayıt ucu "bu e-posta zaten kayıtlı" der — bu, hesabın varlığını ele verir;
+  kayıt formunda kullanıcının bunu bilmesi gerektiği için kabul edildi ve hız sınırıyla korunuyor.
+- **İki adımlı doğrulama (2FA) yok.**
+- **Rol kataloğu koddan gelir.** Arayüzden yeni rol/izin tanımlanamaz; değişiklik için dağıtım gerekir.
+- **Denetim kaydı arayüzden görüntülenemez.** `audit_log` tablosu dolar ama ekranı yoktur.
+- **İade akışı kısmidir.** Paket "iade edildi" yapılabilir ve stok döner; para iadesi gerçek ödeme
+  sağlayıcısına bağlı olmadığı için yoktur.
+- **Mağaza komisyonu/ödeşme yok.** Çok satıcılı bir pazarın mali tarafı modellenmedi.
+- **Hukuki metinler yok.** KVKK aydınlatma metni, mesafeli satış sözleşmesi, iade koşulları
+  işletmeden gelmelidir.
+- **Dosya yükleme yok.** Ürün görseli adresle verilir.
+- **Tek dil.** Arayüz yalnızca Türkçedir.
+
+## Güvenlik açığı bildirimi
+
+Bir açık bulursanız genel bir issue açmadan önce depo sahibine özel olarak bildirin.

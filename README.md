@@ -1,180 +1,189 @@
-# Bilgisayar Bilgileri
+# Pazar — çok satıcılı pazar yeri
 
-A full-stack e-commerce web application for computer components, built with **Node.js, Express, PostgreSQL** and a plain **HTML / CSS / JavaScript** frontend.
+Birden çok mağazanın tek vitrinde satış yaptığı, tek sepet ve tek ödemeyle alışveriş yapılan bir
+e-ticaret uygulaması.
 
-The backend follows **Clean Architecture** with **CQRS**. The architecture rules are enforced by tests. The whole system runs with a single `docker compose up`.
+- **Arayüz:** Vue 3 + Vite + Tailwind CSS 4 (tek sayfa uygulaması)
+- **Sunucu:** Node.js + Express 5, **Clean Architecture + CQRS**
+- **Kimlik:** Kendi **OAuth 2.1 / OpenID Connect** sunucumuz — PKCE, RS256 JWT, döndürmeli yenileme jetonu
+- **Veri:** PostgreSQL 16 · **Önbellek:** Redis · **Kuyruk:** RabbitMQ · **Günlük:** Seq
+- **Demo e-postası:** Mailpit — posta gerçekten gönderilir, internete çıkmaz
 
-> **Note:** The checkout flow is for testing only and does not process real payments.
+> **Bu bir demo ortamıdır.** Ödemeler benzetimdir; gerçek para hareketi yoktur.
+> Canlıya almadan önce [docs/SECURITY.md](docs/SECURITY.md) dosyasındaki listeyi tamamlayın.
 
 ---
 
-## Quick start (Docker)
+## Hızlı başlangıç
 
 ```bash
-cp .env.example .env        # then fill in the values
+node backend/scripts/generate-env.js > .env
 docker compose up --build -d
 ```
 
-| Service | URL |
+İlk açılış şemayı kurar, rolleri eşitler, sistem yöneticisini oluşturur ve demo verisini ekler.
+
+| Ne | Adres |
 |---|---|
-| Website | http://localhost:8080 (or your `WEB_PORT`) |
-| Admin panel | http://localhost:8080/admin |
-| API health | http://localhost:8080/api/health, `/api/ready` |
+| **Site** | http://localhost:8090 |
+| Yönetim paneli | http://localhost:8090/yonetim |
+| Mağaza paneli | http://localhost:8090/magaza |
+| Günlükler (Seq) | http://localhost:8092 |
+| **E-postalar (Mailpit)** | http://localhost:8093 |
+| Kuyruklar (RabbitMQ) | http://localhost:8094 |
+| API sağlık | http://localhost:8090/api/health · `/api/ready` |
+| OIDC keşif | http://localhost:8090/.well-known/openid-configuration |
 
-The server refuses to start with missing or weak settings (short `SESSION_SECRET`, example passwords, and so on).
+### Giriş bilgileri
 
-```text
-Browser ──► frontend (nginx, non-root)
-              ├── static pages (frontend/public)
-              └── /api/* ──► backend (Node/Express, non-root, read-only) ──► db (PostgreSQL 16, internal network)
-```
-
-- Migrations run automatically when the backend starts. On an empty database, sample products are added.
-- Data lives in the `db-data` volume. `docker compose down` keeps it; `docker compose down -v` deletes it.
-- The database is not published to the host. For pgAdmin and similar tools:
-  ```bash
-  docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-  ```
-
-### Running without Docker
-
-You need Node.js 22+ and a local PostgreSQL.
+**Sistem yöneticisi** ilk açılışta oluşturulur. Parola `.env` içinde verilmediyse rastgele üretilir ve
+iki yere yazılır — konsola ve konteyner içindeki bir dosyaya:
 
 ```bash
-cd backend && npm install && npm run dev          # API on http://localhost:3000/api
-cd frontend && npm install && npm run dev         # site on http://localhost:8080
+docker compose logs api | grep -A6 "SİSTEM YÖNETİCİSİ"
+docker compose exec api cat /app/var/bootstrap-admin.txt
+```
+
+**Demo hesapları** (hepsinin parolası `Pazar2026Demo`):
+
+| Rol | E-posta |
+|---|---|
+| Mağaza Sahibi | `teknoloji@pazar.test`, `oyuncu@pazar.test`, `komponent@pazar.test`, `ekran@pazar.test` |
+| Mağaza Çalışanı | `calisan@pazar.test` |
+| Müşteri | `musteri@pazar.test`, `ahmet@pazar.test` |
+
+Demoyu nasıl göstereceğiniz: [docs/DEMO.md](docs/DEMO.md)
+
+---
+
+## Neler çalışıyor
+
+**Kayıtsız kullanıcı (misafir)**
+- Ürünleri gezer, arar, filtreler
+- **Sepete ekler** — sepet sunucuda tutulur, çerezde yalnızca kimliği taşınır
+- **Kayıt olmadan sipariş verir**, tek kullanımlık takip koduyla siparişini izler
+- Destek talebi açar
+- Her adımda kayıt olmanın faydası hatırlatılır, ama hiçbir yerde zorunlu tutulmaz
+
+**Kayıt olduğunda sepeti kaybolmaz.** Misafir sepeti hesaba taşınır; aynı ürün iki sepette de
+varsa adetler toplanır.
+
+**Müşteri** — sipariş geçmişi, sipariş iptali, adres defteri, profil, parola değiştirme,
+parola sıfırlama, destek talepleri
+
+**Mağaza Sahibi / Çalışanı** — kendi mağazasının panosu, ürün yönetimi (CSV ile toplu ekleme dahil),
+kendi paketlerinin sipariş akışı, kargo bilgileri, çalışan yönetimi, destek talepleri
+
+**Sistem Yöneticisi** — genel pano ve 14 günlük grafik, mağaza başvuru onayı, mağaza askıya alma,
+kullanıcı ve rol yönetimi, tüm siparişler, tüm destek talepleri
+
+---
+
+## Mimari
+
+```text
+                 ┌──────────────────────────────────────────────┐
+ Tarayıcı ──────►│ web (nginx)  Vue derlemesi + /api, /oauth proxy│
+                 └───────────────┬──────────────────────────────┘
+                                 ▼
+                 ┌──────────────────────────────────────────────┐
+                 │ api  (Express 5)                             │
+                 │   presentation → application → domain        │
+                 │                     ▲                        │
+                 │   infrastructure ───┘ (portları uygular)     │
+                 └──┬────────────┬───────────┬─────────┬────────┘
+                    ▼            ▼           ▼         ▼
+                 Postgres      Redis      RabbitMQ    Seq
+                    ▲                        ▲
+                    │   outbox ──────────────┘
+                    └───────── worker (olay aktarımı, e-posta, bakım)
+```
+
+**Bağımlılık yönü içeri doğrudur.** `domain` hiçbir şeye bağımlı değildir; `application` yalnızca
+`domain`'e ve port sözleşmelerine bakar; somut altyapı (PostgreSQL, Redis, RabbitMQ, SMTP) yalnızca
+`bootstrap/container.js` içinde bağlanır.
+
+**CQRS:** 38 komut, 26 sorgu — toplam **64 kullanım senaryosu**, her biri kendi dosyasında.
+Komut handler'ı read model'e, sorgu handler'ı unit of work'e dokunamaz.
+
+Bu kuralların hiçbiri yalnızca belgede yazmaz: `tests/architecture` kuralı çiğneyen kodda kırılır.
+
+Ayrıntılar: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DATA-MODEL.md](docs/DATA-MODEL.md) ·
+[docs/AUTH.md](docs/AUTH.md) · [docs/API.md](docs/API.md) · [docs/DECISIONS.md](docs/DECISIONS.md)
+
+### Klasörler
+
+```text
+backend/src/
+├── domain/              saf iş kuralları — bağımlılığı yok
+│   ├── shared/          Money, guards, hatalar, olaylar
+│   ├── identity/        AccessPolicy, Role, Permission, User, OAuthClient
+│   ├── catalog/  stores/  ordering/  support/
+├── application/         kullanım senaryoları (CQRS)
+│   ├── shared/          cqrs/bus.js, ports.js, registry.js
+│   └── <bağlam>/
+│       ├── index.js     bağlamın dışa açık yüzü + handler kaydı
+│       ├── commands/<Senaryo>.js
+│       └── queries/<Senaryo>.js
+├── infrastructure/      portların somut karşılıkları
+│   ├── persistence/postgres/   UnitOfWork, repository'ler, read model'ler, migration'lar
+│   ├── security/        RS256 jeton, scrypt, PKCE, opak jetonlar
+│   ├── cache/  messaging/  logging/  mail/  support/
+├── presentation/http/   Express uygulaması, rotalar, ara katmanlar
+├── bootstrap/           composition root, ilk kurulum, zamanlanmış işler
+├── main.js              API süreci
+└── worker.js            outbox aktarımı, e-posta tüketicisi, bakım
+
+frontend/src/
+├── lib/                 api istemcisi, OAuth/PKCE, biçimlendirme
+├── stores/              Pinia (oturum, sepet, bildirim)
+├── components/  layouts/
+└── views/               shop/ · auth/ · account/ · store/ · admin/
 ```
 
 ---
 
-## Project structure
-
-```text
-.
-├── docker-compose.yml          production-like stack
-├── docker-compose.dev.yml      optional: publishes the database to localhost
-├── docker-compose.test.yml     full test suite with a throwaway PostgreSQL
-├── backend/
-│   ├── src/
-│   │   ├── main.js             entry point: config check → migrations → seed → HTTP
-│   │   ├── bootstrap/          composition root (container.js), scheduled jobs
-│   │   ├── config/             environment loading and validation
-│   │   ├── domain/             pure business rules, depends on nothing
-│   │   │   └── catalog/ ordering/ customers/ support/ shared/
-│   │   ├── application/        use cases, one bounded context per folder
-│   │   │   ├── shared/         cqrs/bus.js, ports.js
-│   │   │   └── <context>/
-│   │   │       ├── index.js    public surface of the context + handler registration
-│   │   │       ├── commands/<UseCase>/{<UseCase>Command.js, <UseCase>Handler.js}
-│   │   │       └── queries/<UseCase>/{<UseCase>Query.js, <UseCase>Handler.js}
-│   │   ├── infrastructure/
-│   │   │   ├── persistence/postgres/
-│   │   │   │   ├── PgUnitOfWork.js   write-side transaction boundary
-│   │   │   │   ├── repositories/     write side
-│   │   │   │   ├── read-models/      read side, returns DTOs directly
-│   │   │   │   └── migrations/  pool.js  migrate.js  seed.js
-│   │   │   ├── security/       tokens, password hashing, opaque codes
-│   │   │   └── mail/
-│   │   └── presentation/http/  Express app, routes, middleware
-│   └── tests/
-│       ├── architecture/       dependency and CQRS rules
-│       ├── unit/               domain, application, security, config
-│       └── integration/        full API against a real PostgreSQL
-├── frontend/
-│   ├── nginx/default.conf      routing, CSP and security headers, /api proxy
-│   ├── scripts/                vendor copy, site check, dev server
-│   └── public/
-│       ├── pages/              HTML pages (served as /name or /name.html)
-│       └── assets/
-│           ├── css/{base,pages}/
-│           ├── js/core/        api client, safe html templating, cart, favorites, formatting
-│           ├── js/components/  navbar, product card
-│           ├── js/pages/       one ES module per page (admin/ is split by feature)
-│           └── images/<section>/
-└── docs/                       SECURITY.md, screenshots
-```
-
-### Dependency rule
-
-```text
-presentation ──► application ──► domain
-                     ▲
-infrastructure ──────┘ (implements the ports; wired only in bootstrap/container.js)
-```
-
-`tests/architecture` fails the build if a layer imports something it should not.
-
-### CQRS
-
-| Side | Goes through | Uses | Example |
-|---|---|---|---|
-| **Command** (changes state) | `commands.execute(new PlaceOrderCommand(...))` | domain rules + repositories inside a `UnitOfWork` transaction | place order, change status |
-| **Query** (reads only) | `queries.ask(new ListAdminOrdersQuery(...))` | read models running SQL that returns DTOs | product list, order history, stats |
-
-Command handlers cannot touch read models and query handlers cannot touch the unit of work; a test enforces this. Routes contain no business logic. Domain errors are mapped to HTTP status codes in `middleware/errorHandler.js`.
-
----
-
-## Features
-
-- Catalog with search and category filters, favorites, cart with quantities, test checkout
-- Order tracking with a one-time code (only its SHA-256 hash is stored)
-- Customer accounts: register, login with "remember me", profile, password change, **password reset by e-mail**, saved address pre-filling checkout, order history, self-service cancellation
-- Admin panel: products (CSV import, archive/restore), stock, orders with server-side search, filters and pagination, order lifecycle, shipping info, support tickets, CSV export
-- Stock is checked and reduced in the same transaction as the order (row locks prevent overselling)
-- Stock returns automatically when a test payment fails, an order is cancelled, or an unpaid order expires (`ORDER_PAYMENT_TTL_MINUTES`)
-- Products that appear in past orders are archived instead of deleted
-
-## API overview
-
-| Method | Path | Auth |
-|---|---|---|
-| GET | `/api/health`, `/api/ready`, `/api/products?q=&category=&ids=`, `/api/product-categories` | – |
-| POST | `/api/orders`, `/api/order-tracking`, `/api/support` | – |
-| POST | `/api/orders/:id/payment-summary`, `/api/orders/:id/test-payment` | tracking code; off unless `ENABLE_TEST_PAYMENTS=true` |
-| POST | `/api/customers/register` · `login` · `logout` · `password/forgot` · `password/reset` | – |
-| GET / PUT / POST | `/api/customers/session` · `address` · `profile` · `password` · `orders` · `orders/:id/cancel` | customer |
-| POST | `/api/admin/login` · `logout` | – |
-| GET / POST / PUT / PATCH / DELETE | `/api/admin/stats` · `products` · `products/bulk` · `products/:id/restore` · `orders` · `support` | admin |
-
-## Tests
+## Testler
 
 ```bash
-# Everything, including the API against a throwaway PostgreSQL (no real data or SMTP is touched)
+# Tamamı: birim + mimari + gerçek PostgreSQL/Redis ile uçtan uca API
 docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
 docker compose -f docker-compose.test.yml down -v
 
-# Without Docker: unit and architecture tests only
+# Altyapısız: yalnızca birim ve mimari testleri
 cd backend && npm run test:unit
-
-# Frontend: broken links, inline scripts/styles that CSP would block
-cd frontend && npm run check
 ```
 
-## Going live
+**120 test** — 52 entegrasyon, 58 birim, 10 mimari. Tek kullanımlık veritabanı kullanılır; gerçek
+veriye, çalışan sisteme ve gerçek SMTP'ye dokunulmaz.
 
-See [docs/SECURITY.md](docs/SECURITY.md). At minimum: put HTTPS in front, then set `COOKIE_SECURE=true`, `ENABLE_TEST_PAYMENTS=false` and `PUBLIC_URL=https://your-domain`.
-
-## Moving data from an older database
-
-Existing tables are kept; migrations only add columns, tables and indexes. Copy the data with the stack running:
-
-```bash
-pg_dump -h <old-host> -U <old-user> --data-only <old-db> > backup.sql
-docker compose exec -T db psql -U <user> <db> < backup.sql
-```
-
-Customers keep their passwords; old hashes are upgraded at next login. Everyone has to log in again once.
-
-## Screenshots
-
-| | |
-|---|---|
-| ![Home](docs/screenshots/01-anasayfa.png) | ![Products](docs/screenshots/03-urunler-sepete-ekleme.png) |
-| ![Cart](docs/screenshots/06-sepet.png) | ![Admin orders](docs/screenshots/09-admin-siparisler.png) |
+Testler yalnızca "mutlu yol"u değil, güvenlik sınırlarını da kontrol eder: eş zamanlı sipariş,
+jeton hırsızlığı tespiti, mağazalar arası erişim, CSRF, SQL enjeksiyonu, hız sınırı.
 
 ---
 
-## Developer
+## Geliştirme (Docker olmadan arayüz)
 
-**Toygar Keskin** · Web Development | Node.js | Express | PostgreSQL
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d   # altyapı + API (8095)
+cd frontend && npm install && npm run dev                              # Vite → http://localhost:5173
+```
+
+`docker-compose.dev.yml` ayrıca PostgreSQL'i 5434, Redis'i 6380 portundan bu bilgisayara açar.
+
+---
+
+## Ayarlar
+
+Tüm ayarlar `.env` dosyasından okunur; örnekler ve açıklamalar
+[.env.example](.env.example) içindedir. **Sunucu eksik ya da zayıf ayarlarla başlamayı reddeder** —
+yanlış yapılandırılmış bir sistemin sessizce çalışmasındansa durup nedenini söylemesi yeğdir.
+
+Canlı ortam için zorunlu olanlar: `COOKIE_SECURE=true`, `PAYMENTS_MODE` benzetim dışı,
+`SEED_DEMO_DATA=false`, `PUBLIC_URL=https://…`.
+
+---
+
+## Geliştirici
+
+**Toygar Keskin**

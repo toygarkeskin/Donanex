@@ -3,48 +3,76 @@
 const express = require("express");
 const helmet = require("helmet");
 
-const { createSessionResolver, createAuthGuards } = require("./middleware/auth");
-const { createRateLimiters } = require("./middleware/rateLimiters");
+const { requestContext, accessLog } = require("./middleware/requestContext");
+const { authenticate } = require("./middleware/authenticate");
+const { cartSession } = require("./middleware/cartSession");
 const { originGuard } = require("./middleware/originGuard");
-const { requestLogger } = require("./middleware/requestLogger");
+const { createRateLimiters } = require("./middleware/rateLimiters");
 const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
-const { healthRoutes } = require("./routes/health.routes");
-const { catalogRoutes } = require("./routes/catalog.routes");
-const { orderRoutes } = require("./routes/orders.routes");
-const { customerRoutes } = require("./routes/customers.routes");
-const { supportRoutes } = require("./routes/support.routes");
-const { adminRoutes } = require("./routes/admin.routes");
 
-const BULK_IMPORT_PATH = "/api/admin/products/bulk";
+const { healthRoutes } = require("./routes/health.routes");
+const { oauthRoutes } = require("./routes/oauth.routes");
+const { authRoutes } = require("./routes/auth.routes");
+const { catalogRoutes } = require("./routes/catalog.routes");
+const { cartRoutes } = require("./routes/cart.routes");
+const { orderRoutes } = require("./routes/orders.routes");
+const { accountRoutes } = require("./routes/account.routes");
+const { storePanelRoutes } = require("./routes/store.routes");
+const { adminRoutes } = require("./routes/admin.routes");
+const { supportRoutes } = require("./routes/support.routes");
+
+const BULK_IMPORT = /\/products\/bulk$/;
 
 /**
- * Yalnızca JSON API sunar. Statik sayfaları frontend (nginx) konteyneri sunar
- * ve /api isteklerini buraya yönlendirir.
+ * JSON API. Statik dosyaları web (nginx) konteyneri sunar ve /api ile /oauth
+ * isteklerini buraya yönlendirir.
+ *
+ * Express 5 kullanılıyor: async rota fonksiyonlarındaki hatalar kendiliğinden
+ * errorHandler'a iletilir, her rotayı try/catch ile sarmak gerekmez.
  */
-function createApp({ commands, queries, config, rateLimits = true, log = console.log }) {
+function createApp({ commands, queries, services, config, rateLimits = true }) {
   const app = express();
+  const logger = services.logger;
 
   app.disable("x-powered-by");
   if (config.trustProxy) app.set("trust proxy", config.trustProxy);
 
   app.use(
     helmet({
+      // API yalnızca JSON döndürür; hiçbir kaynağı yüklemesine gerek yok.
       contentSecurityPolicy: { useDefaults: false, directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
-      strictTransportSecurity: config.cookieSecure
+      strictTransportSecurity: config.cookieSecure,
+      crossOriginResourcePolicy: { policy: "same-origin" }
     })
   );
-  app.use(requestLogger(log));
+  app.use(requestContext(logger));
 
-  // Bedava ve yüksek hacimli kontrol: rate limit'e takılmasın, oturum aramasın.
+  // Sağlık uçları: sık çağrılır, sınırlara ve oturum çözümüne takılmasın.
   app.use("/api", healthRoutes({ queries }));
 
-  const limiters = createRateLimiters({ enabled: rateLimits });
-  const auth = createAuthGuards();
-  const ctx = { commands, queries, auth, limiters, config };
+  app.use(accessLog());
 
-  const smallBody = express.json({ limit: "32kb" });
-  const largeBody = express.json({ limit: "1mb" }); // yalnızca CSV ile toplu ürün için
+  const limiters = createRateLimiters({ enabled: rateLimits, redisClient: services.redisClient });
+  const json = express.json({ limit: "64kb" });
+  const largeJson = express.json({ limit: "1mb" }); // yalnızca CSV ile toplu ürün
+  const form = express.urlencoded({ extended: false, limit: "16kb" }); // OAuth jeton ucu
 
+  const context = { commands, queries, services, config, limiters };
+
+  /* ---------- OAuth 2.1 / OIDC ---------- */
+  // Keşif belgesi ve JWKS kök altında durur (RFC 8414).
+  app.use("/.well-known", oauthRoutes.discovery(context));
+  // userinfo ucu Bearer jeton ister; bu yüzden /oauth da oturumu çözer.
+  app.use(
+    "/oauth",
+    limiters.api,
+    form,
+    json,
+    authenticate({ tokenIssuer: services.tokenIssuer, queries }),
+    oauthRoutes.endpoints(context)
+  );
+
+  /* ---------- Uygulama API'si ---------- */
   const api = express.Router();
   api.use((_req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
@@ -52,14 +80,18 @@ function createApp({ commands, queries, config, rateLimits = true, log = console
   });
   api.use(limiters.api);
   api.use(originGuard);
-  api.use((req, res, next) => (req.originalUrl.split("?")[0] === BULK_IMPORT_PATH ? largeBody : smallBody)(req, res, next));
-  api.use(createSessionResolver({ queries }));
+  api.use((req, res, next) => (BULK_IMPORT.test(req.path) ? largeJson : json)(req, res, next));
+  api.use(authenticate({ tokenIssuer: services.tokenIssuer, queries }));
+  api.use(cartSession({ cookieSecure: config.cookieSecure }));
 
-  api.use(catalogRoutes(ctx));
-  api.use(orderRoutes(ctx));
-  api.use(supportRoutes(ctx));
-  api.use("/customers", customerRoutes(ctx));
-  api.use("/admin", adminRoutes(ctx));
+  api.use("/auth", authRoutes(context));
+  api.use(catalogRoutes(context));
+  api.use("/cart", cartRoutes(context));
+  api.use(orderRoutes(context));
+  api.use("/me", accountRoutes(context));
+  api.use("/stores", storePanelRoutes(context));
+  api.use("/admin", adminRoutes(context));
+  api.use(supportRoutes(context));
   api.use(notFoundHandler);
 
   app.use("/api", api);

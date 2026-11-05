@@ -6,15 +6,15 @@ const { CheckReadinessQuery } = require("../../../application/system");
 function healthRoutes({ queries }) {
   const router = Router();
 
-  // Canlılık: süreç ayakta mı? (Docker healthcheck)
+  // Canlılık: süreç ayakta mı? (Docker healthcheck bunu kullanır)
   router.get("/health", (_req, res) => {
-    res.json({ success: true, message: "Backend sunucusu çalışıyor." });
+    res.json({ status: "ok", service: "pazar-api" });
   });
 
-  // Hazırlık: veritabanına ulaşılabiliyor mu?
+  // Hazırlık: bağımlılıklar (veritabanı, önbellek) yanıt veriyor mu?
   router.get("/ready", async (_req, res) => {
-    const ready = await queries.ask(new CheckReadinessQuery());
-    res.status(ready ? 200 : 503).json({ success: ready });
+    const result = await queries.ask(new CheckReadinessQuery());
+    res.status(result.ready ? 200 : 503).json(result);
   });
 
   return router;

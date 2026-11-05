@@ -1,89 +1,93 @@
 "use strict";
 
 const { ValidationError } = require("../shared/errors");
-const { isNonEmptyString } = require("../shared/guards");
-const { toCents, centsToDecimalString } = require("../shared/money");
+const { Money } = require("../shared/Money");
+const { requireText, optionalText, requireEnum, slugify, isNonEmptyString } = require("../shared/guards");
+
+const ProductStatus = Object.freeze({
+  DRAFT: "draft",       // yalnızca mağaza görür
+  ACTIVE: "active",     // vitrinde
+  ARCHIVED: "archived"  // satıştan kaldırıldı, geçmiş siparişler korunur
+});
 
 const MAX_STOCK = 1_000_000;
-const MAX_DESCRIPTION = 5000;
-const DEFAULT_IMAGE = "/assets/images/urunler/laptopcard.png";
 
-/** Görsel yalnızca sitenin kendi dosyalarından veya HTTPS adresinden gelebilir. */
-function isSafeImage(value) {
-  if (!isNonEmptyString(value, 500)) return false;
-  const image = value.trim();
-  if (/[\s"'<>\\]/.test(image)) return false;
-  if (image.startsWith("/assets/") && !image.includes("..")) return true;
+/**
+ * Ürün görseli yalnızca sitenin kendi dosyalarından ya da HTTPS adresinden gelebilir.
+ * javascript:, data: ve http: adresleri reddedilir.
+ */
+function assertImageUrl(value) {
+  const image = isNonEmptyString(value, 500) ? value.trim() : "";
+  if (!image) throw new ValidationError("Görsel adresi zorunludur.");
+  if (/[\s"'<>\\]/.test(image)) throw new ValidationError("Görsel adresi geçersiz karakter içeriyor.");
+  if (image.startsWith("/images/") && !image.includes("..")) return image;
   try {
-    return new URL(image).protocol === "https:";
+    if (new URL(image).protocol === "https:") return image;
   } catch {
-    return false;
+    /* aşağıda reddedilir */
   }
+  throw new ValidationError("Görsel adresi /images/ ile veya https:// ile başlamalı.");
 }
 
-/** Ürün varlığı. Yazma tarafında (command) kullanılır. */
+function assertStock(value) {
+  const stock = typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : value;
+  if (!Number.isInteger(stock) || stock < 0 || stock > MAX_STOCK) {
+    throw new ValidationError(`Stok 0 ile ${MAX_STOCK} arasında bir tam sayı olmalı.`);
+  }
+  return stock;
+}
+
+/**
+ * Ürün varlığı. Fiyat her zaman Money'dir; vitrin ve sipariş aynı değeri kullanır.
+ */
 class Product {
-  constructor({ id = null, name, description, priceCents, image, category, stock }) {
-    this.id = id;
-    this.name = name;
-    this.description = description;
-    this.priceCents = priceCents;
-    this.image = image;
-    this.category = category;
-    this.stock = stock;
+  constructor(fields) {
+    Object.assign(this, fields);
     Object.freeze(this);
   }
 
-  get price() {
-    return centsToDecimalString(this.priceCents);
-  }
-
-  /** Yönetici formundan gelen veriyi doğrular. Tüm alanlar zorunludur. */
-  static create(input, message = "Ürün bilgilerini ve fiyatını kontrol edin.") {
-    const body = input || {};
-    const stock = typeof body.stock === "string" && body.stock.trim() === "" ? NaN : Number(body.stock);
-    const priceCents = toCents(body.price);
-
-    const valid =
-      body.stock !== null &&
-      Number.isInteger(stock) &&
-      stock >= 0 &&
-      stock <= MAX_STOCK &&
-      isNonEmptyString(body.name, 250) &&
-      isNonEmptyString(body.description, MAX_DESCRIPTION) &&
-      priceCents !== null &&
-      isNonEmptyString(body.category, 100);
-
-    if (!valid) throw new ValidationError(message);
-    if (!isSafeImage(body.image)) {
-      throw new ValidationError("Görsel yolu /assets/ ile veya https:// ile başlamalı.");
-    }
+  static create(input) {
+    const data = input || {};
+    const name = requireText(data.name, "Ürün adı", 250);
 
     return new Product({
-      id: body.id ?? null,
-      name: body.name.trim(),
-      description: body.description.trim(),
-      priceCents,
-      image: body.image.trim(),
-      category: body.category.trim(),
-      stock
+      id: data.id ?? null,
+      storeId: data.storeId ?? null,
+      categoryId: data.categoryId ?? null,
+      name,
+      slug: slugify(data.slug || name),
+      sku: optionalText(data.sku, "Stok kodu", 60),
+      description: requireText(data.description, "Ürün açıklaması", 5000),
+      price: Money.fromAmount(data.price, "Fiyat"),
+      stock: assertStock(data.stock),
+      imageUrl: assertImageUrl(data.imageUrl),
+      status: requireEnum(data.status ?? ProductStatus.ACTIVE, Object.values(ProductStatus), "Ürün durumu")
     });
   }
 
-  /** CSV ile toplu içe aktarma: yalnızca ad ve fiyat zorunlu, diğerleri varsayılanla dolar. */
-  static fromImportRow(row, rowNumber) {
-    const r = row || {};
-    const name = typeof r.name === "string" ? r.name.trim() : "";
-    const filled = {
-      name,
-      price: r.price,
-      stock: r.stock === undefined || r.stock === "" ? 0 : r.stock,
-      category: isNonEmptyString(r.category) ? r.category : "Genel",
-      image: isNonEmptyString(r.image) ? r.image : DEFAULT_IMAGE,
-      description: isNonEmptyString(r.description) ? r.description : name
-    };
-    return Product.create(filled, `${rowNumber}. satırdaki ürün bilgileri geçersiz.`);
+  /** CSV ile toplu içe aktarma: yalnızca ad ve fiyat zorunlu. */
+  static fromImportRow(row, rowNumber, defaults = {}) {
+    const data = row || {};
+    const name = typeof data.name === "string" ? data.name.trim() : "";
+    try {
+      return Product.create({
+        ...defaults,
+        name,
+        price: data.price,
+        stock: data.stock === undefined || data.stock === "" ? 0 : data.stock,
+        sku: data.sku,
+        description: isNonEmptyString(data.description) ? data.description : name,
+        imageUrl: isNonEmptyString(data.imageUrl) ? data.imageUrl : defaults.imageUrl,
+        status: ProductStatus.DRAFT
+      });
+    } catch (error) {
+      throw new ValidationError(`${rowNumber}. satır: ${error.message}`);
+    }
+  }
+
+  get isPurchasable() {
+    return this.status === ProductStatus.ACTIVE && this.stock > 0;
   }
 }
 
-module.exports = { Product, MAX_STOCK, isSafeImage };
+module.exports = { Product, ProductStatus, MAX_STOCK, assertImageUrl, assertStock };

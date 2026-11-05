@@ -3,43 +3,66 @@
 const { Router } = require("express");
 const {
   PlaceOrderCommand,
-  RecordTestPaymentCommand,
-  GetOrderPaymentSummaryQuery,
+  ProcessPaymentCommand,
   TrackOrderQuery
 } = require("../../../application/ordering");
+const { COOKIES, clearCookie, appendCookie } = require("../support/cookies");
 
-function orderRoutes({ commands, queries, limiters, config }) {
+/**
+ * Sipariş verme ve ödeme.
+ *
+ * KAYIT ZORUNLU DEĞİLDİR: misafir de sipariş verebilir ve takip kodu alır.
+ * Yanıtta kullanıcıya kayıt olabileceği hatırlatılır.
+ */
+function orderRoutes({ commands, queries, config, limiters }) {
   const router = Router();
 
-  /** Test uçları, ayarla açılmadıkça yok sayılır. */
-  function requireTestPayments(_req, res, next) {
-    if (!config.testPaymentsEnabled) return res.status(404).json({ success: false, message: "Bulunamadı." });
-    next();
-  }
-
-  router.post("/orders", limiters.orders, async (req, res) => {
-    const result = await commands.execute(new PlaceOrderCommand(req.body, req.customer?.customerId || null));
-    res.status(201).json({ success: true, message: "Sipariş oluşturuldu.", ...result });
-  });
-
-  // TEST ÖDEME SİSTEMİ - GERÇEK ÖDEME ALMAZ. Takip kodu sahiplik kanıtıdır.
-  router.post("/orders/:id/payment-summary", requireTestPayments, limiters.tracking, async (req, res) => {
-    const order = await queries.ask(new GetOrderPaymentSummaryQuery(req.params.id, req.body?.trackingCode));
-    res.json({ success: true, order });
-  });
-
-  router.post("/orders/:id/test-payment", requireTestPayments, limiters.tracking, async (req, res) => {
-    const order = await commands.execute(
-      new RecordTestPaymentCommand(req.params.id, req.body?.trackingCode, req.body?.successful)
+  router.post("/orders", limiters.checkout, async (req, res) => {
+    const result = await commands.execute(
+      new PlaceOrderCommand({
+        userId: req.auth?.userId ?? null,
+        guestCartId: req.guestCartId,
+        checkout: req.body
+      }),
+      req.context()
     );
-    res.json({ success: true, message: "Test sonucu kaydedildi. Gerçek ödeme alınmadı.", order });
+
+    // Sepet siparişe dönüştü; misafir çerezi artık boş bir sepeti gösteriyor.
+    appendCookie(res, clearCookie(COOKIES.CART, { secure: config.cookieSecure, sameSite: "Lax" }));
+
+    res.status(201).json({
+      ...result,
+      // Kayıtsız alışverişte hesabın faydasını hatırlat (zorlamadan).
+      registrationHint: req.auth?.userId
+        ? null
+        : "Hesap oluşturursanız siparişlerinizi takip kodu olmadan görebilir, adreslerinizi kaydedebilirsiniz."
+    });
   });
 
-  // Müşteri sipariş takibi: sipariş numarası + takip kodu
-  router.post("/order-tracking", limiters.tracking, async (req, res) => {
-    const { orderId, trackingCode } = req.body || {};
-    const order = await queries.ask(new TrackOrderQuery(orderId, trackingCode));
-    res.json({ success: true, order });
+  /**
+   * Ödeme benzetimi. Gerçek para hareketi yoktur ve yalnızca
+   * PAYMENTS_MODE=simulated iken açıktır. Erişim, siparişin sahibi olmakla
+   * ya da takip kodunu bilmekle kanıtlanır.
+   */
+  router.post("/orders/:orderId/payment", limiters.checkout, async (req, res) => {
+    const result = await commands.execute(
+      new ProcessPaymentCommand({
+        orderId: req.params.orderId,
+        trackingCode: req.body?.trackingCode ?? null,
+        userId: req.auth?.userId ?? null,
+        outcome: req.body?.outcome
+      }),
+      req.context()
+    );
+    res.json(result);
+  });
+
+  /** Misafir takibi: sipariş numarası + takip kodu. Kişisel veri dönmez. */
+  router.post("/orders/track", limiters.tracking, async (req, res) => {
+    const order = await queries.ask(
+      new TrackOrderQuery({ orderNumber: req.body?.orderNumber, trackingCode: req.body?.trackingCode })
+    );
+    res.json(order);
   });
 
   return router;

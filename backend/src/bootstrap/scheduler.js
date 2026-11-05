@@ -1,23 +1,57 @@
 "use strict";
 
 const { ExpireUnpaidOrdersCommand } = require("../application/ordering");
+const { UNPAID_ORDER_TTL_MINUTES, GUEST_CART_TTL_MS } = require("../application/identity/authPolicy");
 
-const INTERVAL_MS = 5 * 60 * 1000;
+/**
+ * Arka plan bakım işleri. Yalnızca worker sürecinde çalışır; API konteyneri
+ * kaç kopya olursa olsun bu işler bir kez yapılır.
+ */
+function startScheduler({ commands, unitOfWork, logger, intervalMs = 5 * 60 * 1000 }) {
+  const jobs = [
+    {
+      name: "expire-unpaid-orders",
+      run: async () => {
+        const { expired } = await commands.execute(
+          new ExpireUnpaidOrdersCommand({ olderThanMinutes: UNPAID_ORDER_TTL_MINUTES })
+        );
+        return expired ? { Expired: expired } : null;
+      }
+    },
+    {
+      name: "purge-expired-tokens",
+      run: async () =>
+        unitOfWork.run(async ({ oauth, authSessions, verificationTokens }) => {
+          await oauth.purgeExpired();
+          await authSessions.purgeExpired();
+          await verificationTokens.purgeExpired();
+          return null;
+        })
+    },
+    {
+      name: "purge-abandoned-carts",
+      run: async () =>
+        unitOfWork.run(async ({ carts }) => {
+          const removed = await carts.purgeAbandonedGuestCarts(new Date(Date.now() - GUEST_CART_TTL_MS));
+          return removed ? { Removed: removed } : null;
+        })
+    }
+  ];
 
-/** Arka plan işleri. Durdurma fonksiyonu döndürür. */
-function startScheduler({ commands, config }) {
-  const run = async () => {
-    try {
-      const { expired } = await commands.execute(new ExpireUnpaidOrdersCommand(config.orderPaymentTtlMinutes));
-      if (expired) console.log(`Süresi dolan ${expired} ödenmemiş sipariş iptal edildi.`);
-    } catch (error) {
-      console.error("Zamanlanmış iş başarısız:", error.message);
+  const runAll = async () => {
+    for (const job of jobs) {
+      try {
+        const result = await job.run();
+        if (result) logger.info("Bakım işi {Job} çalıştı", { Job: job.name, ...result });
+      } catch (error) {
+        logger.error("Bakım işi {Job} başarısız: {Reason}", { Job: job.name, Reason: error.message });
+      }
     }
   };
 
-  const timer = setInterval(run, INTERVAL_MS);
+  const timer = setInterval(runAll, intervalMs);
   timer.unref();
-  run();
+  runAll();
 
   return () => clearInterval(timer);
 }

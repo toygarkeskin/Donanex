@@ -5,52 +5,70 @@ const {
   NotFoundError,
   ConflictError,
   UnauthorizedError,
+  ForbiddenError,
   ConfigurationError
 } = require("../../../domain/shared/errors");
 
-const STATUS_BY_ERROR = new Map([
-  [ValidationError, 400],
-  [UnauthorizedError, 401],
-  [NotFoundError, 404],
-  [ConflictError, 409],
-  [ConfigurationError, 503]
-]);
+const STATUS_BY_ERROR = [
+  [ValidationError, 400, "validation_error"],
+  [UnauthorizedError, 401, "unauthorized"],
+  [ForbiddenError, 403, "forbidden"],
+  [NotFoundError, 404, "not_found"],
+  [ConflictError, 409, "conflict"],
+  [ConfigurationError, 503, "service_unavailable"]
+];
 
-function statusFor(error) {
-  for (const [ErrorClass, status] of STATUS_BY_ERROR) {
-    if (error instanceof ErrorClass) return status;
+function classify(error) {
+  for (const [ErrorClass, status, code] of STATUS_BY_ERROR) {
+    if (error instanceof ErrorClass) return { status, code };
   }
   return null;
 }
 
-/** Domain hatalarını HTTP yanıtına çevirir; beklenmeyen hataların ayrıntısını gizler. */
+/**
+ * Domain hatalarını HTTP yanıtına çevirir.
+ *
+ * Beklenen hatalarda kullanıcıya anlamlı bir mesaj döner; beklenmeyen
+ * hatalarda ayrıntı GİZLENİR (yığın izi, SQL metni, dosya yolu sızmaz) ve
+ * olay istek numarasıyla günlüğe yazılır.
+ */
 function errorHandler(error, req, res, _next) {
   if (error.type === "entity.parse.failed") {
-    return res.status(400).json({ success: false, message: "Geçersiz istek gövdesi." });
+    return res.status(400).json({ error: "invalid_body", message: "Geçersiz istek gövdesi." });
   }
   if (error.type === "entity.too.large") {
-    return res.status(413).json({ success: false, message: "İstek çok büyük." });
+    return res.status(413).json({ error: "payload_too_large", message: "İstek çok büyük." });
   }
 
-  const status = statusFor(error);
-  if (status) {
-    return res.status(status).json({ success: false, message: error.message });
+  const known = classify(error);
+  if (known) {
+    return res.status(known.status).json({
+      error: known.code,
+      message: error.message,
+      ...(error.details ? { details: error.details } : {})
+    });
   }
 
-  // Express/body-parser kaynaklı diğer istemci hataları (bozuk URL, desteklenmeyen kodlama...)
   if (Number.isInteger(error.status) && error.status >= 400 && error.status < 500) {
-    return res.status(error.status).json({ success: false, message: "Geçersiz istek." });
+    return res.status(error.status).json({ error: "bad_request", message: "Geçersiz istek." });
   }
 
-  console.error(`[${req.method} ${req.originalUrl.split("?")[0]}]`, error);
+  req.log?.error("İşlenmeyen hata: {Reason}", {
+    Reason: error.message,
+    ErrorType: error.name,
+    Path: req.originalUrl.split("?")[0],
+    Stack: error.stack
+  });
+
   return res.status(500).json({
-    success: false,
-    message: "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin."
+    error: "internal_error",
+    message: "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
+    requestId: req.id
   });
 }
 
 function notFoundHandler(_req, res) {
-  res.status(404).json({ success: false, message: "Bulunamadı." });
+  res.status(404).json({ error: "not_found", message: "Bulunamadı." });
 }
 
 module.exports = { errorHandler, notFoundHandler };

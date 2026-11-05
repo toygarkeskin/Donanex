@@ -1,10 +1,12 @@
 "use strict";
 
-const { CheckReadinessQuery } = require("./queries/CheckReadiness/CheckReadinessQuery");
-const { CheckReadinessHandler } = require("./queries/CheckReadiness/CheckReadinessHandler");
+const { defineContext } = require("../shared/registry");
 
-module.exports = {
-  CheckReadinessQuery,
-  commandHandlers: [],
-  queryHandlers: [[CheckReadinessQuery, CheckReadinessHandler]]
-};
+module.exports = defineContext({
+  name: "system",
+  commands: {},
+  queries: {
+    CheckReadiness: require("./queries/CheckReadiness"),
+    GetDashboard: require("./queries/GetDashboard")
+  }
+});

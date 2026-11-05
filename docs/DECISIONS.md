@@ -1,0 +1,226 @@
+# Kararlar
+
+Her madde: ne yapıldı, neden, hangi seçenek **reddedildi** ve ne zaman gözden geçirilmesi gerekir.
+Bir kuralı çiğnemek gerekiyorsa buraya yeni bir madde yazın.
+
+---
+
+## 1. Kendi yetkilendirme sunucumuz, sosyal giriş değil
+
+Google/GitHub ile giriş eklemek daha az iş olurdu ama demo bir dış hesaba ve internet erişimine
+bağımlı hale gelirdi; ayrıca rol/izin modelinin kalbi olan jeton üretimini kendimiz görmezdik.
+
+OAuth 2.1 + OIDC'yi kendimiz uyguladık: authorization_code + PKCE, refresh rotation,
+client_credentials, JWKS, keşif belgesi.
+
+**Reddedilen:** Auth0/Keycloak. Keycloak çalışır ama demo için iki kat kaynak ister ve projenin
+göstermek istediği şeyi (yetkilendirmenin nasıl kurulduğunu) kutunun içine saklar.
+
+**Gözden geçir:** gerçek kurumsal SSO gerekirse harici bir IdP'yi **üst** kimlik sağlayıcı olarak
+bağlamak, kendi sunucumuzu atmaktan kolaydır.
+
+## 2. `jose` yerine `node:crypto`
+
+RS256 imzalama, doğrulama ve JWK ihracı için `node:crypto` yetiyor. `jose` ESM'dir; CommonJS
+projesinde dinamik `import()` ve test tarafında ek karmaşıklık getiriyordu.
+
+**Sonuç:** üretim bağımlılığı sayısı düştü, JWT doğrulaması (algoritma sabitleme, `alg: none`
+reddi) açıkça okunabilir bir dosyada durur ve doğrudan test edilir.
+
+## 3. Erişim jetonu bellekte, yenileme jetonu HttpOnly çerezde
+
+`localStorage` XSS'te okunabilir; çereze konan **erişim** jetonu ise her isteğe kendiliğinden
+eklenip CSRF yüzeyini büyütür.
+
+Bu yüzden: erişim jetonu yalnızca Pinia'da (bellekte), yenileme jetonu HttpOnly + SameSite=Strict
+çerezde. Sayfa yenilenince sessiz yenileme oturumu geri getirir.
+
+**Bedeli:** uygulama her açılışta bir yenileme isteği yapar. Kabul edildi.
+
+## 4. İzinler jetona gömülmez
+
+Gömülü izinler jeton süresi boyunca donar: yetkisi alınan bir kullanıcı 15 dakika yetkili kalır.
+
+İzinler her istekte sunucuda çözülür, Redis'te 5 dk önbelleklenir; rol değişimi, parola değişimi ve
+askıya alma önbelleği **siler** — değişiklik anında geçerli olur.
+
+**Bedeli:** her istekte bir önbellek okuması. Yetki değişiminin anında geçmesi buna değer.
+
+## 5. Siparişin iki seviyesi: `orders` → `order_packages`
+
+Çok satıcılı bir pazarda bir sepet birden çok mağazaya düşer. Tek seviyeli bir sipariş modelinde
+"sipariş kargoya verildi" ifadesi anlamsızdır: mağazalardan biri vermiş, öbürü vermemiş olabilir.
+
+Ödeme ve tutar `orders`'ta, **kargo ve hazırlık durumu paket üzerindedir**. Siparişin genel durumu
+paketlerden türetilir.
+
+**Reddedilen:** her mağaza için ayrı sipariş. Müşteri tek ödeme yapıyor; ayrı siparişler ödemeyi,
+iadeyi ve sipariş numarasını parçalardı.
+
+## 6. Sepet sunucuda, tarayıcıda yalnızca sepet çerezi
+
+Misafir sepetini `localStorage`'da tutmak kolaydı. Ama spec'in açık maddesi şu: *kullanıcı sepeti
+doldurduktan sonra "kayıt olarak devam et" derse sepet kaybolmamalı*.
+
+Sepet veritabanındadır (`carts.user_id IS NULL` → misafir), tarayıcı yalnızca HttpOnly bir sepet
+kimliği taşır. Kayıt/giriş anında misafir sepeti kullanıcının sepetiyle birleştirilir.
+
+**Kazanç:** sepet stok ve fiyat denetiminden geçer; istemci fiyat belirleyemez; sepet cihaz
+değiştirse de (giriş sonrası) durur.
+
+## 7. `cart_items` fiyat tutmaz
+
+Fiyat her görüntülemede güncel üründen okunur.
+
+Sepete eklenirken kopyalansaydı: istemciden gelen fiyat güvenilmez olur, aylar önce eklenen satır
+eski fiyatla donar ve "sepetteki fiyat ile ödenen fiyat farklı" hatası kapıda beklerdi.
+
+**Sipariş satırında ise tam tersi:** `order_items` ürün adını, görselini ve birim fiyatını o anki
+haliyle **kopyalar** — ürün sonradan değişse de geçmiş sipariş bozulmaz.
+
+## 8. Para `BIGINT` kuruş
+
+`NUMERIC` doğru ama JavaScript tarafında metin/`Number` dönüşümünde yuvarlama sürprizi üretir;
+`float` zaten baştan yanlıştır.
+
+Her yerde tam sayı kuruş. Aritmetik yalnızca `domain/shared/Money` içinde.
+
+**Tuzak:** pg sürücüsü BIGINT'i **metin** döndürür. Tek bir yerde (`pool.js`) tip çözücüsü
+tanımlandı; bu yapılmadan önce `Money.fromCents("6700000")` "Tutar geçersiz." hatası veriyordu.
+
+## 9. Açık transaction `AsyncLocalStorage`'da
+
+İlk uygulamada `PgUnitOfWork` açık transaction'ı `this.active` alanında tutuyordu. UnitOfWork örneği
+tüm isteklerde paylaşıldığı için **eş zamanlı iki istek aynı bağlantıyı kullanıyordu**:
+`SELECT … FOR UPDATE` kilidi anlamını yitiriyor, stok negatife düşüyordu.
+
+Bu, entegrasyon testindeki "eş zamanlı siparişler stoğu aşamaz" senaryosunda aralıklı 500'ler olarak
+ortaya çıktı; kök neden veritabanı günlüğündeki `products_stock_check` ihlaliydi.
+
+Açık transaction artık `AsyncLocalStorage` içindedir: her istek kendi async bağlamında kendi
+transaction'ını görür. **Bu alan bir sınıf alanına geri taşınırsa hata sessizce geri gelir.**
+
+## 10. Güvenlik etkisi olan adım, hata fırlatacak transaction'ın içinde durmaz
+
+Yetkilendirme kodu doğrulamadan **önce** ve kendi transaction'ında tüketilir; çalınan yenileme
+jetonunun ailesini iptal etmek de kendi transaction'ında kalıcı yapılır, hata sonra fırlatılır.
+
+Aynı işleme konsalardı geri alma bu etkiyi de silerdi: saldırgan aynı kodla sınırsız deneme
+yapabilir, çalınmış jeton ailesi iptal edilmemiş kalırdı. İkisi de entegrasyon testinde yakalandı.
+
+## 11. Transactional outbox
+
+Olay doğrudan RabbitMQ'ya yazılsaydı iki uçlu bir tutarsızlık kapısı açılırdı: veri yazıldı ama olay
+gitmedi (e-posta yok), ya da olay gitti ama transaction geri alındı (olmayan sipariş için e-posta).
+
+Olaylar `outbox_messages` tablosuna veriyle **aynı transaction'da** yazılır; `worker` süreci
+`FOR UPDATE SKIP LOCKED` ile okuyup kuyruğa aktarır.
+
+**Bedeli:** olaylar milisaniyeler yerine saniye içinde gider. E-posta için fazlasıyla yeterli.
+
+## 12. Olaylar kendi kendine yeterli
+
+E-posta tüketicisi alıcıyı yalnızca olay içeriğinden bulur, veritabanına geri dönmez.
+
+Dönseydi: olay işlenirken kullanıcı silinmiş olabilir, worker'ın DB'ye erişimi şart olur ve tüketici
+test etmesi zor bir bağımlılık zincirine girerdi. `STORE_APPROVED` olayında `email`/`fullName`
+unutulmuştu; entegrasyon testi "alıcı yok" diye yakaladı.
+
+## 13. Mimari testler
+
+Katman kuralları yoruma bırakılmadı; `tests/architecture/architecture.test.js` dosya bazında
+`require` yönlerini, CQRS ayrımını ve SQL'in yerini denetler.
+
+Bu testler geliştirme sırasında **iki gerçek ihlal** yakaladı: presentation katmanının bağlam
+içindeki bir dosyayı doğrudan import etmesi ve bir **Query** handler'ının `unitOfWork` kullanması.
+İkisi de düzeltildi — test gevşetilmedi.
+
+## 14. CQRS, ama event sourcing yok
+
+Komut/sorgu ayrımı yazma tarafını tek transaction ve domain kurallarıyla, okuma tarafını ekranın
+istediği şekli tek sorguda üreten read model'lerle kurar.
+
+**Reddedilen:** event sourcing ve ayrı okuma veritabanı. Bu ölçekte faydası yok, karmaşıklığı büyük:
+projeksiyon gecikmesi, yeniden oynatma, şema evrimi. Bugün tek PostgreSQL yetiyor.
+
+## 15. Rol kataloğu koddan gelir
+
+Roller ve izinler `domain/identity` içinde tanımlıdır ve her açılışta veritabanına eşitlenir.
+Tek doğru kaynak koddadır.
+
+**Sonucu:** arayüzden yeni izin tanımlanamaz, değişiklik dağıtım gerektirir. Bunun karşılığında izin
+kodları kodda aranabilir, yazım hatası testle yakalanır ve bir ortamda var olup diğerinde olmayan
+izin durumu oluşmaz.
+
+## 16. İzinlerin kapsamı (`global` / `store` / `both`)
+
+Mağaza sahibinin kendine sistem yetkisi devşirmesini engelleyen şey budur: `global` kapsamlı bir
+izin yalnızca sistem geneli bir atamayla kazanılır, mağazaya bağlı rol bu izni taşısa bile vermez.
+
+Mantık `domain/identity/AccessPolicy.js` içinde, HTTP ve veritabanı bilmeyen saf bir nesnededir;
+doğrudan birim testiyle sınanır.
+
+## 17. Yetki iki kat denetlenir
+
+Rotada `requirePermission(...)`, handler'da `assertCan(...)`.
+
+İkincisi gereksiz görünür. Amacı şu: bir rota yanlışlıkla korumasız bırakılırsa iş mantığı yine de
+yetkisiz çalışmaz. Güvenlik tek bir satırın dikkatine bağlı kalmaz.
+
+## 18. "Yok" ile "senin değil" aynı yanıtı döner
+
+Başkasının siparişi de, olmayan sipariş de 404 döner. Sahiplik koşulu sorgunun **parçasıdır**, ayrı
+bir kontrol değildir.
+
+Ayrı olsaydı 403/404 farkı numara deneyerek kayıt varlığını öğrenmeye yarardı; ayrıca "kontrolü
+yazmayı unutmak" mümkün olurdu — sorgunun parçası olduğu için unutulamaz.
+
+## 19. Ödeme benzetimi, ama gerçek bir e-posta sunucusu
+
+Spec "her şey demo edilebilsin, e-posta gerçekten gönderiliyormuş gibi davransın" diyor.
+
+- **Ödeme:** `PAYMENTS_MODE=simulated`. Kart alanı yok, ödeme kaydı gerçek (`payments` tablosu),
+  sipariş gerçekten `paid` olur.
+- **E-posta:** gerçek SMTP ile **Mailpit**'e gönderilir. Kod yolu üretimdekiyle aynıdır; yalnızca
+  varış noktası yereldir. "Sahte mailer" kullanılmadı: o zaman SMTP yolu hiç sınanmamış olurdu.
+
+Üretim ayarlarında config doğrulaması `simulated` ödemeyi **reddeder** — benzetim yanlışlıkla
+canlıya çıkamaz.
+
+## 20. Demo `NODE_ENV=development` ile çalışır
+
+`SEED_DEMO_DATA=true`, `PAYMENTS_MODE=simulated` ve `COOKIE_SECURE=false` üretimde reddedilir.
+Demoyu üretim kılığına sokmak için bu doğrulamaları gevşetmek yerine demo açıkça geliştirme
+ortamında bırakıldı: doğrulama sert kalsın, demo dürüst olsun.
+
+## 21. Hız sınırlarının Redis öneki ayrı
+
+Başta tüm limitler varsayılan öneki paylaşıyordu: tek sayaç, en dar limit (parola sıfırlama)
+birkaç istekte bütün API'yi 429'a düşürüyordu.
+
+Her limiterin kendi öneki var (`rl:<ad>:`). Yeni bir limiter eklerken önek vermeyi unutmayın.
+
+## 22. Konteynerler root değil, dosya sistemi salt okunur
+
+Tüm servisler root olmayan kullanıcıyla, `read_only: true`, `cap_drop: ALL` ve
+`no-new-privileges` ile çalışır. Veritabanı, Redis ve kuyruk `internal: true` bir ağdadır;
+dışarıya yalnızca web ve yönetim arayüzleri açılır.
+
+**Tuzak:** `cap_drop: ALL` Redis imajının root'tan `redis` kullanıcısına düşmesini engeller
+(`setpriv: setresuid failed`); bu yüzden `user: "redis"` açıkça verilir. Aynı şekilde yönetim
+arayüzleri `internal` ağdan port yayınlayamaz — ayrı bir `admin` ağı eklendi.
+
+## 23. Tailwind CSS v4, `@apply` zinciri yok
+
+v4'te `@apply` başka bir **component** sınıfını (ör. `.btn`) uygulayamaz; yalnızca utility'leri
+uygular. Bu yüzden buton türevleri ortak taban seçicisiyle birlikte tanımlanır.
+
+Bu bir üslup tercihi değil, derleme hatasıdır: `Cannot apply unknown utility class 'btn'`.
+
+## 24. Panel ekranları tembel yüklenir
+
+Vitrine gelen ziyaretçi yönetim panelinin kodunu indirmez. Rotalar `() => import(...)` ile
+tanımlıdır; ilk yük küçük kalır.
+
+Rotalardaki rol korumaları **kullanım kolaylığı** içindir, güvenlik değildir: asıl denetim
+sunucudadır.

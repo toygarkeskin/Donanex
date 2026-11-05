@@ -1,19 +1,16 @@
 "use strict";
 
 const { ValidationError } = require("../shared/errors");
+const { optionalText } = require("../shared/guards");
 
-const clean = (value) => (typeof value === "string" ? value.trim() : "");
+const CARRIERS = Object.freeze([
+  "Yurtiçi Kargo", "Aras Kargo", "MNG Kargo", "PTT Kargo", "Sürat Kargo", "UPS", "Diğer"
+]);
 
 /** Kargo bilgisi değer nesnesi. Boş alanlar null olarak saklanır. */
-function createShipping(body) {
-  const input = body || {};
-  const company = clean(input.shipping_company);
-  const trackingNumber = clean(input.tracking_number);
-  const trackingUrl = clean(input.tracking_url);
-
-  if (company.length > 100 || trackingNumber.length > 100 || trackingUrl.length > 500) {
-    throw new ValidationError("Kargo alanlarından biri çok uzun.");
-  }
+function createShipping(input) {
+  const data = input || {};
+  const trackingUrl = optionalText(data.trackingUrl, "Takip bağlantısı", 500);
 
   if (trackingUrl) {
     let protocol = null;
@@ -28,10 +25,10 @@ function createShipping(body) {
   }
 
   return Object.freeze({
-    company: company || null,
-    trackingNumber: trackingNumber || null,
-    trackingUrl: trackingUrl || null
+    carrier: optionalText(data.carrier, "Kargo firması", 100),
+    trackingNumber: optionalText(data.trackingNumber, "Takip numarası", 100),
+    trackingUrl
   });
 }
 
-module.exports = { createShipping };
+module.exports = { createShipping, CARRIERS };

@@ -1,556 +1,941 @@
 "use strict";
 
 /**
- * Gerçek PostgreSQL ile uçtan uca API testi. TEST_DB_HOST verilmezse atlanır:
- *   docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
- *
- * E-posta her zaman sahte posta kutusuna gider; gerçek SMTP'ye hiçbir şey gönderilmez.
+ * Uçtan uca API testleri: gerçek PostgreSQL ve Redis, gerçek HTTP.
+ * Çalıştırmak için:
+ *   docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
  */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { createPool, waitForDatabase } = require("../../src/infrastructure/persistence/postgres/pool");
-const { runMigrations } = require("../../src/infrastructure/persistence/postgres/migrate");
-const { seedProductsIfEmpty } = require("../../src/infrastructure/persistence/postgres/seed");
-const { buildContainer } = require("../../src/bootstrap/container");
-const { createApp } = require("../../src/presentation/http/app");
-const { ExpireUnpaidOrdersCommand } = require("../../src/application/ordering");
+const {
+  enabled,
+  skip,
+  startHarness,
+  Client,
+  ADMIN_EMAIL,
+  ADMIN_PASSWORD,
+  DEMO_PASSWORD,
+  REDIRECT_URI
+} = require("./helpers");
 
-const enabled = Boolean(process.env.TEST_DB_HOST);
-const opts = { skip: enabled ? false : "TEST_DB_HOST tanımlı değil" };
+const opts = { skip };
+let app;
+let anon;
 
-const ADMIN = { username: "yonetici", password: "test-yonetici-parolasi-123" };
-const CUSTOMER = { name: "Test Müşteri", email: "musteri@example.com", password: "Parola1234" };
-
-const config = {
-  port: 0,
-  isProduction: false,
-  trustProxy: false,
-  cookieSecure: false,
-  testPaymentsEnabled: true,
-  publicUrl: "http://site.test",
-  orderPaymentTtlMinutes: 60,
-  admin: ADMIN,
-  sessionSecret: "t".repeat(48),
-  smtp: {}
-};
-
-let pool, server, base, container;
-const outbox = [];
-
-class Client {
-  constructor() {
-    this.cookies = {};
-  }
-  async call(method, path, body, headers = {}) {
-    const cookie = Object.entries(this.cookies).map(([k, v]) => `${k}=${v}`).join("; ");
-    const response = await fetch(`${base}/api${path}`, {
-      method,
-      headers: {
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...(cookie ? { Cookie: cookie } : {}),
-        ...headers
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined
-    });
-    for (const raw of response.headers.getSetCookie()) {
-      const [pair] = raw.split(";");
-      const index = pair.indexOf("=");
-      const value = pair.slice(index + 1);
-      if (value) this.cookies[pair.slice(0, index)] = value;
-      else delete this.cookies[pair.slice(0, index)];
-    }
-    const text = await response.text();
-    let data = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      /* JSON değil */
-    }
-    return { status: response.status, data, headers: response.headers, rawCookies: response.headers.getSetCookie() };
-  }
-  get(path, headers) {
-    return this.call("GET", path, undefined, headers);
-  }
-  post(path, body = {}, headers) {
-    return this.call("POST", path, body, headers);
-  }
-  put(path, body = {}) {
-    return this.call("PUT", path, body);
-  }
-  patch(path, body = {}) {
-    return this.call("PATCH", path, body);
-  }
-  delete(path) {
-    return this.call("DELETE", path);
-  }
-}
-
-const admin = new Client();
-const anon = new Client();
-
-const checkout = (items, extra = {}) => ({
-  fullName: "Ali Veli",
-  email: "ali@example.com",
-  phone: "05550000000",
-  address: "İstanbul",
-  items,
-  ...extra
+const checkout = (overrides = {}) => ({
+  contact: { email: "misafir@example.com", fullName: "Misafir Alıcı", phone: "0555 000 11 22" },
+  shippingAddress: {
+    fullName: "Misafir Alıcı",
+    phone: "0555 000 11 22",
+    city: "Ankara",
+    district: "Çankaya",
+    line: "Deneme Mah. 1. Cad. No:3"
+  },
+  ...overrides
 });
 
-async function firstProduct(stock = 1) {
-  const { data } = await anon.get("/products");
-  return data.products.find((p) => p.stock >= stock);
+const firstProduct = async (minStock = 1) => {
+  const { data } = await anon.get("/api/products?pageSize=60");
+  return data.items.find((product) => product.stock >= minStock);
+};
+
+const stockOf = async (id) => {
+  const { data } = await anon.get(`/api/products?pageSize=60`);
+  return data.items.find((product) => product.id === id)?.stock ?? null;
+};
+
+/** Sepete ekleyip sipariş veren kısa yol. */
+async function placeGuestOrder(client, productId, quantity = 1) {
+  await client.post("/api/cart/items", { productId, quantity });
+  const response = await client.post("/api/orders", checkout());
+  return response;
 }
-const stockOf = async (id) => (await anon.get(`/products?ids=${id}`)).data.products[0].stock;
 
 test.before(async () => {
   if (!enabled) return;
-  pool = createPool({
-    host: process.env.TEST_DB_HOST,
-    port: Number(process.env.TEST_DB_PORT || 5432),
-    database: process.env.TEST_DB_NAME,
-    user: process.env.TEST_DB_USER,
-    password: process.env.TEST_DB_PASSWORD
-  });
-  await waitForDatabase(pool);
-  await pool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
-  await runMigrations(pool, () => {});
-  await seedProductsIfEmpty(pool, () => {});
-
-  container = buildContainer(
-    { pool, config },
-    { mailer: { send: async (mail) => (outbox.push(mail), true) } }
-  );
-  const app = createApp({ commands: container.commands, queries: container.queries, config, rateLimits: false, log: () => {} });
-  await new Promise((resolve) => {
-    server = app.listen(0, resolve);
-  });
-  base = `http://127.0.0.1:${server.address().port}`;
-
-  assert.equal((await admin.post("/admin/login", ADMIN)).status, 200);
-});
+  app = await startHarness();
+  anon = new Client(app.base);
+}, opts);
 
 test.after(async () => {
-  if (!enabled) return;
-  await new Promise((resolve) => server.close(resolve));
-  await pool.end();
+  if (app) await app.stop();
+}, opts);
+
+/* ------------------------------------------------------ sağlık ve keşif */
+
+test("sağlık ve hazırlık uçları", opts, async () => {
+  const health = await anon.get("/api/health");
+  assert.equal(health.status, 200);
+
+  const ready = await anon.get("/api/ready");
+  assert.equal(ready.status, 200);
+  assert.equal(ready.data.ready, true);
+  assert.equal(ready.data.checks.database, true);
 });
 
-test("Sağlık uçları çalışır, güvenlik başlıkları vardır", opts, async () => {
-  const health = await anon.get("/health");
-  assert.equal(health.status, 200);
-  assert.equal((await anon.get("/ready")).status, 200);
-  assert.equal(health.headers.get("x-powered-by"), null);
+test("güvenlik başlıkları ve önbellek politikası", opts, async () => {
+  const health = await anon.get("/api/health");
+  assert.equal(health.headers.get("x-powered-by"), null, "sunucu yazılımı gizlenir");
   assert.equal(health.headers.get("x-content-type-options"), "nosniff");
   assert.match(health.headers.get("content-security-policy"), /default-src 'none'/);
-  assert.equal((await anon.get("/products")).headers.get("cache-control"), "no-store");
-  assert.equal((await anon.get("/db-test")).status, 404, "eski tanılama ucu kaldırıldı");
+
+  const products = await anon.get("/api/products");
+  assert.equal(products.headers.get("cache-control"), "no-store", "API yanıtları önbelleklenmez");
 });
 
-test("Vitrin: arama, kategori ve kimlik filtresi; SQL enjeksiyonu etkisiz", opts, async () => {
-  const all = (await anon.get("/products")).data.products;
-  assert.ok(all.length >= 4);
+test("OIDC keşif belgesi ve JWKS", opts, async () => {
+  const discovery = await anon.get("/.well-known/openid-configuration");
+  assert.equal(discovery.status, 200);
+  assert.equal(discovery.data.issuer, "http://localhost:8090");
+  assert.deepEqual(discovery.data.code_challenge_methods_supported, ["S256"], "PKCE zorunlu ilan edilir");
+  assert.deepEqual(discovery.data.response_types_supported, ["code"], "örtük akış yok");
 
-  const laptops = (await anon.get("/products?category=Laptop")).data.products;
-  assert.ok(laptops.length > 0 && laptops.every((p) => p.category === "Laptop"));
-
-  assert.ok((await anon.get("/products?q=logitech")).data.products.length > 0);
-  assert.equal((await anon.get(`/products?q=${encodeURIComponent("' OR 1=1 --")}`)).data.products.length, 0);
-  assert.equal((await anon.get(`/products?q=${encodeURIComponent("%")}`)).data.products.length, 0, "joker kaçırılır");
-  assert.equal((await anon.get("/products?ids=abc")).data.products.length, 0);
-  assert.equal((await anon.get("/products?ids=99999999999")).status, 200);
-  assert.ok((await anon.get("/product-categories")).data.categories.includes("Laptop"));
+  const jwks = await anon.get("/oauth/jwks");
+  assert.equal(jwks.data.keys[0].kty, "RSA");
+  assert.ok(!("d" in jwks.data.keys[0]), "gizli anahtar sızmaz");
 });
 
-test("Yetkisiz kullanıcı yönetici ve müşteri uçlarına erişemez", opts, async () => {
-  for (const path of ["/admin/stats", "/admin/products", "/admin/orders", "/admin/support", "/admin/support/1"]) {
-    assert.equal((await anon.get(path)).status, 401, path);
-  }
-  assert.equal((await anon.post("/admin/products", {})).status, 401);
-  assert.equal((await anon.delete("/admin/products/1")).status, 401);
-  assert.equal((await anon.patch("/admin/orders/1/status", { status: "İptal edildi" })).status, 401);
-  for (const path of ["/customers/address", "/customers/orders"]) {
-    assert.equal((await anon.get(path)).status, 401, path);
-  }
-  assert.equal((await anon.post("/customers/orders/1/cancel")).status, 401);
+/* ------------------------------------------------------------- vitrin */
+
+test("vitrin kayıtsız kullanıcıya açıktır", opts, async () => {
+  const products = await anon.get("/api/products");
+  assert.equal(products.status, 200);
+  assert.ok(products.data.total > 10, `${products.data.total} ürün`);
+
+  const categories = await anon.get("/api/categories");
+  assert.ok(categories.data.items.length > 0);
+
+  const stores = await anon.get("/api/storefront/stores");
+  assert.ok(stores.data.items.length >= 4);
+
+  const sample = products.data.items[0];
+  const detail = await anon.get(`/api/products/${sample.storeSlug}/${sample.slug}`);
+  assert.equal(detail.data.id, sample.id);
+  assert.equal((await anon.get("/api/products/yok/yok")).status, 404);
 });
 
-test("Müşteri belirteci yönetici çerezi olarak kullanılamaz; sahte çerez reddedilir", opts, async () => {
-  const c = new Client();
-  await c.post("/customers/register", { ...CUSTOMER, email: "cerez@example.com" });
-  await c.post("/customers/login", { email: "cerez@example.com", password: CUSTOMER.password });
-  const hacker = new Client();
-  hacker.cookies.admin_session = c.cookies.customer_session;
-  assert.equal((await hacker.get("/admin/stats")).status, 401);
-  hacker.cookies.admin_session = "e30.sahte";
-  assert.equal((await hacker.get("/admin/stats")).status, 401);
+test("arama ve filtreler; SQL enjeksiyonu ile joker etkisiz", opts, async () => {
+  assert.ok((await anon.get("/api/products?q=klavye")).data.total > 0);
+  assert.equal((await anon.get(`/api/products?q=${encodeURIComponent("' OR 1=1 --")}`)).data.total, 0);
+  assert.equal((await anon.get(`/api/products?q=${encodeURIComponent("%")}`)).data.total, 0, "LIKE jokeri kaçırılır");
+  assert.equal((await anon.get(`/api/products?q=${encodeURIComponent("_")}`)).data.total, 0);
+
+  const filtered = await anon.get("/api/products?category=laptop");
+  assert.ok(filtered.data.total > 0);
+  assert.equal((await anon.get("/api/products?minPrice=999999")).data.total, 0);
+
+  const paged = await anon.get("/api/products?pageSize=2&page=1");
+  assert.equal(paged.data.items.length, 2);
+  assert.ok(paged.data.pages > 1);
 });
 
-test("Çerezler HttpOnly ve SameSite=Strict'tir", opts, async () => {
-  const c = new Client();
-  const { rawCookies } = await c.post("/admin/login", ADMIN);
-  assert.match(rawCookies[0], /HttpOnly/);
-  assert.match(rawCookies[0], /SameSite=Strict/);
+/* ------------------------------------------------- misafir sepeti ve sipariş */
+
+test("misafir sepet açabilir, sepet sunucuda tutulur", opts, async () => {
+  const guest = new Client(app.base);
+  const product = await firstProduct(3);
+
+  const added = await guest.post("/api/cart/items", { productId: product.id, quantity: 2 });
+  assert.equal(added.status, 201);
+  assert.equal(added.data.itemCount, 2);
+  assert.ok(guest.cookies.pzr_cart, "sepet kimliği HttpOnly çerezde taşınır");
+
+  const cart = await guest.get("/api/cart");
+  assert.equal(cart.data.items.length, 1);
+  assert.equal(cart.data.items[0].storeSlug, product.storeSlug, "ürün bağlantısı için mağaza adresi döner");
+
+  const tooMany = await guest.put(`/api/cart/items/${product.id}`, { quantity: 99 });
+  assert.equal(tooMany.status, 409);
+
+  const removed = await guest.delete(`/api/cart/items/${product.id}`);
+  assert.equal(removed.data.itemCount, 0);
 });
 
-test("Başka siteden gelen istek (CSRF) reddedilir", opts, async () => {
-  const body = { email: "x@y.co", password: "z" };
-  const evil = await anon.post("/customers/login", body, { Origin: "https://kotu-site.test" });
-  assert.equal(evil.status, 403);
-  const crossSite = await anon.post("/customers/login", body, { "Sec-Fetch-Site": "cross-site" });
-  assert.equal(crossSite.status, 403);
-  const same = await anon.post("/customers/login", body, { Origin: base });
-  assert.equal(same.status, 401, "aynı kaynak geçer ve kimlik denetimine ulaşır");
+test("sepet başka bir tarayıcıdan okunamaz", opts, async () => {
+  const guest = new Client(app.base);
+  const product = await firstProduct();
+  await guest.post("/api/cart/items", { productId: product.id, quantity: 1 });
+
+  const other = new Client(app.base);
+  assert.equal((await other.get("/api/cart")).data.itemCount, 0, "çerezi olmayan boş sepet görür");
 });
 
-test("Sipariş: tutar sunucuda hesaplanır, istemci fiyatı yok sayılır, stok düşer", opts, async () => {
+test("misafir kayıt olmadan sipariş verebilir ve takip kodu alır", opts, async () => {
+  const guest = new Client(app.base);
   const product = await firstProduct(2);
   const before = product.stock;
-  const { status, data } = await anon.post(
-    "/orders",
-    checkout([{ productId: product.id, quantity: 2, price: 0.01 }], { total: 0.01 })
-  );
-  assert.equal(status, 201);
-  assert.equal(Number(data.total), Number(product.price) * 2);
-  assert.match(data.trackingCode, /^[a-f0-9]{48}$/);
-  assert.equal(await stockOf(product.id), before - 2);
+
+  const order = await placeGuestOrder(guest, product.id, 2);
+  assert.equal(order.status, 201);
+  assert.match(order.data.orderNumber, /^PZ-\d{4}-\d{6}$/);
+  assert.match(order.data.trackingCode, /^[a-f0-9]{64}$/);
+  assert.ok(order.data.registrationHint, "kayıt olabileceği hatırlatılır");
+  assert.equal(await stockOf(product.id), before - 2, "stok ayrılır");
+
+  const mail = await app.outbox.waitFor((message) => message.subject.includes(order.data.orderNumber));
+  assert.ok(mail, "sipariş e-postası gönderilir");
+  assert.ok(mail.text.includes(order.data.trackingCode), "misafire takip kodu yazılır");
 });
 
-test("Sipariş: stoktan fazlası ve geçersiz girdi reddedilir", opts, async () => {
+test("istemciden gelen fiyat ve toplam yok sayılır", opts, async () => {
+  const guest = new Client(app.base);
   const product = await firstProduct();
-  const over = await anon.post("/orders", checkout([{ productId: product.id, quantity: 99 }]));
-  assert.equal(over.status, 409);
-  assert.equal((await anon.post("/orders", checkout([{ productId: 2147483648, quantity: 1 }]))).status, 400);
-  assert.equal((await anon.post("/orders", checkout([{ productId: "1; DROP TABLE orders", quantity: 1 }]))).status, 400);
-  assert.equal((await anon.post("/orders", { items: "x" })).status, 400);
+  await guest.post("/api/cart/items", { productId: product.id, quantity: 1, price: 1 });
+
+  const order = await guest.post("/api/orders", { ...checkout(), total: 1, items: [{ productId: product.id, quantity: 99 }] });
+  assert.equal(order.status, 201);
+  assert.equal(order.data.total.cents, product.price.cents, "tutar sunucuda hesaplanır");
 });
 
-test("Eş zamanlı siparişler stoğu aşamaz (satır kilidi)", opts, async () => {
-  const { data } = await admin.post("/admin/products", {
-    name: "Son Ürün", description: "d", price: 10, image: "/assets/a.png", category: "Test", stock: 3
+test("geçersiz sipariş girdileri reddedilir", opts, async () => {
+  const guest = new Client(app.base);
+  const product = await firstProduct();
+  await guest.post("/api/cart/items", { productId: product.id, quantity: 1 });
+
+  assert.equal((await guest.post("/api/orders", {})).status, 400);
+  assert.equal((await guest.post("/api/orders", checkout({ contact: { email: "yok" } }))).status, 400);
+  assert.equal((await new Client(app.base).post("/api/orders", checkout())).status, 400, "boş sepet");
+
+  assert.equal((await guest.post("/api/cart/items", { productId: "1; DROP TABLE orders", quantity: 1 })).status, 400);
+  assert.equal((await guest.post("/api/cart/items", { productId: product.id, quantity: -1 })).status, 400);
+  assert.equal((await guest.post("/api/cart/items", { productId: product.id, quantity: 1.5 })).status, 400);
+});
+
+test("eş zamanlı siparişler stoğu aşamaz", opts, async () => {
+  const owner = new Client(app.base);
+  assert.ok((await owner.signIn("teknoloji@pazar.test", DEMO_PASSWORD)).ok);
+  const me = await owner.get("/api/me");
+  const storeId = me.data.stores[0].id;
+
+  const created = await owner.post(`/api/stores/${storeId}/products`, {
+    name: "Yarış Testi Ürünü",
+    description: "Eş zamanlılık testi.",
+    price: "10.00",
+    stock: 3,
+    imageUrl: "/images/urunler/ssd.png",
+    status: "active"
   });
-  const id = data.product.id;
-  const results = await Promise.all(
-    Array.from({ length: 10 }, () => anon.post("/orders", checkout([{ productId: id, quantity: 1 }])))
+  const productId = created.data.id;
+
+  // On istemci aynı anda son üç ürüne talip olur.
+  const attempts = await Promise.all(
+    Array.from({ length: 10 }, async () => {
+      const client = new Client(app.base);
+      return placeGuestOrder(client, productId, 1);
+    })
   );
-  assert.equal(results.filter((r) => r.status === 201).length, 3);
-  assert.equal(results.filter((r) => r.status === 409).length, 7);
-  assert.equal(await stockOf(id), 0);
+
+  const statuses = attempts.map((result) => result.status);
+  const failures = attempts
+    .filter((result) => result.status >= 500)
+    .map((result) => JSON.stringify(result.data));
+  assert.equal(statuses.filter((status) => status === 201).length, 3, `yalnızca stok kadar sipariş geçer: ${statuses}`);
+  assert.ok(
+    statuses.every((status) => status === 201 || status === 409),
+    `her istek ya başarılı ya "stok yetersiz" olmalı, sunucu hatası olmamalı: ${statuses} :: ${failures}`
+  );
+  assert.equal(await stockOf(productId), 0);
 });
 
-test("Güvenlik: takip kodu olmadan sipariş görülemez ve ödemesi değiştirilemez", opts, async () => {
-  const product = await firstProduct();
-  const before = product.stock;
-  const { data } = await anon.post("/orders", checkout([{ productId: product.id, quantity: 1 }]));
-  const { orderId, trackingCode } = data;
+/* ------------------------------------------------------- ödeme ve takip */
 
-  assert.equal((await anon.get(`/orders/${orderId}`)).status, 404, "eski açık uç kaldırıldı");
-  assert.equal((await anon.post(`/orders/${orderId}/payment-summary`, {})).status, 404);
-  assert.equal((await anon.post(`/orders/${orderId}/test-payment`, { successful: false })).status, 404);
+test("ödeme ve sipariş görüntüleme takip kodu ister", opts, async () => {
+  const guest = new Client(app.base);
+  const product = await firstProduct();
+  const order = await placeGuestOrder(guest, product.id);
+  const { orderId, trackingCode, orderNumber } = order.data;
+
+  // Takip kodu olmadan: bulunamadı.
+  assert.equal((await anon.post(`/api/orders/${orderId}/payment`, { outcome: "success" })).status, 404);
   assert.equal(
-    (await anon.post(`/orders/${orderId}/test-payment`, { successful: false, trackingCode: "0".repeat(48) })).status,
+    (await anon.post(`/api/orders/${orderId}/payment`, { outcome: "success", trackingCode: "0".repeat(64) })).status,
     404
   );
-  assert.equal(await stockOf(product.id), before - 1, "stok değişmemeli");
+  assert.equal((await anon.post("/api/orders/track", { orderNumber, trackingCode: "0".repeat(64) })).status, 404);
 
-  const summary = await anon.post(`/orders/${orderId}/payment-summary`, { trackingCode });
-  assert.equal(summary.status, 200);
-  assert.deepEqual(Object.keys(summary.data.order).sort(), ["id", "status", "total"], "kişisel veri dönmez");
-
-  const paid = await anon.post(`/orders/${orderId}/test-payment`, { successful: true, trackingCode });
-  assert.equal(paid.data.order.status, "Test başarılı");
-  assert.equal((await anon.post(`/orders/${orderId}/test-payment`, { successful: false, trackingCode })).status, 409);
-});
-
-test("Başarısız ödeme stoğu iade eder", opts, async () => {
-  const product = await firstProduct();
-  const { data } = await anon.post("/orders", checkout([{ productId: product.id, quantity: 1 }]));
-  await anon.post(`/orders/${data.orderId}/test-payment`, { successful: false, trackingCode: data.trackingCode });
-  assert.equal(await stockOf(product.id), product.stock);
-});
-
-test("Takip: yanlış kod bilgi sızdırmaz, doğru kod durumu döndürür", opts, async () => {
-  const product = await firstProduct();
-  const { data } = await anon.post("/orders", checkout([{ productId: product.id, quantity: 1 }]));
-  const track = (trackingCode) => anon.post("/order-tracking", { orderId: data.orderId, trackingCode });
-
-  assert.equal((await track("0".repeat(48))).status, 404);
-  assert.equal((await track({ $ne: null })).status, 400);
-  const ok = await track(data.trackingCode);
-  assert.equal(ok.status, 200);
-  assert.equal(ok.data.order.status, "Ödeme bekleniyor");
-  assert.equal(ok.data.order.email, undefined);
-  assert.equal(ok.data.order.address, undefined);
-});
-
-test("Test ödeme uçları kapatılınca yanıt vermez", opts, async () => {
-  const closed = createApp({
-    commands: container.commands,
-    queries: container.queries,
-    config: { ...config, testPaymentsEnabled: false },
-    rateLimits: false,
-    log: () => {}
-  });
-  const srv = await new Promise((resolve) => {
-    const s = closed.listen(0, () => resolve(s));
-  });
-  const response = await fetch(`http://127.0.0.1:${srv.address().port}/api/orders/1/test-payment`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}"
-  });
-  assert.equal(response.status, 404);
-  await new Promise((resolve) => srv.close(resolve));
-});
-
-test("Süresi dolan ödenmemiş sipariş iptal edilir, stok döner", opts, async () => {
-  const product = await firstProduct();
-  const { data } = await anon.post("/orders", checkout([{ productId: product.id, quantity: 1 }]));
-  await pool.query("UPDATE orders SET created_at = NOW() - INTERVAL '2 hours' WHERE id = $1", [data.orderId]);
-
-  const { expired } = await container.commands.execute(new ExpireUnpaidOrdersCommand(60));
-  assert.ok(expired >= 1);
-  assert.equal(await stockOf(product.id), product.stock);
-  const track = await anon.post("/order-tracking", { orderId: data.orderId, trackingCode: data.trackingCode });
-  assert.equal(track.data.order.status, "İptal edildi");
-});
-
-test("Müşteri: kayıt, giriş, adres, geçmiş, başkasının siparişini iptal edememe", opts, async () => {
-  const c = new Client();
-  assert.equal((await c.post("/customers/register", CUSTOMER)).status, 201);
-  assert.equal((await c.post("/customers/register", CUSTOMER)).status, 409);
-  assert.equal((await c.post("/customers/register", { ...CUSTOMER, email: "z@z.co", password: "12345678" })).status, 400);
-  assert.equal((await c.post("/customers/login", { email: CUSTOMER.email, password: "yanlis" })).status, 401);
-  assert.equal((await c.post("/customers/login", { email: "yok@example.com", password: "yanlis" })).status, 401);
-  assert.equal((await c.post("/customers/login", { email: { $gt: "" }, password: "x" })).status, 400);
-  assert.equal((await c.post("/customers/login", CUSTOMER)).status, 200);
-  assert.equal((await c.get("/customers/session")).data.customer.email, CUSTOMER.email);
-
-  assert.equal((await c.put("/customers/address", { fullName: "A", phone: "05551112233", address: "Adres" })).status, 200);
-  assert.equal((await c.get("/customers/address")).data.address.address, "Adres");
-  assert.equal((await c.put("/customers/profile", { name: "Yeni Ad" })).data.name, "Yeni Ad");
-
-  const product = await firstProduct();
-  const own = await c.post("/orders", checkout([{ productId: product.id, quantity: 1 }]));
-  const listed = (await c.get("/customers/orders")).data.orders;
-  assert.equal(listed.length, 1);
-  assert.equal(listed[0].canCancel, true);
-
-  const other = new Client();
-  await other.post("/customers/register", { ...CUSTOMER, email: "diger@example.com" });
-  await other.post("/customers/login", { email: "diger@example.com", password: CUSTOMER.password });
-  assert.equal((await other.get("/customers/orders")).data.orders.length, 0);
-  assert.equal((await other.post(`/customers/orders/${own.data.orderId}/cancel`)).status, 404);
-
-  assert.equal((await c.post(`/customers/orders/${own.data.orderId}/cancel`)).status, 200);
-  assert.equal(await stockOf(product.id), product.stock);
-});
-
-test("Çıkış belirteci iptal eder: çalınmış çerez işe yaramaz", opts, async () => {
-  const c = new Client();
-  await c.post("/customers/login", CUSTOMER);
-  const stolen = c.cookies.customer_session;
-  await c.post("/customers/logout");
-
-  const thief = new Client();
-  thief.cookies.customer_session = stolen;
-  assert.equal((await thief.get("/customers/orders")).status, 401);
-
-  const a = new Client();
-  await a.post("/admin/login", ADMIN);
-  const stolenAdmin = a.cookies.admin_session;
-  await a.post("/admin/logout");
-  const adminThief = new Client();
-  adminThief.cookies.admin_session = stolenAdmin;
-  assert.equal((await adminThief.get("/admin/stats")).status, 401);
-});
-
-test("Parola değişimi: eski parola ister, diğer oturumları kapatır", opts, async () => {
-  const email = "degisim@example.com";
-  const c = new Client();
-  await c.post("/customers/register", { ...CUSTOMER, email });
-  await c.post("/customers/login", { email, password: CUSTOMER.password });
-  const otherDevice = new Client();
-  await otherDevice.post("/customers/login", { email, password: CUSTOMER.password });
-
-  assert.equal((await c.put("/customers/password", { currentPassword: "yanlis", newPassword: "YeniParola99" })).status, 401);
-  assert.equal((await c.put("/customers/password", { currentPassword: CUSTOMER.password, newPassword: "kisa" })).status, 400);
-  assert.equal((await c.put("/customers/password", { currentPassword: CUSTOMER.password, newPassword: "YeniParola99" })).status, 200);
-
-  assert.equal((await c.get("/customers/address")).status, 200, "bu cihaz oturumda kalır");
-  assert.equal((await otherDevice.get("/customers/address")).status, 401, "diğer cihaz düşer");
-  assert.equal((await new Client().post("/customers/login", { email, password: CUSTOMER.password })).status, 401);
-  assert.equal((await new Client().post("/customers/login", { email, password: "YeniParola99" })).status, 200);
-});
-
-test("Parola sıfırlama: tek kullanımlık, aynı yanıt, oturumları kapatır", opts, async () => {
-  const email = "sifirla@example.com";
-  const c = new Client();
-  await c.post("/customers/register", { ...CUSTOMER, email });
-  await c.post("/customers/login", { email, password: CUSTOMER.password });
-
-  const unknown = await anon.post("/customers/password/forgot", { email: "kayitsiz@example.com" });
-  const known = await anon.post("/customers/password/forgot", { email });
-  assert.equal(unknown.status, 200);
-  assert.deepEqual(unknown.data, known.data, "yanıt e-postanın kayıtlı olduğunu ele vermez");
-
-  for (let i = 0; i < 100 && !outbox.some((m) => m.to === email); i++) {
-    await new Promise((resolve) => setTimeout(resolve, 20));
+  const tracked = await anon.post("/api/orders/track", { orderNumber, trackingCode });
+  assert.equal(tracked.status, 200);
+  assert.equal(tracked.data.orderNumber, orderNumber);
+  for (const leak of ["contactEmail", "contactPhone", "shippingAddress"]) {
+    assert.equal(leak in tracked.data, false, `${leak} takip yanıtında dönmemeli`);
   }
-  const mail = outbox.find((m) => m.to === email);
-  assert.ok(mail, "e-posta gönderilmeli");
-  assert.ok(!outbox.some((m) => m.to === "kayitsiz@example.com"));
-  assert.ok(mail.text.includes("http://site.test/parolaunut.html#token="), "bağlantı PUBLIC_URL'den üretilir");
-  const token = mail.text.match(/#token=([a-f0-9]{48})/)[1];
-
-  const { rows } = await pool.query("SELECT token_hash FROM password_reset_tokens");
-  assert.ok(rows.every((r) => r.token_hash !== token), "açık belirteç veritabanında tutulmaz");
-
-  assert.equal((await anon.post("/customers/password/reset", { token: "0".repeat(48), password: "Sifirlandi99" })).status, 400);
-  assert.equal((await anon.post("/customers/password/reset", { token, password: "kisa" })).status, 400);
-  assert.equal((await anon.post("/customers/password/reset", { token, password: "Sifirlandi99" })).status, 200);
-  assert.equal((await anon.post("/customers/password/reset", { token, password: "Baska12345" })).status, 400, "tek kullanımlık");
-
-  assert.equal((await c.get("/customers/address")).status, 401, "eski oturum kapanır");
-  assert.equal((await new Client().post("/customers/login", { email, password: "Sifirlandi99" })).status, 200);
 });
 
-test("Eski biçimli parola girişte yükseltilir", opts, async () => {
-  const crypto = require("crypto");
-  const salt = "abcdef";
-  const legacy = `${salt}:${crypto.scryptSync("EskiParola1", salt, 64).toString("hex")}`;
-  await pool.query("INSERT INTO customers (name, email, password_hash) VALUES ('Eski', 'eski@example.com', $1)", [legacy]);
+test("ödeme bir kez işlenir, başarısız ödeme stoğu iade eder", opts, async () => {
+  const product = await firstProduct(2);
+  const before = product.stock;
 
-  assert.equal((await new Client().post("/customers/login", { email: "eski@example.com", password: "EskiParola1" })).status, 200);
-  const { rows } = await pool.query("SELECT password_hash FROM customers WHERE email = 'eski@example.com'");
-  assert.match(rows[0].password_hash, /^scrypt\$/);
-  assert.equal((await new Client().post("/customers/login", { email: "eski@example.com", password: "EskiParola1" })).status, 200);
-});
-
-test("Yönetici: ürün CRUD, içe aktarma, görsel doğrulaması, satıştan kaldırma", opts, async () => {
-  const body = { name: "Yeni", description: "Açıklama", price: "150.50", image: "/assets/a.png", category: "Test", stock: 5 };
-  const created = await admin.post("/admin/products", body);
-  assert.equal(created.status, 201);
-  const id = created.data.product.id;
-
-  assert.equal((await admin.post("/admin/products", { ...body, image: "javascript:alert(1)" })).status, 400);
-  assert.equal((await admin.put(`/admin/products/${id}`, { ...body, stock: 7 })).data.product.stock, 7);
-  assert.equal((await admin.put("/admin/products/999999", body)).status, 404);
-  assert.equal((await admin.put("/admin/products/abc", body)).status, 400);
-
-  const deleted = await admin.delete(`/admin/products/${id}`);
-  assert.equal(deleted.data.archived, false);
-  assert.equal((await admin.delete(`/admin/products/${id}`)).status, 404);
-
-  // Satılmış ürün silinmez, satıştan kaldırılır ve geri alınır.
-  const sold = await admin.post("/admin/products", body);
-  const soldId = sold.data.product.id;
-  await anon.post("/orders", checkout([{ productId: soldId, quantity: 1 }]));
-  assert.equal((await admin.delete(`/admin/products/${soldId}`)).data.archived, true);
-  assert.equal((await anon.get(`/products?ids=${soldId}`)).data.products.length, 0);
-  assert.equal((await anon.post("/orders", checkout([{ productId: soldId, quantity: 1 }]))).status, 400);
-  assert.equal((await admin.post(`/admin/products/${soldId}/restore`)).status, 200);
-  assert.equal((await anon.get(`/products?ids=${soldId}`)).data.products.length, 1);
-
-  const imported = await admin.post("/admin/products/bulk", { products: [{ name: "CSV 1", price: 10 }, { name: "CSV 2", price: 20, stock: 2 }] });
-  assert.equal(imported.data.count, 2);
-  const badImport = await admin.post("/admin/products/bulk", { products: [{ name: "Tamam", price: 1 }, { name: "", price: 1 }] });
-  assert.equal(badImport.status, 400);
-  assert.match(badImport.data.message, /3\. satır/);
-  const names = (await admin.get("/admin/products")).data.products.map((p) => p.name);
-  assert.ok(!names.includes("Tamam"), "içe aktarma hep ya da hiç çalışır");
-
-  assert.ok((await admin.get("/admin/stats")).data.stats.product_count > 0);
-});
-
-test("Yönetici: sipariş filtreleri, sayfalama, yaşam döngüsü, kargo", opts, async () => {
-  const product = await firstProduct();
-  const { data } = await anon.post("/orders", checkout([{ productId: product.id, quantity: 1 }], { fullName: "Filtre Kişisi" }));
-  const id = data.orderId;
-
-  const found = await admin.get(`/admin/orders?q=${encodeURIComponent("Filtre Kişisi")}`);
-  assert.equal(found.data.total, 1);
-  assert.deepEqual(found.data.orders[0].allowed_statuses, ["Test başarılı", "Test başarısız", "Hazırlanıyor", "İptal edildi"]);
-
-  const paged = await admin.get("/admin/orders?page=1&pageSize=2");
-  assert.equal(paged.data.orders.length, 2);
-  assert.ok(paged.data.pages > 1);
-  assert.equal((await admin.get("/admin/orders?status=Ödeme bekleniyor&from=2000-01-01&to=2999-01-01")).status, 200);
-  assert.equal((await admin.get(`/admin/orders?from=${encodeURIComponent("'; DROP TABLE orders;--")}`)).status, 200);
-
-  const status = (s) => admin.patch(`/admin/orders/${id}/status`, { status: s });
-  assert.equal((await status("Teslim edildi")).status, 409, "basamak atlanamaz");
-  assert.equal((await status("Uydurma")).status, 400);
-  assert.equal((await status("Hazırlanıyor")).status, 200);
-  assert.equal((await status("Kargoya verildi")).status, 200);
-
-  assert.equal((await admin.patch(`/admin/orders/${id}/shipping`, { tracking_url: "javascript:alert(1)" })).status, 400);
-  const shipping = await admin.patch(`/admin/orders/${id}/shipping`, {
-    shipping_company: "Kargo A.Ş.", tracking_number: "123", tracking_url: "https://kargo.example/123"
+  const first = new Client(app.base);
+  const success = await placeGuestOrder(first, product.id);
+  const paid = await first.post(`/api/orders/${success.data.orderId}/payment`, {
+    outcome: "success",
+    trackingCode: success.data.trackingCode
   });
-  assert.equal(shipping.data.order.tracking_number, "123");
+  assert.equal(paid.data.status, "paid");
+  assert.equal(paid.data.simulated, true);
 
-  const track = await anon.post("/order-tracking", { orderId: id, trackingCode: data.trackingCode });
-  assert.equal(track.data.order.shipping_company, "Kargo A.Ş.");
+  const again = await first.post(`/api/orders/${success.data.orderId}/payment`, {
+    outcome: "success",
+    trackingCode: success.data.trackingCode
+  });
+  assert.equal(again.status, 409, "ödeme ikinci kez işlenemez");
+
+  const second = new Client(app.base);
+  const failing = await placeGuestOrder(second, product.id);
+  await second.post(`/api/orders/${failing.data.orderId}/payment`, {
+    outcome: "failure",
+    trackingCode: failing.data.trackingCode
+  });
+  assert.equal(await stockOf(product.id), before - 1, "başarısız ödemenin stoğu iade edilir");
 });
 
-test("Destek: e-posta yalnızca yanıt değişince gönderilir", opts, async () => {
-  assert.equal((await anon.post("/support", { fullName: "A", email: "gecersiz", message: "m" })).status, 400);
-  const created = await anon.post("/support", { fullName: "Destek Kişisi", email: "destek@example.com", message: "<img src=x onerror=alert(1)>" });
+/* --------------------------------------------------------- kayıt ve giriş */
+
+test("kayıt misafir sepetini hesaba taşır", opts, async () => {
+  const guest = new Client(app.base);
+  const product = await firstProduct(2);
+  await guest.post("/api/cart/items", { productId: product.id, quantity: 2 });
+
+  const email = `yeni${Date.now()}@example.com`;
+  const register = await guest.post("/api/auth/register", {
+    fullName: "Yeni Üye",
+    email,
+    password: "YeniUye2026x",
+    phone: "0555 123 45 67"
+  });
+
+  assert.equal(register.status, 201);
+  assert.equal(register.data.mergedCartItems, 1, "misafir sepeti kaybolmaz");
+
+  const signedIn = new Client(app.base);
+  assert.ok((await signedIn.signIn(email, "YeniUye2026x")).ok);
+  assert.equal((await signedIn.get("/api/cart")).data.itemCount, 2, "sepet hesapta duruyor");
+});
+
+test("kayıt kuralları ve yinelenen e-posta", opts, async () => {
+  const email = `tekrar${Date.now()}@example.com`;
+  const body = { fullName: "Ali Veli", email, password: "GucluParola1" };
+
+  assert.equal((await anon.post("/api/auth/register", body)).status, 201);
+  assert.equal((await anon.post("/api/auth/register", body)).status, 409);
+  assert.equal((await anon.post("/api/auth/register", { ...body, email: `x${Date.now()}@e.co`, password: "kisa1" })).status, 400);
+  assert.equal((await anon.post("/api/auth/register", { ...body, email: "gecersiz" })).status, 400);
+});
+
+test("hatalı giriş aynı mesajı döndürür ve oturum açmaz", opts, async () => {
+  const wrongPassword = await new Client(app.base).signIn("musteri@pazar.test", "YanlisParola1");
+  const unknownUser = await new Client(app.base).signIn("hicyok@example.com", "YanlisParola1");
+
+  assert.equal(wrongPassword.ok, false);
+  assert.equal(unknownUser.ok, false);
+  assert.equal(wrongPassword.reason, unknownUser.reason, "kayıtlı e-posta ele verilmez");
+});
+
+/* ----------------------------------------------------------- OAuth 2.1 */
+
+test("yetkilendirme kodu akışı PKCE ile tamamlanır", opts, async () => {
+  const client = new Client(app.base);
+  const result = await client.signIn("musteri@pazar.test", DEMO_PASSWORD);
+
+  assert.ok(result.ok, result.reason);
+  assert.ok(result.tokens.access_token);
+  assert.ok(result.tokens.id_token, "openid istendiğinde id_token verilir");
+  assert.equal(result.tokens.token_type, "Bearer");
+  assert.equal(result.state, "test-state", "state geri döner");
+  assert.ok(!result.tokens.refresh_token, "yenileme jetonu gövdede dönmez");
+  assert.ok(client.cookies.pzr_rt, "yenileme jetonu HttpOnly çerezdedir");
+});
+
+test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => {
+  const crypto = require("crypto");
+  const client = new Client(app.base);
+  const verifier = crypto.randomBytes(48).toString("base64url");
+  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+
+  const authorize = await client.get(
+    `/oauth/authorize?response_type=code&client_id=pazar-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&scope=openid&state=s&code_challenge=${challenge}&code_challenge_method=S256`
+  );
+  const authRequestId = new URL(authorize.headers.get("location")).searchParams.get("auth");
+  const signIn = await client.post("/api/auth/sign-in", {
+    email: "musteri@pazar.test",
+    password: DEMO_PASSWORD,
+    authRequestId
+  });
+  const code = new URL(signIn.data.redirectTo).searchParams.get("code");
+
+  const wrongVerifier = await client.form("/oauth/token", {
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: REDIRECT_URI,
+    client_id: "pazar-web",
+    code_verifier: crypto.randomBytes(48).toString("base64url")
+  });
+  assert.equal(wrongVerifier.status, 400);
+  assert.equal(wrongVerifier.data.error, "invalid_request");
+
+  // Doğru doğrulayıcı da artık çalışmaz: kod tek kullanımlıktır.
+  const retry = await client.form("/oauth/token", {
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: REDIRECT_URI,
+    client_id: "pazar-web",
+    code_verifier: verifier
+  });
+  assert.ok(retry.status >= 400, "tüketilen kod yeniden kullanılamaz");
+});
+
+test("authorize geçersiz istekleri reddeder", opts, async () => {
+  const base = `/oauth/authorize?response_type=code&client_id=pazar-web&scope=openid&code_challenge_method=S256&code_challenge=${"a".repeat(43)}`;
+
+  const badRedirect = await anon.get(`${base}&redirect_uri=${encodeURIComponent("https://evil.test/callback")}`);
+  assert.equal(badRedirect.status, 400, "kayıtlı olmayan redirect_uri reddedilir");
+  assert.equal(badRedirect.headers.get("location"), null, "doğrulanmadan yönlendirme yapılmaz");
+
+  const plain = await anon.get(
+    `/oauth/authorize?response_type=code&client_id=pazar-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=openid&code_challenge=x&code_challenge_method=plain`
+  );
+  assert.equal(plain.status, 400, "düz PKCE kabul edilmez");
+
+  const token = await anon.get(
+    `/oauth/authorize?response_type=token&client_id=pazar-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=openid&code_challenge_method=S256&code_challenge=${"a".repeat(43)}`
+  );
+  assert.equal(token.status, 400, "örtük akış kapalı");
+
+  const unknownClient = await anon.get(`${base.replace("pazar-web", "uydurma")}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`);
+  assert.equal(unknownClient.status, 400);
+});
+
+test("yenileme jetonu döner ve tekrar kullanımı oturumu kapatır", opts, async () => {
+  const client = new Client(app.base);
+  assert.ok((await client.signIn("ahmet@pazar.test", DEMO_PASSWORD)).ok);
+  const stolen = client.cookies.pzr_rt;
+
+  const refreshed = await client.form("/oauth/token", { grant_type: "refresh_token", client_id: "pazar-web" });
+  assert.equal(refreshed.status, 200);
+  assert.ok(refreshed.data.access_token);
+  assert.notEqual(client.cookies.pzr_rt, stolen, "yenileme jetonu döndürülür");
+
+  // Çalınan eski jeton kullanılırsa tüm zincir iptal edilir.
+  const thief = new Client(app.base);
+  const reuse = await thief.form("/oauth/token", {
+    grant_type: "refresh_token",
+    client_id: "pazar-web",
+    refresh_token: stolen
+  });
+  assert.equal(reuse.status, 401);
+
+  const afterReuse = await client.form("/oauth/token", { grant_type: "refresh_token", client_id: "pazar-web" });
+  assert.equal(afterReuse.status, 401, "hırsızlık tespit edilince aile iptal edilir");
+});
+
+test("çıkış oturumu sunucuda iptal eder", opts, async () => {
+  const client = new Client(app.base);
+  await client.signIn("musteri@pazar.test", DEMO_PASSWORD);
+  const stolenRefresh = client.cookies.pzr_rt;
+
+  assert.equal((await client.get("/api/me")).status, 200);
+  await client.post("/api/auth/sign-out");
+
+  const thief = new Client(app.base);
+  const reuse = await thief.form("/oauth/token", {
+    grant_type: "refresh_token",
+    client_id: "pazar-web",
+    refresh_token: stolenRefresh
+  });
+  assert.equal(reuse.status, 401, "çalınmış jeton çıkıştan sonra işe yaramaz");
+});
+
+test("jeton olmadan ve sahte jetonla korunan uçlara girilemez", opts, async () => {
+  for (const path of ["/api/me", "/api/me/orders", "/api/admin/dashboard", "/api/me/addresses"]) {
+    assert.equal((await anon.get(path)).status, 401, path);
+  }
+
+  const forged = new Client(app.base);
+  forged.accessToken = "sahte.jeton.degeri";
+  assert.equal((await forged.get("/api/me")).status, 401);
+});
+
+/* ------------------------------------------------- rol ve yetki sınırları */
+
+test("müşteri yönetim ve mağaza panellerine giremez", opts, async () => {
+  const customer = new Client(app.base);
+  assert.ok((await customer.signIn("musteri@pazar.test", DEMO_PASSWORD)).ok);
+
+  const me = await customer.get("/api/me");
+  assert.deepEqual(me.data.roles, ["CUSTOMER"]);
+  assert.equal(me.data.isSystemAdmin, false);
+  assert.deepEqual(me.data.stores, []);
+
+  const stores = await anon.get("/api/storefront/stores");
+  const storeId = (await new Client(app.base).get("/api/storefront/stores")).data.items[0].id;
+
+  assert.equal((await customer.get("/api/admin/dashboard")).status, 403);
+  assert.equal((await customer.get("/api/admin/users")).status, 403);
+  assert.equal((await customer.get(`/api/stores/${storeId}/products`)).status, 403);
+  assert.equal((await customer.post(`/api/stores/${storeId}/products`, {})).status, 403);
+  assert.ok(stores.data.items.length > 0);
+});
+
+test("mağaza sahibi yalnızca kendi mağazasını yönetir", opts, async () => {
+  const owner = new Client(app.base);
+  assert.ok((await owner.signIn("teknoloji@pazar.test", DEMO_PASSWORD)).ok);
+
+  const me = await owner.get("/api/me");
+  assert.deepEqual(me.data.roles, ["CUSTOMER", "STORE_OWNER"].filter((role) => me.data.roles.includes(role)));
+  const myStore = me.data.stores[0];
+  assert.ok(myStore);
+
+  const allStores = (await anon.get("/api/storefront/stores")).data.items;
+  const foreign = allStores.find((store) => store.id !== myStore.id);
+
+  assert.equal((await owner.get(`/api/stores/${myStore.id}/products`)).status, 200);
+  assert.equal((await owner.get(`/api/stores/${foreign.id}/products`)).status, 403);
+  assert.equal((await owner.get(`/api/stores/${foreign.id}/orders`)).status, 403);
+  assert.equal((await owner.get(`/api/stores/${foreign.id}/dashboard`)).status, 403);
+  assert.equal(
+    (await owner.post(`/api/stores/${foreign.id}/products`, {
+      name: "x",
+      description: "d",
+      price: "1",
+      stock: 1,
+      imageUrl: "/images/a.png"
+    })).status,
+    403,
+    "başka mağazaya ürün eklenemez"
+  );
+  assert.equal((await owner.get("/api/admin/users")).status, 403);
+});
+
+test("mağaza çalışanı ürün işler ama mağaza ayarlarına dokunamaz", opts, async () => {
+  const staff = new Client(app.base);
+  assert.ok((await staff.signIn("calisan@pazar.test", DEMO_PASSWORD)).ok);
+
+  const me = await staff.get("/api/me");
+  const storeId = me.data.stores[0].id;
+
+  assert.equal((await staff.get(`/api/stores/${storeId}/products`)).status, 200);
+  assert.equal((await staff.get(`/api/stores/${storeId}/orders`)).status, 200);
+  assert.equal((await staff.put(`/api/stores/${storeId}`, {})).status, 403, "mağaza ayarı değiştiremez");
+  assert.equal((await staff.get(`/api/stores/${storeId}/members`)).status, 403, "çalışan yönetemez");
+});
+
+/* ------------------------------------------------------- mağaza paneli */
+
+test("mağaza ürün yaşam döngüsünü yönetir", opts, async () => {
+  const owner = new Client(app.base);
+  await owner.signIn("oyuncu@pazar.test", DEMO_PASSWORD);
+  const storeId = (await owner.get("/api/me")).data.stores[0].id;
+
+  const body = {
+    name: "Panel Testi Ürünü",
+    description: "Entegrasyon testinde eklendi.",
+    price: "149.90",
+    stock: 4,
+    imageUrl: "/images/urunler/ssd.png",
+    status: "draft"
+  };
+
+  const created = await owner.post(`/api/stores/${storeId}/products`, body);
   assert.equal(created.status, 201);
-  const id = created.data.request.id;
-  const sent = () => outbox.filter((m) => m.to === "destek@example.com").length;
+  assert.equal(created.data.status, "draft");
 
-  await admin.put(`/admin/support/${id}`, { status: "İnceleniyor", admin_response: "" });
-  assert.equal(sent(), 0, "durum değişikliği e-posta atmaz");
+  // Taslak ürün vitrinde görünmez.
+  assert.equal((await anon.get(`/api/products?q=Panel Testi`)).data.total, 0);
 
-  const reply = await admin.put(`/admin/support/${id}`, { status: "Yanıtlandı", admin_response: "Merhaba" });
-  assert.equal(reply.data.emailSent, true);
-  assert.equal(sent(), 1);
+  await owner.patch(`/api/stores/${storeId}/products/${created.data.id}/status`, { status: "active" });
+  assert.equal((await anon.get(`/api/products?q=Panel Testi`)).data.total, 1, "yayına alınınca vitrinde görünür");
 
-  await admin.put(`/admin/support/${id}`, { status: "Kapatıldı", admin_response: "Merhaba" });
-  assert.equal(sent(), 1, "aynı yanıt tekrar gönderilmez");
+  const updated = await owner.put(`/api/stores/${storeId}/products/${created.data.id}`, { ...body, stock: 9, status: "active" });
+  assert.equal(updated.data.stock, 9);
 
-  assert.equal((await admin.get(`/admin/support/${id}`)).data.request.status, "Kapatıldı");
-  assert.equal((await admin.put(`/admin/support/${id}`, { status: "Uydurma" })).status, 400);
-  assert.equal((await admin.delete(`/admin/support/${id}`)).status, 200);
-  assert.equal((await admin.get(`/admin/support/${id}`)).status, 404);
+  assert.equal(
+    (await owner.post(`/api/stores/${storeId}/products`, { ...body, imageUrl: "javascript:alert(1)" })).status,
+    400,
+    "zararlı görsel adresi reddedilir"
+  );
+
+  const deleted = await owner.delete(`/api/stores/${storeId}/products/${created.data.id}`);
+  assert.equal(deleted.data.archived, false, "hiç satılmamış ürün silinir");
+  assert.equal((await owner.delete(`/api/stores/${storeId}/products/${created.data.id}`)).status, 404);
 });
 
-test("Hatalı istekler 500 üretmez ve iç ayrıntı sızdırmaz", opts, async () => {
-  const raw = await fetch(`${base}/api/customers/login`, {
+test("satılmış ürün silinmez, arşivlenir", opts, async () => {
+  const owner = new Client(app.base);
+  await owner.signIn("oyuncu@pazar.test", DEMO_PASSWORD);
+  const storeId = (await owner.get("/api/me")).data.stores[0].id;
+
+  const created = await owner.post(`/api/stores/${storeId}/products`, {
+    name: "Satılmış Ürün",
+    description: "Sipariş sonrası arşivlenir.",
+    price: "99.00",
+    stock: 5,
+    imageUrl: "/images/urunler/ssd.png",
+    status: "active"
+  });
+
+  await placeGuestOrder(new Client(app.base), created.data.id);
+
+  const deleted = await owner.delete(`/api/stores/${storeId}/products/${created.data.id}`);
+  assert.equal(deleted.data.archived, true, "sipariş geçmişi korunur");
+  assert.equal((await anon.get("/api/products?q=Satılmış Ürün")).data.total, 0, "arşivli ürün vitrinde yok");
+});
+
+test("CSV toplu içe aktarma hep ya da hiç çalışır", opts, async () => {
+  const owner = new Client(app.base);
+  await owner.signIn("komponent@pazar.test", DEMO_PASSWORD);
+  const storeId = (await owner.get("/api/me")).data.stores[0].id;
+  const before = (await owner.get(`/api/stores/${storeId}/products`)).data.total;
+
+  const broken = await owner.post(`/api/stores/${storeId}/products/bulk`, {
+    products: [{ name: "Geçerli", price: 10 }, { name: "", price: 5 }]
+  });
+  assert.equal(broken.status, 400);
+  assert.match(broken.data.message, /3\. satır/, "hatalı satır numarası bildirilir");
+  assert.equal((await owner.get(`/api/stores/${storeId}/products`)).data.total, before, "hiçbiri eklenmez");
+
+  const ok = await owner.post(`/api/stores/${storeId}/products/bulk`, {
+    products: [{ name: "CSV Ürün 1", price: 10 }, { name: "CSV Ürün 2", price: 20, stock: 4 }]
+  });
+  assert.equal(ok.data.count, 2);
+  assert.equal((await owner.get(`/api/stores/${storeId}/products`)).data.total, before + 2);
+});
+
+test("mağaza siparişi hazırlar, kargolar ve müşteri bilgilendirilir", opts, async () => {
+  const owner = new Client(app.base);
+  await owner.signIn("oyuncu@pazar.test", DEMO_PASSWORD);
+  const storeId = (await owner.get("/api/me")).data.stores[0].id;
+
+  const products = (await owner.get(`/api/stores/${storeId}/products?status=active`)).data.items;
+  const product = products.find((item) => item.stock > 0);
+
+  const guest = new Client(app.base);
+  const order = await placeGuestOrder(guest, product.id);
+  await guest.post(`/api/orders/${order.data.orderId}/payment`, {
+    outcome: "success",
+    trackingCode: order.data.trackingCode
+  });
+
+  const list = await owner.get(`/api/stores/${storeId}/orders?q=${order.data.orderNumber}`);
+  assert.equal(list.data.total, 1);
+  const packageId = list.data.items[0].packageId;
+
+  assert.equal((await owner.patch(`/api/stores/${storeId}/orders/${packageId}/status`, { status: "delivered" })).status, 409, "basamak atlanamaz");
+  assert.equal((await owner.patch(`/api/stores/${storeId}/orders/${packageId}/status`, { status: "preparing" })).status, 200);
+
+  const shipping = await owner.patch(`/api/stores/${storeId}/orders/${packageId}/shipping`, {
+    carrier: "Yurtiçi Kargo",
+    trackingNumber: "YK-123",
+    trackingUrl: "https://kargo.test/YK-123"
+  });
+  assert.equal(shipping.data.trackingNumber, "YK-123");
+  assert.equal(
+    (await owner.patch(`/api/stores/${storeId}/orders/${packageId}/shipping`, { trackingUrl: "javascript:alert(1)" })).status,
+    400
+  );
+
+  await owner.patch(`/api/stores/${storeId}/orders/${packageId}/status`, { status: "shipped" });
+
+  const tracked = await anon.post("/api/orders/track", {
+    orderNumber: order.data.orderNumber,
+    trackingCode: order.data.trackingCode
+  });
+  assert.equal(tracked.data.packages[0].status, "shipped");
+  assert.equal(tracked.data.packages[0].trackingNumber, "YK-123");
+});
+
+/* ---------------------------------------------------- müşteri hesabı */
+
+test("müşteri profilini, adresini ve siparişlerini yönetir", opts, async () => {
+  const email = `hesap${Date.now()}@example.com`;
+  const client = new Client(app.base);
+  await client.post("/api/auth/register", { fullName: "Hesap Testi", email, password: "HesapTest2026" });
+  assert.ok((await client.signIn(email, "HesapTest2026")).ok);
+
+  assert.equal((await client.put("/api/me/profile", { fullName: "Yeni Ad" })).data.fullName, "Yeni Ad");
+
+  const address = await client.post("/api/me/addresses", {
+    title: "Ev",
+    fullName: "Hesap Testi",
+    phone: "0555 999 88 77",
+    city: "İzmir",
+    district: "Konak",
+    line: "Adres satırı"
+  });
+  assert.equal(address.status, 201);
+  assert.equal((await client.get("/api/me/addresses")).data.items.length, 1);
+  assert.equal((await client.delete(`/api/me/addresses/${address.data.id}`)).status, 204);
+
+  // Başkasının adresi silinemez.
+  const other = new Client(app.base);
+  await other.signIn("musteri@pazar.test", DEMO_PASSWORD);
+  const otherAddress = await other.post("/api/me/addresses", {
+    title: "Ev",
+    fullName: "Müşteri",
+    phone: "0555 111 22 33",
+    city: "İstanbul",
+    district: "Kadıköy",
+    line: "Adres"
+  });
+  assert.equal((await client.delete(`/api/me/addresses/${otherAddress.data.id}`)).status, 404);
+});
+
+test("müşteri yalnızca kendi siparişini görür ve iptal eder", opts, async () => {
+  const product = await firstProduct(2);
+
+  const buyer = new Client(app.base);
+  await buyer.signIn("musteri@pazar.test", DEMO_PASSWORD);
+  await buyer.post("/api/cart/items", { productId: product.id, quantity: 1 });
+  const order = await buyer.post("/api/orders", checkout());
+
+  const other = new Client(app.base);
+  await other.signIn("ahmet@pazar.test", DEMO_PASSWORD);
+
+  assert.equal((await other.get(`/api/me/orders/${order.data.orderId}`)).status, 404, "başkasının siparişi görünmez");
+  assert.equal((await other.post(`/api/me/orders/${order.data.orderId}/cancel`)).status, 404);
+
+  const mine = await buyer.get(`/api/me/orders/${order.data.orderId}`);
+  assert.equal(mine.status, 200);
+  assert.equal(mine.data.packages[0].items.length, 1);
+
+  const before = await stockOf(product.id);
+  assert.equal((await buyer.post(`/api/me/orders/${order.data.orderId}/cancel`)).status, 200);
+  assert.equal(await stockOf(product.id), before + 1, "iptal stoğu iade eder");
+});
+
+test("parola değişimi diğer oturumları kapatır", opts, async () => {
+  const email = `parola${Date.now()}@example.com`;
+  await anon.post("/api/auth/register", { fullName: "Parola Testi", email, password: "EskiParola1" });
+
+  const phone = new Client(app.base);
+  const laptop = new Client(app.base);
+  assert.ok((await phone.signIn(email, "EskiParola1")).ok);
+  assert.ok((await laptop.signIn(email, "EskiParola1")).ok);
+
+  assert.equal((await phone.put("/api/me/password", { currentPassword: "yanlis", newPassword: "YeniParola1" })).status, 401);
+  assert.equal((await phone.put("/api/me/password", { currentPassword: "EskiParola1", newPassword: "kisa" })).status, 400);
+  assert.equal((await phone.put("/api/me/password", { currentPassword: "EskiParola1", newPassword: "YeniParola1" })).status, 200);
+
+  // Diğer cihazın erişim jetonu oturum sürümü arttığı için geçersizdir.
+  assert.equal((await laptop.get("/api/me")).status, 401);
+  assert.equal((await new Client(app.base).signIn(email, "EskiParola1")).ok, false);
+  assert.equal((await new Client(app.base).signIn(email, "YeniParola1")).ok, true);
+});
+
+test("parola sıfırlama tek kullanımlıktır ve hesap varlığını ele vermez", opts, async () => {
+  const email = `sifirla${Date.now()}@example.com`;
+  await anon.post("/api/auth/register", { fullName: "Sıfırlama", email, password: "EskiParola9" });
+
+  const known = await anon.post("/api/auth/password/forgot", { email });
+  const unknown = await anon.post("/api/auth/password/forgot", { email: "kayitsiz@example.com" });
+  assert.deepEqual(known.data, unknown.data, "yanıt e-postanın kayıtlı olduğunu söylemez");
+
+  const mail = await app.outbox.waitFor((message) => message.to === email && message.subject.includes("Parola"));
+  assert.ok(mail, "sıfırlama e-postası gönderilir");
+  assert.ok(!app.outbox.messages.some((message) => message.to === "kayitsiz@example.com"));
+
+  const token = mail.text.match(/#token=([a-f0-9]{64})/)[1];
+  assert.ok(mail.text.includes("/parola-sifirla#token="), "jeton adres parçasında taşınır");
+
+  const stored = await app.pool.query("SELECT token_hash FROM verification_tokens WHERE purpose = 'password_reset'");
+  assert.ok(stored.rows.every((row) => row.token_hash !== token), "açık jeton veritabanında tutulmaz");
+
+  assert.equal((await anon.post("/api/auth/password/reset", { token: "0".repeat(64), password: "YeniSifre12" })).status, 400);
+  assert.equal((await anon.post("/api/auth/password/reset", { token, password: "kisa" })).status, 400);
+  assert.equal((await anon.post("/api/auth/password/reset", { token, password: "YeniSifre12" })).status, 200);
+  assert.equal((await anon.post("/api/auth/password/reset", { token, password: "BaskaSifre12" })).status, 400, "tek kullanımlık");
+
+  assert.equal((await new Client(app.base).signIn(email, "YeniSifre12")).ok, true);
+});
+
+/* ------------------------------------------------------- mağaza başvurusu */
+
+test("başvuru onaylanınca mağaza sahibi yetkisi verilir", opts, async () => {
+  const email = `satici${Date.now()}@example.com`;
+  const applicant = new Client(app.base);
+  await applicant.post("/api/auth/register", { fullName: "Aday Satıcı", email, password: "AdaySatici1" });
+  await applicant.signIn(email, "AdaySatici1");
+
+  const application = await applicant.post("/api/me/store-application", {
+    name: `Test Mağaza ${Date.now()}`,
+    description: "Entegrasyon testinde açıldı.",
+    contactEmail: email,
+    phone: "0555 444 33 22"
+  });
+  assert.equal(application.status, 201);
+  const storeId = application.data.store.id;
+  assert.equal(application.data.store.status, "pending");
+
+  // Onaydan önce ne panel ne de ürün ekleme açıktır.
+  assert.equal((await applicant.get(`/api/stores/${storeId}/products`)).status, 403);
+  assert.equal((await anon.get(`/api/storefront/stores/${application.data.store.slug}`)).status, 404);
+
+  const admin = new Client(app.base);
+  assert.ok((await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD)).ok);
+  assert.equal((await admin.patch(`/api/admin/stores/${storeId}/status`, { status: "active" })).status, 200);
+
+  // Yetki önbelleği temizlendiği için yeni rol hemen geçerli olur.
+  const refreshed = new Client(app.base);
+  await refreshed.signIn(email, "AdaySatici1");
+  const me = await refreshed.get("/api/me");
+  assert.ok(me.data.stores.some((store) => store.id === storeId), "mağaza panelde görünür");
+  assert.equal((await refreshed.get(`/api/stores/${storeId}/products`)).status, 200);
+
+  const approval = await app.outbox.waitFor((message) => message.subject.includes("onaylandı"));
+  assert.ok(approval, "onay e-postası gönderilir");
+});
+
+/* ------------------------------------------------------ yönetim paneli */
+
+test("sistem yöneticisi panoyu, mağazaları ve kullanıcıları yönetir", opts, async () => {
+  const admin = new Client(app.base);
+  assert.ok((await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD)).ok);
+
+  const dashboard = await admin.get("/api/admin/dashboard");
+  assert.equal(dashboard.status, 200);
+  assert.ok(dashboard.data.activeStores >= 4);
+  assert.equal(dashboard.data.last14Days.length, 14);
+
+  assert.ok((await admin.get("/api/admin/stores")).data.total >= 4);
+  assert.ok((await admin.get("/api/admin/users")).data.total >= 5);
+  assert.ok((await admin.get("/api/admin/orders")).data.total > 0);
+  assert.equal((await admin.get("/api/admin/tickets")).status, 200);
+
+  const orders = await admin.get("/api/admin/orders?pageSize=1");
+  const detail = await admin.get(`/api/admin/orders/${orders.data.items[0].id}`);
+  assert.equal(detail.status, 200);
+  assert.ok(Array.isArray(detail.data.payments));
+});
+
+test("yönetici hesabı askıya alır ve son yöneticiyi koruyan kural çalışır", opts, async () => {
+  const admin = new Client(app.base);
+  await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
+
+  const email = `askiya${Date.now()}@example.com`;
+  const victim = new Client(app.base);
+  await victim.post("/api/auth/register", { fullName: "Askıya Alınacak", email, password: "AskiTest2026" });
+  await victim.signIn(email, "AskiTest2026");
+  assert.equal((await victim.get("/api/me")).status, 200);
+
+  const users = await admin.get(`/api/admin/users?q=${encodeURIComponent(email)}`);
+  const userId = users.data.items[0].id;
+
+  assert.equal((await admin.patch(`/api/admin/users/${userId}/status`, { status: "suspended" })).status, 200);
+  assert.equal((await victim.get("/api/me")).status, 403, "askıya alınan kullanıcı erişemez");
+  assert.equal((await new Client(app.base).signIn(email, "AskiTest2026")).ok, false);
+
+  await admin.patch(`/api/admin/users/${userId}/status`, { status: "active" });
+  assert.equal((await new Client(app.base).signIn(email, "AskiTest2026")).ok, true);
+
+  // Kendi hesabını askıya alamaz, son yöneticinin rolünü kaldıramaz.
+  const self = (await admin.get(`/api/admin/users?q=${encodeURIComponent(ADMIN_EMAIL)}`)).data.items[0];
+  assert.equal((await admin.patch(`/api/admin/users/${self.id}/status`, { status: "suspended" })).status, 409);
+  assert.equal(
+    (await admin.post(`/api/admin/users/${self.id}/roles`, { roleCode: "SYSTEM_ADMIN", revoke: true })).status,
+    409
+  );
+});
+
+test("askıya alınan mağazanın ürünleri vitrinden düşer", opts, async () => {
+  const admin = new Client(app.base);
+  await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
+
+  const stores = await admin.get("/api/admin/stores?status=active");
+  const store = stores.data.items.find((item) => item.productCount > 0);
+  const before = (await anon.get(`/api/products?store=${store.slug}`)).data.total;
+  assert.ok(before > 0);
+
+  await admin.patch(`/api/admin/stores/${store.id}/status`, { status: "suspended" });
+  assert.equal((await anon.get(`/api/products?store=${store.slug}`)).data.total, 0);
+  assert.equal((await anon.get(`/api/storefront/stores/${store.slug}`)).status, 404);
+
+  await admin.patch(`/api/admin/stores/${store.id}/status`, { status: "active" });
+  assert.equal((await anon.get(`/api/products?store=${store.slug}`)).data.total, before, "geri alınır");
+});
+
+/* ------------------------------------------------------------- destek */
+
+test("destek talebi kayıtsız açılır; yanıt yalnızca metin varsa e-posta gönderir", opts, async () => {
+  const email = `destek${Date.now()}@example.com`;
+  const created = await anon.post("/api/support/tickets", {
+    fullName: "Destek Testi",
+    email,
+    subject: "Kargo sorusu",
+    message: "<img src=x onerror=alert(1)> Siparişim ne zaman çıkar?"
+  });
+  assert.equal(created.status, 201);
+  assert.match(created.data.reference, /^DT-\d{6}$/);
+
+  const admin = new Client(app.base);
+  await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
+  const ticketId = created.data.id;
+
+  const statusOnly = await admin.put(`/api/admin/tickets/${ticketId}`, { status: "in_progress" });
+  assert.equal(statusOnly.data.emailQueued, false, "durum değişikliği e-posta göndermez");
+
+  const replied = await admin.put(`/api/admin/tickets/${ticketId}`, {
+    status: "answered",
+    body: "Siparişiniz yarın kargoya verilecek."
+  });
+  assert.equal(replied.data.emailQueued, true);
+
+  const mail = await app.outbox.waitFor((message) => message.to === email && message.subject.includes("yanıt"));
+  assert.ok(mail);
+  assert.equal((await anon.post("/api/support/tickets", { fullName: "A", email: "gecersiz", subject: "s", message: "m" })).status, 400);
+});
+
+/* -------------------------------------------------------- dayanıklılık */
+
+test("bozuk istekler 500 üretmez ve iç ayrıntı sızdırmaz", opts, async () => {
+  const broken = await fetch(`${app.base}/api/auth/sign-in`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{bozuk"
   });
-  assert.equal(raw.status, 400);
+  assert.equal(broken.status, 400);
 
-  const large = await anon.post("/support", { fullName: "A", email: "a@b.co", message: "x".repeat(40000) });
-  assert.equal(large.status, 413);
+  const huge = await anon.post("/api/support/tickets", {
+    fullName: "A",
+    email: "a@b.co",
+    subject: "s",
+    message: "x".repeat(200_000)
+  });
+  assert.equal(huge.status, 413);
 
-  assert.equal((await fetch(`${base}/api/orders/%E0%A4%A/test-payment`, { method: "POST" })).status, 400);
-  assert.equal((await anon.get("/yok")).status, 404);
+  assert.equal((await anon.get("/api/boyle-bir-uc-yok")).status, 404);
+  assert.equal((await anon.get("/api/me/orders/not-a-uuid")).status, 401);
 
-  const weird = await anon.post("/orders", []);
-  assert.equal(weird.status, 400);
+  const serverError = await anon.get("/api/products?page=abc&pageSize=-5");
+  assert.equal(serverError.status, 200, "bozuk sayfalama varsayılana düşer");
 });
 
-test("Rate limit: hatalı girişler engellenir", opts, async () => {
-  const limited = createApp({ commands: container.commands, queries: container.queries, config, log: () => {} });
-  const srv = await new Promise((resolve) => {
-    const s = limited.listen(0, () => resolve(s));
-  });
-  const url = `http://127.0.0.1:${srv.address().port}/api/admin/login`;
-  const attempt = () =>
-    fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: "x", password: "y" })
-    }).then((r) => r.status);
+test("CSRF: yabancı Origin ve cross-site istekler reddedilir", opts, async () => {
+  const body = { fullName: "A", email: "a@b.co", subject: "s", message: "m" };
 
+  assert.equal((await anon.post("/api/support/tickets", body, { Origin: "https://kotu.test" })).status, 403);
+  assert.equal((await anon.post("/api/support/tickets", body, { "Sec-Fetch-Site": "cross-site" })).status, 403);
+  assert.equal((await anon.post("/api/support/tickets", body, { Origin: app.base })).status, 201, "aynı kaynak geçer");
+  assert.equal((await anon.get("/api/products", { Origin: "https://kotu.test" })).status, 200, "okuma engellenmez");
+});
+
+test("hız sınırı hatalı girişleri durdurur", opts, async () => {
+  const limited = new Client(app.limitedBase);
   const statuses = [];
-  for (let i = 0; i < 7; i++) statuses.push(await attempt());
-  assert.deepEqual(statuses, [401, 401, 401, 401, 401, 429, 429]);
-  await new Promise((resolve) => srv.close(resolve));
+
+  for (let attempt = 0; attempt < 13; attempt++) {
+    const response = await limited.post("/api/auth/sign-in", {
+      email: "musteri@pazar.test",
+      password: "YanlisParola1"
+    });
+    statuses.push(response.status);
+  }
+
+  assert.ok(statuses.includes(429), "bir noktada sınıra takılmalı");
+  assert.equal(statuses[0], 401, "ilk denemeler normal hata döner");
+});
+
+test("her yanıt istek numarası taşır", opts, async () => {
+  const response = await anon.get("/api/products");
+  assert.match(response.headers.get("x-request-id"), /[0-9a-f-]{36}/);
 });

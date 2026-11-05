@@ -1,0 +1,36 @@
+"use strict";
+
+const { COOKIES, buildCookie, appendCookie } = require("../support/cookies");
+const { authPolicy } = require("../../../application/identity");
+
+const { GUEST_CART_TTL_MS } = authPolicy;
+
+/**
+ * Misafir sepetinin kimliğini çerezde taşır.
+ *
+ * Kullanıcı kayıt olmadan sepet doldurabilir; sepet sunucuda durduğu için
+ * içeriği istemci tarafından değiştirilemez. Giriş ya da kayıt sırasında bu
+ * kimlik SignIn/RegisterUser komutlarına verilir ve sepet kullanıcının
+ * sepetiyle birleştirilir — hiçbir ürün kaybolmaz.
+ */
+function cartSession({ cookieSecure }) {
+  return (req, res, next) => {
+    req.guestCartId = req.auth?.userId ? null : req.cookies[COOKIES.CART] || null;
+
+    /** Yeni bir misafir sepeti açıldığında çerezi günceller. */
+    res.rememberGuestCart = (cartId) => {
+      if (!cartId || req.auth?.userId || cartId === req.guestCartId) return;
+      appendCookie(
+        res,
+        buildCookie(COOKIES.CART, cartId, {
+          maxAgeSeconds: GUEST_CART_TTL_MS / 1000,
+          secure: cookieSecure,
+          sameSite: "Lax"
+        })
+      );
+    };
+    next();
+  };
+}
+
+module.exports = { cartSession };

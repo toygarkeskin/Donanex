@@ -1,43 +1,50 @@
 "use strict";
 
+const TICKET = `
+  id, reference, user_id AS "userId", store_id AS "storeId", order_id AS "orderId",
+  email, full_name AS "fullName", subject, message, status, created_at AS "createdAt"`;
+
 class PgSupportRepository {
   constructor(client) {
     this.db = client;
   }
 
-  async add({ fullName, email, phone, message }) {
+  async createTicket(ticket) {
+    const { rows: reference } = await this.db.query("SELECT nextval('ticket_reference_seq') AS value");
     const { rows } = await this.db.query(
-      `INSERT INTO support_requests (full_name, email, phone, message)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, created_at`,
-      [fullName, email, phone, message]
+      `INSERT INTO support_tickets
+         (id, reference, user_id, store_id, order_id, email, full_name, subject, message, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING ${TICKET}`,
+      [ticket.id, `DT-${String(reference[0].value).padStart(6, "0")}`, ticket.userId, ticket.storeId, ticket.orderId, ticket.email, ticket.fullName, ticket.subject, ticket.message, ticket.status]
     );
     return rows[0];
   }
 
-  async findContact(id) {
+  /** storeId verilirse yalnızca o mağazanın talebi bulunur. */
+  async findTicket(ticketId, storeId = null) {
     const { rows } = await this.db.query(
-      `SELECT full_name AS "fullName", email, admin_response AS "adminResponse"
-       FROM support_requests WHERE id = $1 FOR UPDATE`,
-      [id]
+      `SELECT ${TICKET} FROM support_tickets
+       WHERE id = $1 AND ($2::uuid IS NULL OR store_id = $2::uuid)`,
+      [ticketId, storeId]
     );
     return rows[0] || null;
   }
 
-  async respond(id, status, response) {
-    const { rows } = await this.db.query(
-      `UPDATE support_requests
-       SET status = $1, admin_response = $2, updated_at = NOW()
-       WHERE id = $3
-       RETURNING id, status, admin_response, updated_at`,
-      [status, response, id]
+  async addMessage({ id, ticketId, authorUserId, body, isStaff }) {
+    await this.db.query(
+      `INSERT INTO support_messages (id, ticket_id, author_user_id, body, is_staff)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, ticketId, authorUserId, body, isStaff]
     );
-    return rows[0] || null;
   }
 
-  async remove(id) {
-    const result = await this.db.query("DELETE FROM support_requests WHERE id = $1", [id]);
-    return result.rowCount > 0;
+  async setTicketStatus(ticketId, status) {
+    const { rows } = await this.db.query(
+      `UPDATE support_tickets SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING ${TICKET}`,
+      [status, ticketId]
+    );
+    return rows[0] || null;
   }
 }
 
