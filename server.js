@@ -1,4 +1,5 @@
-
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 
 const express = require("express");
 const nodemailer = require("nodemailer");
@@ -16,35 +17,83 @@ const { Pool } = require("pg");
 const app = express();
 
 const PORT = Number(process.env.PORT || 3000);
-
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
-
-
-
-const pool = new Pool({
-
-  host: process.env.DB_HOST || "127.0.0.1",
-
-  port: Number(process.env.DB_PORT || 5432),
-
-  database: process.env.DB_NAME,
-
-  user: process.env.DB_USER,
-
-  password: process.env.DB_PASSWORD
-
-});
-
-
 
 app.disable("x-powered-by");
 
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    strictTransportSecurity: false
+  })
+);
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "Çok fazla istek gönderildi. Lütfen daha sonra tekrar deneyin."
+  }
+});
+
+app.use("/api", apiLimiter);
+
+const loginLimiter = rateLimit({
+  
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "Çok fazla giriş denemesi. Lütfen daha sonra tekrar deneyin."
+  }
+});
+
+const trackingLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "Çok fazla takip denemesi. Lütfen daha sonra tekrar deneyin."
+  }
+});
+
+const registrationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "Çok fazla kayıt denemesi. Lütfen daha sonra tekrar deneyin."
+  }
+});
+
+
+const supportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "Çok fazla destek talebi gönderdiniz. Lütfen daha sonra tekrar deneyin."
+  }
+});
+
+
+const pool = new Pool({
+  host: process.env.DB_HOST || "127.0.0.1",
+  port: Number(process.env.DB_PORT || 5432),
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD
+});
+
 app.use(express.json({ limit: "50kb" }));
 
-
-
 const OKUL_DIR = path.join(__dirname, "OKUL");
-
 app.use(express.static(OKUL_DIR));
 
 
@@ -421,60 +470,40 @@ function validProduct(body) {
 
 // SAĞLIK VE VERİTABANI TESTİ
 
-
-
 app.get("/api/health", (req, res) => {
-
   res.json({
-
     success: true,
-
     message: "Backend sunucusu çalışıyor!"
-
   });
-
 });
-
-
 
 app.get("/api/db-test", async (req, res) => {
 
+  // Üretim ortamında veritabanı testini kapat.
+  if (IS_PRODUCTION) {
+    return res.sendStatus(404);
+  }
+
   try {
-
     const result = await pool.query(
-
       "SELECT current_database() AS database"
-
     );
 
-
-
     res.json({
-
       success: true,
-
       message: "PostgreSQL bağlantısı başarılı!",
-
       database: result.rows[0].database
-
     });
 
   } catch (error) {
-
     console.error("Veritabanı hatası:", error.message);
 
     res.status(500).json({
-
       success: false,
-
       message: "Veritabanına bağlanılamadı."
-
     });
-
   }
-
 });
-
 
 
 // ÜRÜNLERİ LİSTELE
@@ -521,7 +550,11 @@ app.post("/api/orders", async (req, res) => {
 
   const { adSoyad, email, telefon, adres, items } = req.body || {};
 
+  const customerSession = verifyCustomerSession(
+  parseCookies(req).customer_session
+);
 
+const customerId = customerSession?.customerId || null;
 
   if (
 
@@ -717,29 +750,22 @@ app.post("/api/orders", async (req, res) => {
 
       `INSERT INTO orders
 
-        (customer_name, email, phone, address, total, status, tracking_code_hash)
+        (customer_id, customer_name, email, phone, address, total, status, tracking_code_hash)
 
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 
        RETURNING id, total`,
 
       [
-
-        adSoyad.trim(),
-
-        email.trim(),
-
-        telefon.trim(),
-
-        adres.trim(),
-
-        total.toFixed(2),
-
-        "Ödeme bekleniyor",
-
-        trackingCodeHash
-
-      ]
+  customerId,
+  adSoyad.trim(),
+  email.trim(),
+  telefon.trim(),
+  adres.trim(),
+  total.toFixed(2),
+  "Ödeme bekleniyor",
+  trackingCodeHash
+]
 
     );
 
@@ -1007,7 +1033,7 @@ app.post("/api/orders/:id/test-payment", requireTestMode, async (req, res) => {
 
 // Sipariş numarası ve tek sefer gösterilen takip kodu birlikte gerekir.
 
-app.post("/api/order-tracking", async (req, res) => {
+app.post("/api/order-tracking", trackingLimiter, async (req, res) => {
 
   const { orderId, trackingCode } = req.body || {};
 
@@ -1185,7 +1211,7 @@ function verifyCustomerPassword(password, storedHash) {
 
 // MÜŞTERİ KAYIT
 
-app.post("/api/customers/register", async (req, res) => {
+app.post("/api/customers/register", registrationLimiter, async (req, res) => {
 
   try {
 
@@ -1324,7 +1350,7 @@ app.post("/api/customers/register", async (req, res) => {
 
 
 // MÜŞTERİ GİRİŞ
-app.post("/api/customers/login", async (req, res) => {
+app.post("/api/customers/login", loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
 
@@ -1454,94 +1480,214 @@ app.post("/api/customers/logout", (req, res) => {
   });
 });
 
-app.post("/api/admin/login", (req, res) => {
+// MÜŞTERİ ADRESİNİ GETİR
+app.get("/api/customers/address", async (req, res) => {
+  try {
+    const session = verifyCustomerSession(
+      parseCookies(req).customer_session
+    );
 
-  if (
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        message: "Lütfen giriş yapın."
+      });
+    }
 
-    !ADMIN_USERNAME ||
+    const result = await pool.query(
+      `SELECT
+         address_full_name AS "fullName",
+         phone,
+         address
+       FROM customers
+       WHERE id = $1`,
+      [session.customerId]
+    );
 
-    !ADMIN_PASSWORD ||
-
-    !SESSION_SECRET ||
-
-    SESSION_SECRET.length < 32
-
-  ) {
-
-    return res.status(503).json({
-
-      success: false,
-
-      message: "Yönetici ayarları eksik. .env dosyasını kontrol edin."
-
+    return res.json({
+      success: true,
+      address: result.rows[0] || {
+        fullName: "",
+        phone: "",
+        address: ""
+      }
     });
-
-  }
-
-
-
-  const { username, password } = req.body || {};
-
-
-
-  if (
-
-    typeof username !== "string" ||
-
-    typeof password !== "string" ||
-
-    !safeStringEqual(username, ADMIN_USERNAME) ||
-
-    !safeStringEqual(password, ADMIN_PASSWORD)
-
-  ) {
-
-    return res.status(401).json({
-
+  } catch (error) {
+    console.error("Adres getirme hatası:", error.message);
+    return res.status(500).json({
       success: false,
-
-      message: "Kullanıcı adı veya parola hatalı."
-
+      message: "Adres bilgileri alınamadı."
     });
-
   }
+});
 
+// MÜŞTERİ ADRESİNİ KAYDET
+app.put("/api/customers/address", async (req, res) => {
+  try {
+    const session = verifyCustomerSession(
+      parseCookies(req).customer_session
+    );
 
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        message: "Lütfen giriş yapın."
+      });
+    }
 
-  const token = createSession(ADMIN_USERNAME);
+    const { fullName, phone, address } = req.body || {};
 
+    if (
+      typeof fullName !== "string" ||
+      !fullName.trim() ||
+      fullName.trim().length > 150 ||
+      typeof phone !== "string" ||
+      !phone.trim() ||
+      phone.trim().length > 30 ||
+      typeof address !== "string" ||
+      !address.trim() ||
+      address.trim().length > 1000
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Lütfen adres bilgilerini kontrol edin."
+      });
+    }
 
+    await pool.query(
+      `UPDATE customers
+       SET address_full_name = $1,
+           phone = $2,
+           address = $3
+       WHERE id = $4`,
+      [
+        fullName.trim(),
+        phone.trim(),
+        address.trim(),
+        session.customerId
+      ]
+    );
 
-  res.setHeader(
+    return res.json({
+      success: true,
+      message: "Adresiniz kaydedildi."
+    });
+  } catch (error) {
+    console.error("Adres kaydetme hatası:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Adres kaydedilemedi."
+    });
+  }
+});
 
-    "Set-Cookie",
+// MÜŞTERİNİN SİPARİŞ GEÇMİŞİ
+app.get("/api/customers/orders", async (req, res) => {
+  try {
+    const session = verifyCustomerSession(
+      parseCookies(req).customer_session
+    );
 
-    `admin_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${IS_PRODUCTION ? "; Secure" : ""}`
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        message: "Lütfen giriş yapın."
+      });
+    }
 
-  );
+    const result = await pool.query(
+      `SELECT
+         o.id,
+         o.created_at AS "createdAt",
+         o.status,
+         o.address,
+         o.total,
+         COALESCE(
+           json_agg(
+             json_build_object(
+               'name', oi.product_name,
+               'quantity', oi.quantity,
+               'unitPrice', oi.unit_price
+             )
+           ) FILTER (WHERE oi.id IS NOT NULL),
+           '[]'::json
+         ) AS items
+       FROM orders o
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       WHERE o.customer_id = $1
+       GROUP BY o.id
+       ORDER BY o.created_at DESC`,
+      [session.customerId]
+    );
 
+    return res.json({
+      success: true,
+      orders: result.rows
+    });
+  } catch (error) {
+    console.error("Sipariş geçmişi hatası:", error.message);
 
-
-  res.json({ success: true, message: "Giriş başarılı." });
-
+    return res.status(500).json({
+      success: false,
+      message: "Sipariş geçmişi alınamadı."
+    });
+  }
 });
 
 
+// YÖNETİCİ GİRİŞ
+app.post("/api/admin/login", loginLimiter, (req, res) => {
+  if (
+    !ADMIN_USERNAME ||
+    !ADMIN_PASSWORD ||
+    !SESSION_SECRET ||
+    SESSION_SECRET.length < 32
+  ) {
+    return res.status(503).json({
+      success: false,
+      message: "Yönetici ayarları eksik. .env dosyasını kontrol edin."
+    });
+  }
 
-app.post("/api/admin/logout", (req, res) => {
+  const { username, password } = req.body || {};
+
+  if (
+    typeof username !== "string" ||
+    typeof password !== "string" ||
+    !safeStringEqual(username, ADMIN_USERNAME) ||
+    !safeStringEqual(password, ADMIN_PASSWORD)
+  ) {
+    return res.status(401).json({
+      success: false,
+      message: "Kullanıcı adı veya parola hatalı."
+    });
+  }
+
+  const token = createSession(ADMIN_USERNAME);
 
   res.setHeader(
-
     "Set-Cookie",
-
-    `admin_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${IS_PRODUCTION ? "; Secure" : ""}`
-
+    `admin_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${IS_PRODUCTION ? "; Secure" : ""}`
   );
 
+  return res.json({
+    success: true,
+    message: "Giriş başarılı."
+  });
+});
 
 
-  res.json({ success: true, message: "Çıkış yapıldı." });
+// YÖNETİCİ ÇIKIŞ
+app.post("/api/admin/logout", (req, res) => {
+  res.setHeader(
+    "Set-Cookie",
+    `admin_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${IS_PRODUCTION ? "; Secure" : ""}`
+  );
 
+  return res.json({
+    success: true,
+    message: "Çıkış yapıldı."
+  });
 });
 
 
@@ -2346,7 +2492,15 @@ async function initializeDatabase() {
 
     )
 
+    
+
   `);
+  await pool.query(`
+  ALTER TABLE customers
+  ADD COLUMN IF NOT EXISTS address_full_name VARCHAR(150),
+  ADD COLUMN IF NOT EXISTS phone VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS address VARCHAR(1000)
+`);
 
 
 
@@ -2373,6 +2527,14 @@ async function initializeDatabase() {
     )
 
   `);
+
+  
+await pool.query(`
+    ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS customer_id BIGINT
+    REFERENCES customers(id) ON DELETE SET NULL
+`);
+
 
 
 
@@ -2541,7 +2703,7 @@ async function initializeDatabase() {
 
 
 // DESTEK TALEPLERİ
-app.post("/api/support", async (req, res) => {
+app.post("/api/support", supportLimiter, async (req, res) => {
   try {
     const fullName = String(req.body.fullName || "").trim();
     const email = String(req.body.email || "").trim();
