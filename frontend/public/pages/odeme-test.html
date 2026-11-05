@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Test Ödeme Ekranı</title>
+    <link href="/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/pages/odeme-test.css">
+    <!-- Ortak tipografi: Plus Jakarta Sans (arayüz), Lora (başlık), JetBrains Mono (fiyat/kod) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="/assets/css/base/typography.css">
+    <link rel="stylesheet" href="/assets/css/base/components.css">
+</head>
+<body>
+    <main class="payment-box">
+        <h2 class="text-center mb-3">Test Ödeme Ekranı</h2>
+
+        <div id="takipKoduBilgisi" class="alert alert-info d-none">
+        <p>Sipariş numaranız: <strong id="takipSiparisNo" class="kod"></strong></p>
+    <strong>Sipariş takip kodunuz:</strong>
+    <div class="input-group mt-2">
+        <input
+            type="text"
+            id="gosterilenTakipKodu"
+            class="form-control"
+            readonly
+        >
+        <button
+            type="button"
+            class="btn btn-outline-primary"
+            id="takipKoduKopyala"
+        >
+            Kopyala
+        </button>
+    </div>
+    <p class="mb-0 mt-2">
+        Bu kodu saklayın. Siparişinizi takip etmek için sipariş numaranızla birlikte kullanacaksınız.
+    </p>
+    <a href="/siparis-takip.html" class="btn btn-primary mt-2">
+        Siparişimi takip et
+    </a>
+</div>
+
+        <div class="alert alert-warning">
+            <strong>TEST MODU</strong><br>
+            Gerçek ödeme alınmaz. Kart bilgisi girmeyin.
+        </div>
+
+        <p>Sipariş numarası: <strong id="siparisNo" class="kod">-</strong></p>
+        <p>Ödeme tutarı: <strong id="tutar" class="fiyat">Kontrol ediliyor...</strong></p>
+
+        <button id="onayla" class="btn btn-success w-100">
+            Test Ödemesini Onayla
+        </button>
+
+        <button id="basarisiz" class="btn btn-outline-danger w-100 mt-2">
+            Test Ödemesini Başarısız Simüle Et
+        </button>
+
+        <p id="mesaj" class="mt-3" role="status" aria-live="polite"></p>
+
+        <a href="/urunler.html" class="btn btn-outline-secondary w-100 mt-2">
+            Alışverişe Dön
+        </a>
+    </main>
+<script type="module" src="/assets/js/pages/odeme-test.js"></script>
+</body>
+</html>

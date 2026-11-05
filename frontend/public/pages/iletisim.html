@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>İletişim | Bilgisayar Sitem</title>
+
+  <link
+    href="/assets/vendor/bootstrap/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/assets/vendor/fontawesome/css/all.min.css"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css"
+  >
+
+  <link rel="stylesheet" href="/assets/css/pages/iletisim.css">
+
+  <!-- Ortak tipografi: Plus Jakarta Sans (arayüz), Lora (başlık), JetBrains Mono (fiyat/kod) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="/assets/css/base/typography.css">
+    <link rel="stylesheet" href="/assets/css/base/components.css">
+</head>
+
+<body>
+
+  <!-- Navigasyon -->
+  <div data-site-nav></div>
+
+  <!-- İletişim bilgileri -->
+  <section class="container-fluid py-4 bg-light">
+    <div class="row text-center g-4">
+
+      <div class="col-md-4 d-flex justify-content-center align-items-center gap-3">
+        <div class="icon-box">
+          <i class="fa fa-envelope" aria-hidden="true"></i>
+        </div>
+        <div>
+          <strong>E-posta:</strong><br>
+          info@sitoykeskin.com
+        </div>
+      </div>
+
+      <div class="col-md-4 d-flex justify-content-center align-items-center gap-3">
+        <div class="icon-box">
+          <i class="fa fa-phone" aria-hidden="true"></i>
+        </div>
+        <div>
+          <strong>Telefon:</strong><br>
+          05** *** ** **
+        </div>
+      </div>
+
+      <div class="col-md-4 d-flex justify-content-center align-items-center gap-3">
+        <div class="icon-box">
+          <i class="fa fa-location-dot" aria-hidden="true"></i>
+        </div>
+        <div>
+          <strong>Adres:</strong><br>
+          Şirinevler, Fetih Cad...<br>
+          Bahçelievler - İstanbul
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Destek formu -->
+  <main class="container my-5">
+    <h2 class="text-center mb-3">Size Nasıl Yardımcı Olabiliriz?</h2>
+
+    <p class="text-center text-muted mb-4">
+      Sorularınızı veya destek talebinizi aşağıdaki formdan bize iletebilirsiniz.
+    </p>
+
+    <div class="row justify-content-center">
+      <div class="col-md-8 col-lg-6">
+
+        <div class="contact-card">
+          <form id="supportContactForm">
+
+            <div class="mb-3">
+              <label for="supportName" class="form-label">Ad Soyad</label>
+              <input
+                type="text"
+                id="supportName"
+                name="fullName"
+                class="form-control"
+                autocomplete="name"
+                maxlength="150"
+                required
+              >
+            </div>
+
+            <div class="mb-3">
+              <label for="supportEmail" class="form-label">E-posta</label>
+              <input
+                type="email"
+                id="supportEmail"
+                name="email"
+                class="form-control"
+                autocomplete="email"
+                maxlength="200"
+                required
+              >
+            </div>
+
+            <div class="mb-3">
+              <label for="supportPhone" class="form-label">Telefon</label>
+              <input
+                type="tel"
+                id="supportPhone"
+                name="phone"
+                class="form-control"
+                autocomplete="tel"
+                maxlength="30"
+              >
+            </div>
+
+            <div class="mb-4">
+              <label for="supportMessage" class="form-label">Mesajınız</label>
+              <textarea
+                id="supportMessage"
+                name="message"
+                class="form-control"
+                rows="5"
+                maxlength="5000"
+                required
+              ></textarea>
+            </div>
+
+            <div class="text-end">
+              <button
+                id="supportSubmitBtn"
+                type="submit"
+                class="btn btn-info text-white px-4"
+              >
+                Gönder
+              </button>
+            </div>
+
+            <p
+              id="supportSubmitMessage"
+              role="status"
+              aria-live="polite"
+            ></p>
+
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Alt bilgi -->
+  <footer class="site-footer">
+
+    <div class="footer-top">
+      <div class="footer-item">
+        <i class="fa fa-thumbs-up" aria-hidden="true"></i>
+        <h4>Müşteri Memnuniyeti</h4>
+        <p>Eksiksiz çözüm</p>
+      </div>
+
+      <div class="footer-item">
+        <i class="fa fa-shield-alt" aria-hidden="true"></i>
+        <h4>Garanti</h4>
+        <p>Orijinal ürünler</p>
+      </div>
+
+      <div class="footer-item">
+        <i class="fa fa-headset" aria-hidden="true"></i>
+        <h4>Destek</h4>
+        <p>Uzman ekip</p>
+      </div>
+
+      <div class="footer-item">
+        <i class="fa fa-truck" aria-hidden="true"></i>
+        <h4>Hızlı Teslimat</h4>
+        <p>Kısa sürede</p>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="footer-column">
+        <h4>Kategoriler</h4>
+        <ul>
+          <li>İşlemci</li>
+          <li>Ekran Kartı</li>
+          <li>RAM</li>
+          <li>SSD</li>
+        </ul>
+      </div>
+
+      <div class="footer-column">
+        <h4>Kurumsal</h4>
+        <ul>
+          <li><a href="/hakkimizda.html">Hakkımızda</a></li>
+          <li><a href="/iletisim.html">İletişim</a></li>
+          <li>KVKK</li>
+        </ul>
+      </div>
+
+      <div class="footer-column">
+        <h4>Destek</h4>
+        <ul>
+          <li>Sipariş Takibi</li>
+          <li>İade</li>
+          <li>S.S.S</li>
+        </ul>
+      </div>
+
+      <div class="footer-column">
+        <h4>İletişim</h4>
+        <p>0850 259 26 96</p>
+        <p>09:00 - 18:00</p>
+      </div>
+    </div>
+
+    <p class="footer-copy">
+      © 2025 Bilgisayar Sitem
+    </p>
+
+  </footer>
+<script src="/assets/vendor/bootstrap/js/bootstrap.bundle.min.js" defer></script>
+<script type="module" src="/assets/js/pages/iletisim.js"></script>
+</body>
+</html>

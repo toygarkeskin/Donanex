@@ -4,10 +4,7 @@ node_modules/
 !.env.example
 npm-debug.log*
 .DS_Store
+Thumbs.db
 
-yedek-*/
-server.js.backup
-server.js.email-backup
-server.js.sorun-yedegi
-
-OKUL/admin.js.yedek-sekmeler
+# Yeniden yapılandırmadan kalan eski dosyalar (kontrol edip silebilirsiniz)
+_eski/

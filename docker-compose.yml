@@ -1,0 +1,93 @@
+# Bilgisayar Bilgileri — tüm sistem tek komutla:
+#   docker compose up --build -d
+# Site:  http://localhost:${WEB_PORT}
+# Admin: http://localhost:${WEB_PORT}/admin
+#
+# Değerler proje kökündeki .env dosyasından okunur (.env.example'a bakın).
+# Veritabanı dışarıya açılmaz; pgAdmin vb. için docker-compose.dev.yml'yi kullanın.
+
+name: bilgisayar-bilgileri
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  db:
+    <<: *hardening
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:?DB_NAME .env içinde tanımlı olmalı}
+      POSTGRES_USER: ${DB_USER:?DB_USER .env içinde tanımlı olmalı}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD .env içinde tanımlı olmalı}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    <<: *hardening
+    build:
+      context: ./backend
+      target: runtime
+    env_file: .env
+    environment:
+      # .env'deki yerel ayarları Docker ağı için ezer
+      DB_HOST: db
+      DB_PORT: 5432
+      PORT: 3000
+      TRUST_PROXY: 1
+      NODE_ENV: ${NODE_ENV:-production}
+      # Yerelde HTTP ile çalışır. Canlıda: COOKIE_SECURE=true, ENABLE_TEST_PAYMENTS=false
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ENABLE_TEST_PAYMENTS: ${ENABLE_TEST_PAYMENTS:-true}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${WEB_PORT:-8080}}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - data
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    expose:
+      - "3000"
+
+  frontend:
+    <<: *hardening
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+
+networks:
+  # Veritabanı yalnızca backend'den görünür, dış ağa çıkamaz.
+  data:
+    internal: true
+  edge:
+
+volumes:
+  db-data:

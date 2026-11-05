@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Yönetim Paneli</title>
+  <link rel="stylesheet" href="/assets/css/pages/admin.css">
+    <!-- Ortak tipografi: Plus Jakarta Sans (arayüz), Lora (başlık), JetBrains Mono (fiyat/kod) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="/assets/css/base/typography.css">
+    <link rel="stylesheet" href="/assets/css/base/components.css">
+</head>
+<body>
+  <main class="shell">
+    <section id="loginView" class="login-card">
+      <div class="brand-mark">YÖNETİM</div>
+      <h1>Yönetici girişi</h1>
+      <p class="muted">Devam etmek için hesabınla giriş yap.</p>
+      <form id="loginForm">
+        <label for="username">Kullanıcı adı</label>
+        <input id="username" name="username" autocomplete="username" required maxlength="100">
+        <label for="password">Parola</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="200">
+        <button class="primary full" type="submit">Giriş yap</button>
+      </form>
+      <p id="loginMessage" class="message" role="status"></p>
+      <a class="back-link" href="/anasayfa.html">← Siteye dön</a>
+    </section>
+
+    <section id="dashboardView" hidden>
+      <header class="topbar">
+        <div>
+          <div class="brand-mark">YÖNETİM</div>
+          <h1>Kontrol paneli</h1>
+        </div>
+        <div class="top-actions">
+          <a class="button secondary" href="/anasayfa.html">Siteyi görüntüle</a>
+          <button id="logoutBtn" class="secondary" type="button">Çıkış yap</button>
+        </div>
+      </header>
+
+      <section class="stats-grid">
+        <article class="stat"><span>Toplam ürün</span><strong id="statProducts">—</strong></article>
+        <article class="stat"><span>Azalan stok (≤3)</span><strong id="statLowStock">—</strong></article>
+        <article class="stat"><span>Toplam sipariş</span><strong id="statOrders">—</strong></article>
+        <article class="stat"><span>Ödeme bekleyen</span><strong id="statPending">—</strong></article>
+        <article class="stat"><span>Test başarılı</span><strong id="statSuccess">—</strong></article>
+        <article class="stat"><span>Test başarısız</span><strong id="statFailed">—</strong></article>
+        <article class="stat"><span>Yeni destek talebi</span><strong id="statSupport">—</strong></article>
+      </section>
+
+
+      <nav class="tabs" aria-label="Yönetim bölümleri">
+        <button class="tab" data-tab="productsSection" type="button">Ürünler</button>
+         <button class="tab active" data-tab="ordersSection" type="button">Siparişler</button>
+          <button class="tab" data-tab="supportSection" type="button">Destek Talepleri</button>
+      </nav>
+
+
+      <section id="productsSection" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2>Ürün yönetimi</h2>
+            <p class="muted">Ürün bilgilerini buradan yönet.</p>
+          </div>
+          <button id="newProductBtn" class="primary" type="button">+ Yeni ürün</button>
+        </div>
+
+        <section class="bulk-import" aria-labelledby="bulkImportTitle">
+          <div class="bulk-heading">
+            <div>
+              <h3 id="bulkImportTitle">CSV ile toplu ürün ekle</h3>
+              <p class="muted">En fazla 500 ürünü tek seferde içe aktar. Bu alan yalnızca yönetici panelinde bulunur.</p>
+            </div>
+            <button id="downloadProductCsvBtn" class="secondary" type="button">Örnek CSV indir</button>
+          </div>
+          <label for="productCsvFile">Ürün CSV dosyası</label>
+          <input id="productCsvFile" type="file" accept=".csv,text/csv">
+          <p class="muted">Sütunlar: name, category, price, image, description, stock</p>
+          <div class="form-actions">
+            <button id="importProductsBtn" class="primary" type="button">CSV ürünlerini içe aktar</button>
+          </div>
+          <p id="bulkImportMessage" class="message" role="status"></p>
+        </section>
+
+        <form id="productForm" class="product-form" hidden>
+          <h3 id="productFormTitle">Yeni ürün</h3>
+          <input type="hidden" id="productId">
+          <div class="form-grid">
+            <div>
+              <label for="productName">Ürün adı</label>
+              <input id="productName" required maxlength="250">
+            </div>
+            <div>
+              <label for="productCategory">Kategori</label>
+              <input id="productCategory" required maxlength="100">
+            </div>
+            <div>
+              <label for="productPrice">Fiyat (₺)</label>
+              <input id="productPrice" type="number" min="0" step="0.01" required>
+            </div>
+            <div>
+              <label for="productImage">Görsel yolu</label>
+              <input id="productImage" required maxlength="500" placeholder="/assets/images/urunler/ornek.png veya https://...">
+            </div>
+            <div>
+              <label for="productStock">Stok adedi</label>
+              <input id="productStock" type="number" min="0" step="1" value="0" required>
+            </div>
+            <div class="wide">
+              <label for="productDescription">Açıklama</label>
+              <textarea id="productDescription" required rows="3"></textarea>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="primary" type="submit">Kaydet</button>
+            <button id="cancelProductBtn" class="secondary" type="button">Vazgeç</button>
+          </div>
+        </form>
+
+        <p id="productMessage" class="message" role="status"></p>
+        <div id="productsTable" class="table-wrap">
+          <p class="muted">Ürünler yükleniyor…</p>
+        </div>
+      </section>
+
+      <section id="ordersSection" class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>Sipariş yönetimi</h2>
+            <p class="muted">Test ödemeleri gerçek gelir değildir.</p>
+          </div>
+          <div class="toolbar-actions">
+            <button id="exportOrdersBtn" class="secondary" type="button">CSV dışa aktar</button>
+            <button id="refreshOrdersBtn" class="secondary" type="button">↻ Yenile</button>
+          </div>
+        </div>
+
+        <div class="filters">
+          <div class="search-field">
+            <label for="orderSearch">Sipariş ara</label>
+            <input id="orderSearch" type="search" placeholder="Sipariş no, müşteri, e-posta, telefon veya ürün…">
+          </div>
+          <div>
+            <label for="statusFilter">Durum</label>
+            <select id="statusFilter">
+              <option value="">Tüm durumlar</option>
+              <option>Ödeme bekleniyor</option>
+              <option>Test başarılı</option>
+              <option>Test başarısız</option>
+              <option>Hazırlanıyor</option>
+              <option>Kargoya verildi</option>
+              <option>Teslim edildi</option>
+              <option>Tamamlandı</option>
+              <option>İptal edildi</option>
+            </select>
+          </div>
+          <div>
+            <label for="dateFrom">Başlangıç tarihi</label>
+            <input id="dateFrom" type="date">
+          </div>
+          <div>
+            <label for="dateTo">Bitiş tarihi</label>
+            <input id="dateTo" type="date">
+          </div>
+          <div class="filter-buttons">
+            <button id="clearFiltersBtn" class="secondary" type="button">Filtreleri temizle</button>
+          </div>
+        </div>
+
+        <div class="results-line">
+          <span id="orderCount">Siparişler yükleniyor…</span>
+          <span class="muted">Müşteri bilgilerini yalnızca gerektiğinde görüntüle.</span>
+        </div>
+        <p id="ordersMessage" class="message" role="status"></p>
+        <div id="ordersTable" class="table-wrap">
+          <p class="muted">Siparişler yükleniyor…</p>
+        </div>
+        <div class="pagination">
+          <button id="prevPageBtn" class="secondary" type="button">← Önceki</button>
+          <span id="pageInfo">Sayfa 1</span>
+          <button id="nextPageBtn" class="secondary" type="button">Sonraki →</button>
+        </div>
+      </section>
+
+
+<section id="supportSection" class="panel" hidden>
+  <div class="section-heading">
+    <div>
+      <h2>Destek talepleri</h2>
+      <p class="muted">İletişim formundan gelen talepleri yönet.</p>
+    </div>
+    <div class="toolbar-actions">
+      <span id="supportCount" class="muted">Talepler yükleniyor…</span>
+      <button id="refreshSupportBtn" class="secondary" type="button">↻ Yenile</button>
+    </div>
+  </div>
+
+  <p id="supportMessage" class="message" role="status"></p>
+  <div id="supportTable" class="table-wrap">
+    <p class="muted">Talepler yükleniyor…</p>
+  </div>
+</section>
+
+
+      <p id="globalMessage" class="message" role="status"></p>
+    </section>
+  </main>
+
+  <dialog id="orderDialog" class="order-dialog">
+    <div class="dialog-heading">
+      <div>
+        <div class="brand-mark">SİPARİŞ DETAYI</div>
+        <h2 id="dialogTitle">Sipariş</h2>
+      </div>
+      <button id="closeDialogBtn" class="secondary" type="button">Kapat</button>
+    </div>
+    <div id="orderDetails"></div>
+  </dialog>
+
+
+<dialog id="supportDialog" class="order-dialog">
+  <div class="dialog-heading">
+    <div>
+      <div class="brand-mark">DESTEK TALEBİ</div>
+      <h2>Talep detayı</h2>
+    </div>
+    <button id="closeSupportDialogBtn" class="secondary" type="button">Kapat</button>
+  </div>
+  <div id="supportDetail"></div>
+</dialog>
+<script type="module" src="/assets/js/pages/admin/main.js"></script>
+</body>
+</html>

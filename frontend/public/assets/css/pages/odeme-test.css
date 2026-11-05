@@ -1,0 +1,15 @@
+body {
+        background: #f1f3f5;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+    }
+    .payment-box {
+        background: white;
+        width: 100%;
+        max-width: 500px;
+        padding: 30px;
+        border-radius: 16px;
+        box-shadow: 0 8px 30px #00000012;
+    }

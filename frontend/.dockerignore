@@ -1,0 +1,4 @@
+node_modules
+public/assets/vendor
+Dockerfile
+.dockerignore

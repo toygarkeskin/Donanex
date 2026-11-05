@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>PAROLAMI UNUTTUM</title>
+
+    <!-- Bootstrap -->
+    <link href="/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="/assets/css/pages/hesap.css">
+
+    <!-- Ortak tipografi: Plus Jakarta Sans (arayüz), Lora (başlık), JetBrains Mono (fiyat/kod) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="/assets/css/base/typography.css">
+    <link rel="stylesheet" href="/assets/css/base/components.css">
+</head>
+
+
+<body>
+
+    <div class="login-box">
+
+        <div id="unuttumAlani">
+            <h2>PAROLANI MI UNUTTUN?</h2>
+            <p>Parolanı sıfırlaman için e-posta adresine bir bağlantı göndereceğiz.</p>
+            <form id="unuttumForm">
+                <div class="mb-3">
+                    <input id="unuttumEmail" type="email" class="form-control" placeholder="E-posta"
+                        maxlength="254" autocomplete="email" required>
+                </div>
+                <button type="submit">PAROLAYI SIFIRLA</button>
+            </form>
+        </div>
+
+        <div id="sifirlaAlani" hidden>
+            <h2>YENİ PAROLANI BELİRLE</h2>
+            <p>En az 8 karakter; harf ve rakam içermeli.</p>
+            <form id="sifirlaForm">
+                <div class="mb-3">
+                    <input id="yeniSifre" type="password" class="form-control" placeholder="Yeni parola"
+                        minlength="8" maxlength="128" autocomplete="new-password" required>
+                </div>
+                <div class="mb-3">
+                    <input id="yeniSifreTekrar" type="password" class="form-control" placeholder="Yeni parola (tekrar)"
+                        minlength="8" maxlength="128" autocomplete="new-password" required>
+                </div>
+                <button type="submit">PAROLAYI GÜNCELLE</button>
+            </form>
+        </div>
+
+        <p id="uyari" role="status" aria-live="polite"></p>
+
+        <a href="/hesap.html" class="parola">GERİ DÖN</a>
+    </div>
+
+<script type="module" src="/assets/js/pages/parolaunut.js"></script>
+</body>
+
+</html>

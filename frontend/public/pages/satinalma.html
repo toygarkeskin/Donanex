@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sipariş Oluştur</title>
+
+    <link rel="stylesheet" href="/assets/css/pages/satinalma.css">
+    <link href="/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="/assets/vendor/fontawesome/css/all.min.css">
+    <!-- Ortak tipografi: Plus Jakarta Sans (arayüz), Lora (başlık), JetBrains Mono (fiyat/kod) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="/assets/css/base/typography.css">
+    <link rel="stylesheet" href="/assets/css/base/components.css">
+</head>
+<body>
+
+<div class="backdrop"></div>
+
+<div class="login-box">
+    <div class="icon">
+        <i class="bi bi-person-circle"></i>
+    </div>
+
+    <h2 class="text-center">
+        SİPARİŞİN ÖZETİ<br><br>
+        ADRESE STANDART GÖNDERİM
+    </h2>
+
+    <h3>ALICI BİLGİLERİ</h3>
+
+    <div id="siparisOzeti" class="mb-4">
+        Sipariş bilgileri yükleniyor...
+    </div>
+
+    <form id="siparisForm">
+        <div class="mb-3">
+            <label for="adSoyad" class="form-label">Ad Soyad</label>
+            <input id="adSoyad" name="adSoyad" type="text"
+                class="form-control" autocomplete="name"
+                maxlength="150" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="email" class="form-label">E-posta</label>
+            <input id="email" name="email" type="email"
+                class="form-control" autocomplete="email"
+                maxlength="254" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="telefon" class="form-label">Telefon</label>
+            <input id="telefon" name="telefon" type="tel"
+                class="form-control" autocomplete="tel"
+                maxlength="30" required>
+        </div>
+
+        <div class="mb-4">
+            <label for="adres" class="form-label">Teslimat Adresi</label>
+            <textarea id="adres" name="adres" class="form-control"
+                rows="4" autocomplete="street-address"
+                maxlength="1000" required></textarea>
+        </div>
+
+        <div id="sonucMesaji" role="status" aria-live="polite"></div>
+
+        <button id="siparisButonu" type="submit"
+            class="btn btn-info text-white w-100">
+            Siparişi Onayla
+        </button>
+
+        <a href="/sepet.html" class="btn btn-outline-secondary w-100 mt-2">
+            Sepete Geri Dön
+        </a>
+    </form>
+</div>
+<script type="module" src="/assets/js/pages/satinalma.js"></script>
+</body>
+</html>
