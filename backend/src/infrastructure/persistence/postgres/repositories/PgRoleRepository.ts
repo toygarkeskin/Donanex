@@ -1,19 +1,33 @@
 "use strict";
 
-class PgRoleRepository {
-  constructor(client) {
+import type { Db } from "../pool";
+import type { RoleRepository, Row } from "../../../../application/shared/contracts";
+import type { RoleAssignment } from "../../../../domain/identity/AccessPolicy";
+
+export class PgRoleRepository implements RoleRepository {
+  private readonly db: Db;
+
+  constructor(client: Db) {
     this.db = client;
   }
 
-  async findByCode(code) {
+  async findByCode(code: string): Promise<Row | null> {
     const { rows } = await this.db.query(
-      "SELECT code, name, scope, is_system AS \"isSystem\" FROM roles WHERE code = $1",
+      'SELECT code, name, scope, is_system AS "isSystem" FROM roles WHERE code = $1',
       [code]
     );
     return rows[0] || null;
   }
 
-  async assign({ userId, roleCode, storeId }) {
+  async assign({
+    userId,
+    roleCode,
+    storeId
+  }: {
+    userId: string;
+    roleCode: string;
+    storeId?: string | null;
+  }): Promise<void> {
     await this.db.query(
       `INSERT INTO user_roles (user_id, role_code, store_id)
        VALUES ($1, $2, $3)
@@ -23,7 +37,15 @@ class PgRoleRepository {
     );
   }
 
-  async revoke({ userId, roleCode, storeId }) {
+  async revoke({
+    userId,
+    roleCode,
+    storeId
+  }: {
+    userId: string;
+    roleCode: string;
+    storeId?: string | null;
+  }): Promise<boolean> {
     const result = await this.db.query(
       `DELETE FROM user_roles
        WHERE user_id = $1 AND role_code = $2
@@ -31,11 +53,11 @@ class PgRoleRepository {
            = COALESCE($3::uuid, '00000000-0000-0000-0000-000000000000'::uuid)`,
       [userId, roleCode, storeId]
     );
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   /** Kullanıcının tüm rol atamaları ve her atamanın getirdiği izinler. */
-  async listForUser(userId) {
+  async listForUser(userId: string): Promise<RoleAssignment[]> {
     const { rows } = await this.db.query(
       `SELECT ur.role_code AS "roleCode",
               ur.store_id  AS "storeId",
@@ -46,18 +68,17 @@ class PgRoleRepository {
        GROUP BY ur.role_code, ur.store_id`,
       [userId]
     );
-    return rows;
+    return rows as RoleAssignment[];
   }
 
-  async countByCode(roleCode) {
-    const { rows } = await this.db.query(
-      "SELECT COUNT(*)::int AS total FROM user_roles WHERE role_code = $1",
-      [roleCode]
-    );
+  async countByCode(roleCode: string): Promise<number> {
+    const { rows } = await this.db.query("SELECT COUNT(*)::int AS total FROM user_roles WHERE role_code = $1", [
+      roleCode
+    ]);
     return rows[0].total;
   }
 
-  async hasRole(userId, roleCode) {
+  async hasRole(userId: string, roleCode: string): Promise<boolean> {
     const { rows } = await this.db.query(
       "SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = $1 AND role_code = $2) AS found",
       [userId, roleCode]
@@ -65,5 +86,3 @@ class PgRoleRepository {
     return rows[0].found;
   }
 }
-
-module.exports = { PgRoleRepository };

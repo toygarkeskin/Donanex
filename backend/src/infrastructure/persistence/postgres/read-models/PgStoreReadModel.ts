@@ -1,16 +1,20 @@
 "use strict";
 
-const { escapeLike, binder, paginate } = require("./sql");
+import type { Pool } from "pg";
+import { escapeLike, binder, paginate } from "./sql";
+import type { ListFilters, Row, StoreReadModel } from "../../../../application/shared/contracts";
 
 const PUBLIC = `
   s.id, s.slug, s.name, s.description, s.logo_url AS "logoUrl", s.created_at AS "createdAt"`;
 
-class PgStoreReadModel {
-  constructor(pool) {
+export class PgStoreReadModel implements StoreReadModel {
+  private readonly db: Pool;
+
+  constructor(pool: Pool) {
     this.db = pool;
   }
 
-  async getBySlug(slug) {
+  async getBySlug(slug: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT ${PUBLIC},
               (SELECT COUNT(*)::int FROM products p WHERE p.store_id = s.id AND p.status = 'active') AS "productCount"
@@ -21,7 +25,7 @@ class PgStoreReadModel {
     return rows[0] || null;
   }
 
-  async listPublic({ search, limit }) {
+  async listPublic({ search, limit }: Row): Promise<Row[]> {
     const { params, bind } = binder();
     const where = ["s.status = 'active'"];
     if (search) {
@@ -40,9 +44,9 @@ class PgStoreReadModel {
     return rows;
   }
 
-  async listForAdmin(filters) {
+  async listForAdmin(filters: ListFilters): Promise<Row> {
     const { params, bind } = binder();
-    const where = [];
+    const where: string[] = [];
     if (filters.search) {
       const term = bind(`%${escapeLike(filters.search)}%`);
       where.push(`(s.name ILIKE ${term} OR s.contact_email ILIKE ${term} OR u.email ILIKE ${term})`);
@@ -66,7 +70,7 @@ class PgStoreReadModel {
     return paginate(rows, count.rows[0].total, filters);
   }
 
-  async getForMember(storeId) {
+  async getForMember(storeId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT ${PUBLIC}, s.status, s.contact_email AS "contactEmail", s.phone, s.tax_number AS "taxNumber"
        FROM stores s WHERE s.id = $1`,
@@ -76,7 +80,7 @@ class PgStoreReadModel {
   }
 
   /** Kişinin yetkili olduğu mağazalar — panel menüsünü kurmak için. */
-  async listForMember(storeIds) {
+  async listForMember(storeIds: readonly string[]): Promise<Row[]> {
     if (!storeIds.length) return [];
     const { rows } = await this.db.query(
       `SELECT ${PUBLIC}, s.status FROM stores s WHERE s.id = ANY($1::uuid[]) ORDER BY s.name`,
@@ -85,7 +89,7 @@ class PgStoreReadModel {
     return rows;
   }
 
-  async listMembers(storeId) {
+  async listMembers(storeId: string): Promise<Row[]> {
     const { rows } = await this.db.query(
       `SELECT u.id, u.full_name AS "fullName", u.email, ur.role_code AS "roleCode",
               r.name AS "roleName", ur.granted_at AS "grantedAt",
@@ -101,5 +105,3 @@ class PgStoreReadModel {
     return rows;
   }
 }
-
-module.exports = { PgStoreReadModel };

@@ -1,14 +1,18 @@
 "use strict";
 
-const { money } = require("./sql");
+import type { Pool } from "pg";
+import { money } from "./sql";
+import type { DashboardReadModel, Row } from "../../../../application/shared/contracts";
 
-class PgDashboardReadModel {
-  constructor(pool) {
+export class PgDashboardReadModel implements DashboardReadModel {
+  private readonly db: Pool;
+
+  constructor(pool: Pool) {
     this.db = pool;
   }
 
   /** Sistem yöneticisi özeti. */
-  async adminSummary() {
+  async adminSummary(): Promise<Row> {
     const { rows } = await this.db.query(
       `SELECT
          (SELECT COUNT(*)::int FROM users WHERE status = 'active')            AS "activeUsers",
@@ -37,7 +41,7 @@ class PgDashboardReadModel {
   }
 
   /** Mağaza özeti — yalnızca o mağazanın sayıları. */
-  async storeSummary(storeId) {
+  async storeSummary(storeId: string): Promise<Row> {
     const { rows } = await this.db.query(
       `SELECT
          (SELECT COUNT(*)::int FROM products WHERE store_id = $1 AND status = 'active')   AS "activeProducts",
@@ -56,5 +60,3 @@ class PgDashboardReadModel {
     return rows[0];
   }
 }
-
-module.exports = { PgDashboardReadModel };

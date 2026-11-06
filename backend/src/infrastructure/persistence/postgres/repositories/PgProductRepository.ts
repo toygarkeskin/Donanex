@@ -1,16 +1,21 @@
 "use strict";
 
+import type { Db } from "../pool";
+import type { ProductRepository, Row } from "../../../../application/shared/contracts";
+
 const COLUMNS = `
   id, store_id AS "storeId", category_id AS "categoryId", slug, sku, name, description,
   price_cents AS "priceCents", stock, image_url AS "imageUrl", status, created_at AS "createdAt"`;
 
-class PgProductRepository {
-  constructor(client) {
+export class PgProductRepository implements ProductRepository {
+  private readonly db: Db;
+
+  constructor(client: Db) {
     this.db = client;
   }
 
   /** Aynı mağazada benzersiz adres (slug) üretir: "klavye", "klavye-2", ... */
-  async reserveSlug(storeId, desired) {
+  async reserveSlug(storeId: string, desired: string): Promise<string> {
     const base = desired || "urun";
     for (let suffix = 0; suffix < 50; suffix++) {
       const candidate = suffix === 0 ? base : `${base}-${suffix + 1}`;
@@ -23,47 +28,82 @@ class PgProductRepository {
     return `${base}-${Date.now()}`;
   }
 
-  async create(product) {
+  async create(product: Row): Promise<Row> {
     const { rows } = await this.db.query(
       `INSERT INTO products (id, store_id, category_id, slug, sku, name, description, price_cents, stock, image_url, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING ${COLUMNS}`,
-      [product.id, product.storeId, product.categoryId, product.slug, product.sku, product.name, product.description, product.price.cents, product.stock, product.imageUrl, product.status]
+      [
+        product.id,
+        product.storeId,
+        product.categoryId,
+        product.slug,
+        product.sku,
+        product.name,
+        product.description,
+        product.price.cents,
+        product.stock,
+        product.imageUrl,
+        product.status
+      ]
     );
     return rows[0];
   }
 
-  async createMany(products) {
+  async createMany(products: readonly Row[]): Promise<number> {
     if (!products.length) return 0;
-    const values = [];
-    const params = [];
+    const values: string[] = [];
+    const params: unknown[] = [];
     products.forEach((product, index) => {
       const offset = index * 11;
       values.push(`(${Array.from({ length: 11 }, (_, i) => `$${offset + i + 1}`).join(", ")})`);
-      params.push(product.id, product.storeId, product.categoryId, product.slug, product.sku, product.name, product.description, product.price.cents, product.stock, product.imageUrl, product.status);
+      params.push(
+        product.id,
+        product.storeId,
+        product.categoryId,
+        product.slug,
+        product.sku,
+        product.name,
+        product.description,
+        product.price.cents,
+        product.stock,
+        product.imageUrl,
+        product.status
+      );
     });
     const result = await this.db.query(
       `INSERT INTO products (id, store_id, category_id, slug, sku, name, description, price_cents, stock, image_url, status)
        VALUES ${values.join(", ")}`,
       params
     );
-    return result.rowCount;
+    return result.rowCount ?? 0;
   }
 
   /** storeId sorgunun parçası: başka mağazanın ürünü güncellenemez. */
-  async update(storeId, product) {
+  async update(storeId: string, product: Row): Promise<Row | null> {
     const { rows } = await this.db.query(
       `UPDATE products
        SET category_id = $1, sku = $2, name = $3, description = $4,
            price_cents = $5, stock = $6, image_url = $7, status = $8, updated_at = NOW()
        WHERE id = $9 AND store_id = $10
        RETURNING ${COLUMNS}`,
-      [product.categoryId, product.sku, product.name, product.description, product.price.cents, product.stock, product.imageUrl, product.status, product.id, storeId]
+      [
+        product.categoryId,
+        product.sku,
+        product.name,
+        product.description,
+        product.price.cents,
+        product.stock,
+        product.imageUrl,
+        product.status,
+        product.id,
+        storeId
+      ]
     );
     return rows[0] || null;
   }
 
-  async setStatus(storeId, productId, status) {
+  async setStatus(storeId: string, productId: string, status: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `UPDATE products SET status = $1, updated_at = NOW()
        WHERE id = $2 AND store_id = $3
@@ -73,21 +113,20 @@ class PgProductRepository {
     return rows[0] || null;
   }
 
-  async remove(storeId, productId) {
+  async remove(storeId: string, productId: string): Promise<boolean> {
     const result = await this.db.query("DELETE FROM products WHERE id = $1 AND store_id = $2", [productId, storeId]);
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
-  async isReferencedByOrders(productId) {
-    const { rows } = await this.db.query(
-      "SELECT EXISTS (SELECT 1 FROM order_items WHERE product_id = $1) AS used",
-      [productId]
-    );
+  async isReferencedByOrders(productId: string): Promise<boolean> {
+    const { rows } = await this.db.query("SELECT EXISTS (SELECT 1 FROM order_items WHERE product_id = $1) AS used", [
+      productId
+    ]);
     return rows[0].used;
   }
 
   /** Sepete eklenebilir mi? Mağazası da aktif olmalı. */
-  async findPurchasable(productId) {
+  async findPurchasable(productId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT p.id, p.name, p.price_cents AS "priceCents", p.stock, p.status
        FROM products p
@@ -102,8 +141,10 @@ class PgProductRepository {
    * Sipariş anında ürün satırlarını kilitler.
    * ORDER BY p.id: iki eşzamanlı sipariş satırları hep aynı sırada kilitler,
    * böylece karşılıklı kilitlenme (deadlock) oluşmaz.
+   *
+   * MAP döndürür: çağıran .get(productId) ile arar.
    */
-  async lockForOrder(productIds) {
+  async lockForOrder(productIds: readonly string[]): Promise<Map<string, Row>> {
     const { rows } = await this.db.query(
       `SELECT p.id, p.name, p.price_cents AS "priceCents", p.stock, p.status,
               p.image_url AS "imageUrl", p.store_id AS "storeId",
@@ -115,16 +156,20 @@ class PgProductRepository {
        FOR UPDATE OF p`,
       [productIds]
     );
-    return new Map(rows.map((row) => [row.id, row]));
+    return new Map(rows.map((row) => [row.id as string, row as Row]));
   }
 
-  async decreaseStock(productId, quantity) {
-    await this.db.query("UPDATE products SET stock = stock - $1, updated_at = NOW() WHERE id = $2", [quantity, productId]);
+  async decreaseStock(productId: string, quantity: number): Promise<void> {
+    await this.db.query("UPDATE products SET stock = stock - $1, updated_at = NOW() WHERE id = $2", [
+      quantity,
+      productId
+    ]);
   }
 
-  async increaseStock(productId, quantity) {
-    await this.db.query("UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2", [quantity, productId]);
+  async increaseStock(productId: string, quantity: number): Promise<void> {
+    await this.db.query("UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2", [
+      quantity,
+      productId
+    ]);
   }
 }
-
-module.exports = { PgProductRepository };

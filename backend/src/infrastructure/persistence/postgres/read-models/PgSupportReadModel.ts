@@ -1,6 +1,8 @@
 "use strict";
 
-const { binder, paginate } = require("./sql");
+import type { Pool } from "pg";
+import { binder, paginate } from "./sql";
+import type { ListFilters, Row, SupportReadModel } from "../../../../application/shared/contracts";
 
 const SUMMARY = `
   t.id, t.reference, t.subject, t.status, t.created_at AS "createdAt",
@@ -14,16 +16,17 @@ const MESSAGES = `
     FROM support_messages m WHERE m.ticket_id = t.id
   ), '[]'::json)`;
 
-class PgSupportReadModel {
-  constructor(pool) {
+export class PgSupportReadModel implements SupportReadModel {
+  private readonly db: Pool;
+
+  constructor(pool: Pool) {
     this.db = pool;
   }
 
-  async listForUser(userId, paging) {
-    const count = await this.db.query(
-      "SELECT COUNT(*)::int AS total FROM support_tickets WHERE user_id = $1",
-      [userId]
-    );
+  async listForUser(userId: string, paging: ListFilters): Promise<Row> {
+    const count = await this.db.query("SELECT COUNT(*)::int AS total FROM support_tickets WHERE user_id = $1", [
+      userId
+    ]);
     const { rows } = await this.db.query(
       `SELECT ${SUMMARY} FROM support_tickets t
        WHERE t.user_id = $1 ORDER BY t.created_at DESC LIMIT $2 OFFSET $3`,
@@ -32,7 +35,7 @@ class PgSupportReadModel {
     return paginate(rows, count.rows[0].total, paging);
   }
 
-  async listForStore(storeId, filters) {
+  async listForStore(storeId: string, filters: ListFilters): Promise<Row> {
     const { params, bind } = binder([storeId]);
     const where = ["t.store_id = $1"];
     if (filters.status) where.push(`t.status = ${bind(filters.status)}`);
@@ -46,9 +49,9 @@ class PgSupportReadModel {
     return paginate(rows, count.rows[0].total, filters);
   }
 
-  async listForAdmin(filters) {
+  async listForAdmin(filters: ListFilters): Promise<Row> {
     const { params, bind } = binder();
-    const where = [];
+    const where: string[] = [];
     if (filters.status) where.push(`t.status = ${bind(filters.status)}`);
 
     const from = `FROM support_tickets t LEFT JOIN stores s ON s.id = t.store_id ${where.length ? `WHERE ${where.join(" AND ")}` : ""}`;
@@ -63,7 +66,8 @@ class PgSupportReadModel {
   }
 
   /** Kapsam filtresi sorgunun içindedir: başkasının talebi dönmez. */
-  async get(ticketId, { userId = null, storeId = null } = {}) {
+  async get(ticketId: string, scope: Row = {}): Promise<Row | null> {
+    const { userId = null, storeId = null } = scope;
     const { rows } = await this.db.query(
       `SELECT ${SUMMARY}, t.message, t.order_id AS "orderId", ${MESSAGES} AS messages
        FROM support_tickets t
@@ -75,5 +79,3 @@ class PgSupportReadModel {
     return rows[0] || null;
   }
 }
-
-module.exports = { PgSupportReadModel };

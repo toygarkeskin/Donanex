@@ -1,20 +1,23 @@
 "use strict";
 
-const { AsyncLocalStorage } = require("node:async_hooks");
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { Pool, PoolClient } from "pg";
 
-const { PgUserRepository } = require("./repositories/PgUserRepository");
-const { PgRoleRepository } = require("./repositories/PgRoleRepository");
-const { PgAuthSessionRepository } = require("./repositories/PgAuthSessionRepository");
-const { PgOAuthRepository } = require("./repositories/PgOAuthRepository");
-const { PgVerificationTokenRepository } = require("./repositories/PgVerificationTokenRepository");
-const { PgStoreRepository } = require("./repositories/PgStoreRepository");
-const { PgProductRepository } = require("./repositories/PgProductRepository");
-const { PgCategoryRepository } = require("./repositories/PgCategoryRepository");
-const { PgCartRepository } = require("./repositories/PgCartRepository");
-const { PgOrderRepository } = require("./repositories/PgOrderRepository");
-const { PgSupportRepository } = require("./repositories/PgSupportRepository");
-const { PgOutboxRepository } = require("./repositories/PgOutboxRepository");
-const { PgAuditRepository } = require("./repositories/PgAuditRepository");
+import { PgUserRepository } from "./repositories/PgUserRepository";
+import { PgRoleRepository } from "./repositories/PgRoleRepository";
+import { PgAuthSessionRepository } from "./repositories/PgAuthSessionRepository";
+import { PgOAuthRepository } from "./repositories/PgOAuthRepository";
+import { PgVerificationTokenRepository } from "./repositories/PgVerificationTokenRepository";
+import { PgStoreRepository } from "./repositories/PgStoreRepository";
+import { PgProductRepository } from "./repositories/PgProductRepository";
+import { PgCategoryRepository } from "./repositories/PgCategoryRepository";
+import { PgCartRepository } from "./repositories/PgCartRepository";
+import { PgOrderRepository } from "./repositories/PgOrderRepository";
+import { PgSupportRepository } from "./repositories/PgSupportRepository";
+import { PgOutboxRepository } from "./repositories/PgOutboxRepository";
+import { PgAuditRepository } from "./repositories/PgAuditRepository";
+
+import type { Repositories, UnitOfWork } from "../../../application/shared/contracts";
 
 /**
  * Yazma tarafının transaction sınırı.
@@ -30,14 +33,16 @@ const { PgAuditRepository } = require("./repositories/PgAuditRepository");
  * birbirinin transaction'ına yazardı. O durumda stok kontrolü gibi kilide
  * dayanan kurallar sessizce bozulur (iki sipariş aynı son ürünü satabilir).
  */
-class PgUnitOfWork {
-  constructor(pool) {
+export class PgUnitOfWork implements UnitOfWork {
+  private readonly pool: Pool;
+  /** Her istek kendi async bağlamında kendi transaction'ını görür. */
+  private readonly current = new AsyncLocalStorage<Repositories>();
+
+  constructor(pool: Pool) {
     this.pool = pool;
-    // Her istek kendi async bağlamında kendi transaction'ını görür.
-    this.current = new AsyncLocalStorage();
   }
 
-  buildRepositories(client) {
+  buildRepositories(client: PoolClient): Repositories {
     return {
       users: new PgUserRepository(client),
       roles: new PgRoleRepository(client),
@@ -55,7 +60,7 @@ class PgUnitOfWork {
     };
   }
 
-  async run(work) {
+  async run<T>(work: (repos: Repositories) => Promise<T>): Promise<T> {
     const active = this.current.getStore();
     if (active) return work(active);
 
@@ -70,7 +75,8 @@ class PgUnitOfWork {
       try {
         await client.query("ROLLBACK");
       } catch (rollbackError) {
-        console.error("Geri alma hatası:", rollbackError.message);
+        const mesaj = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+        console.error("Geri alma hatası:", mesaj);
       }
       throw error;
     } finally {
@@ -78,5 +84,3 @@ class PgUnitOfWork {
     }
   }
 }
-
-module.exports = { PgUnitOfWork };

@@ -1,6 +1,8 @@
 "use strict";
 
-const { escapeLike, money, binder, paginate } = require("./sql");
+import type { Pool } from "pg";
+import { escapeLike, money, binder, paginate } from "./sql";
+import type { ListFilters, OrderReadModel, Row } from "../../../../application/shared/contracts";
 
 /** Bir paketin ürün satırları — alt sorgu olarak JSON üretir. */
 const ITEMS = `
@@ -40,12 +42,14 @@ const SUMMARY = `
   o.id, o.order_number AS "orderNumber", o.status, o.placed_at AS "placedAt",
   ${money("o.total_cents")} AS total`;
 
-class PgOrderReadModel {
-  constructor(pool) {
+export class PgOrderReadModel implements OrderReadModel {
+  private readonly db: Pool;
+
+  constructor(pool: Pool) {
     this.db = pool;
   }
 
-  async listForUser(userId, paging) {
+  async listForUser(userId: string, paging: ListFilters): Promise<Row> {
     const count = await this.db.query("SELECT COUNT(*)::int AS total FROM orders WHERE user_id = $1", [userId]);
     const { rows } = await this.db.query(
       `SELECT ${SUMMARY}, ${PACKAGES} AS packages
@@ -59,7 +63,7 @@ class PgOrderReadModel {
   }
 
   /** Kullanıcı kimliği sorgunun parçası: başkasının siparişi dönmez. */
-  async getForUser(orderId, userId) {
+  async getForUser(orderId: string, userId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT ${SUMMARY}, o.shipping_address AS "shippingAddress", o.note,
               o.contact_email AS "contactEmail", o.contact_full_name AS "contactFullName",
@@ -75,7 +79,7 @@ class PgOrderReadModel {
    * Misafir takibi. Yanıt kişisel veri İÇERMEZ: adres, telefon ve e-posta
    * dönmez; yalnızca durum, tutar ve kargo bilgisi verilir.
    */
-  async getByTrackingCode(orderNumber, trackingCodeHash) {
+  async getByTrackingCode(orderNumber: string, trackingCodeHash: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT ${SUMMARY}, ${PACKAGES} AS packages
        FROM orders o
@@ -86,7 +90,7 @@ class PgOrderReadModel {
   }
 
   /** Mağaza paneli: yalnızca o mağazanın paketleri ve kendi ürün satırları. */
-  async listForStore(storeId, filters) {
+  async listForStore(storeId: string, filters: ListFilters): Promise<Row> {
     const { params, bind } = binder([storeId]);
     const where = ["op.store_id = $1"];
 
@@ -116,7 +120,7 @@ class PgOrderReadModel {
   }
 
   /** Paket detayı. Mağaza, müşterinin teslimat bilgisini görür (kargo için gerekli). */
-  async getForStore(packageId, storeId) {
+  async getForStore(packageId: string, storeId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT op.id AS "packageId", op.status, ${money("op.subtotal_cents")} AS subtotal,
               op.carrier, op.tracking_number AS "trackingNumber", op.tracking_url AS "trackingUrl",
@@ -133,9 +137,9 @@ class PgOrderReadModel {
     return rows[0] || null;
   }
 
-  async listForAdmin(filters) {
+  async listForAdmin(filters: ListFilters): Promise<Row> {
     const { params, bind } = binder();
-    const where = [];
+    const where: string[] = [];
 
     if (filters.search) {
       const term = bind(`%${escapeLike(filters.search)}%`);
@@ -159,7 +163,7 @@ class PgOrderReadModel {
     return paginate(rows, count.rows[0].total, filters);
   }
 
-  async getForAdmin(orderId) {
+  async getForAdmin(orderId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT ${SUMMARY}, o.shipping_address AS "shippingAddress", o.note,
               o.contact_email AS "contactEmail", o.contact_full_name AS "contactFullName",
@@ -179,5 +183,3 @@ class PgOrderReadModel {
     return rows[0] || null;
   }
 }
-
-module.exports = { PgOrderReadModel };

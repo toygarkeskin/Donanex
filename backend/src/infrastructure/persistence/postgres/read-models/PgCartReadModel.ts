@@ -1,17 +1,26 @@
 "use strict";
 
-class PgCartReadModel {
-  constructor(pool) {
+import type { Pool } from "pg";
+import type { CartLine } from "../../../../domain/ordering/Cart";
+import type { CartProductRow, CartReadModel } from "../../../../application/shared/contracts";
+
+export class PgCartReadModel implements CartReadModel {
+  private readonly db: Pool;
+
+  constructor(pool: Pool) {
     this.db = pool;
   }
 
   /** Giriş yapmışsa kendi sepeti, değilse çerezdeki misafir sepeti. */
-  async findCartId({ userId, guestCartId }) {
+  async findCartId({
+    userId,
+    guestCartId
+  }: {
+    userId?: string | null;
+    guestCartId?: string | null;
+  }): Promise<string | null> {
     if (userId) {
-      const { rows } = await this.db.query(
-        "SELECT id FROM carts WHERE user_id = $1 AND status = 'active'",
-        [userId]
-      );
+      const { rows } = await this.db.query("SELECT id FROM carts WHERE user_id = $1 AND status = 'active'", [userId]);
       return rows[0]?.id ?? null;
     }
     if (!guestCartId) return null;
@@ -26,7 +35,7 @@ class PgCartReadModel {
    * Sepet satırları ve ürünlerin GÜNCEL hali. Fiyat sepete değil ürüne bağlıdır;
    * fiyat değişince sepet de kendiliğinden güncellenir.
    */
-  async getLines(cartId) {
+  async getLines(cartId: string): Promise<{ lines: CartLine[]; products: CartProductRow[] }> {
     const { rows } = await this.db.query(
       `SELECT ci.product_id AS "productId", ci.quantity,
               p.name, p.slug, p.image_url AS "imageUrl", p.price_cents AS "priceCents",
@@ -58,5 +67,3 @@ class PgCartReadModel {
     };
   }
 }
-
-module.exports = { PgCartReadModel };

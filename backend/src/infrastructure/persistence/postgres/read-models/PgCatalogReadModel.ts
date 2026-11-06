@@ -1,6 +1,8 @@
 "use strict";
 
-const { escapeLike, money, binder, paginate } = require("./sql");
+import type { Pool } from "pg";
+import { escapeLike, money, binder, paginate } from "./sql";
+import type { CatalogReadModel, ListFilters, Row } from "../../../../application/shared/contracts";
 
 const CARD = `
   p.id, p.slug, p.name, p.image_url AS "imageUrl", p.stock, p.status,
@@ -8,20 +10,26 @@ const CARD = `
   s.id AS "storeId", s.slug AS "storeSlug", s.name AS "storeName",
   c.slug AS "categorySlug", c.name AS "categoryName"`;
 
-const SORTS = {
+/**
+ * Sıralama seçenekleri BURADA sabittir: kullanıcının gönderdiği metin asla
+ * doğrudan ORDER BY'a girmez, yalnızca bu haritada anahtar arar.
+ */
+const SORTS: Record<string, string> = {
   newest: "p.created_at DESC, p.id DESC",
   price_asc: "p.price_cents ASC, p.id",
   price_desc: "p.price_cents DESC, p.id",
   name_asc: "p.name ASC, p.id"
 };
 
-class PgCatalogReadModel {
-  constructor(pool) {
+export class PgCatalogReadModel implements CatalogReadModel {
+  private readonly db: Pool;
+
+  constructor(pool: Pool) {
     this.db = pool;
   }
 
   /** Vitrin: yalnızca aktif mağazaların yayındaki ürünleri. */
-  async listProducts(filters) {
+  async listProducts(filters: ListFilters): Promise<Row> {
     const { params, bind } = binder();
     const where = ["p.status = 'active'", "s.status = 'active'"];
 
@@ -51,7 +59,7 @@ class PgCatalogReadModel {
     return paginate(rows, count.rows[0].total, filters);
   }
 
-  async getProductBySlug(storeSlug, productSlug) {
+  async getProductBySlug(storeSlug: string, productSlug: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT ${CARD}, p.description, p.sku, s.description AS "storeDescription"
        FROM products p
@@ -63,7 +71,7 @@ class PgCatalogReadModel {
     return rows[0] || null;
   }
 
-  async listCategories() {
+  async listCategories(): Promise<Row[]> {
     const { rows } = await this.db.query(
       `SELECT c.id, c.slug, c.name, COUNT(p.id)::int AS "productCount"
        FROM categories c
@@ -76,7 +84,7 @@ class PgCatalogReadModel {
   }
 
   /** Mağaza paneli: taslak ve arşivli ürünler de görünür. */
-  async listStoreProducts(storeId, filters) {
+  async listStoreProducts(storeId: string, filters: ListFilters): Promise<Row> {
     const { params, bind } = binder([storeId]);
     const where = ["p.store_id = $1"];
 
@@ -102,7 +110,7 @@ class PgCatalogReadModel {
     return paginate(rows, count.rows[0].total, filters);
   }
 
-  async getProductForStore(storeId, productId) {
+  async getProductForStore(storeId: string, productId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT p.id, p.slug, p.sku, p.name, p.description, p.stock, p.status,
               p.image_url AS "imageUrl", p.category_id AS "categoryId",
@@ -113,5 +121,3 @@ class PgCatalogReadModel {
     return rows[0] || null;
   }
 }
-
-module.exports = { PgCatalogReadModel };

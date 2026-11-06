@@ -1,13 +1,18 @@
 "use strict";
 
-const { escapeLike, binder, paginate } = require("./sql");
+import type { Pool } from "pg";
+import { escapeLike, binder, paginate } from "./sql";
+import type { RoleAssignment as RoleAssignmentRow } from "../../../../domain/identity/AccessPolicy";
+import type { ListFilters, Row, UserReadModel } from "../../../../application/shared/contracts";
 
-class PgUserReadModel {
-  constructor(pool) {
+export class PgUserReadModel implements UserReadModel {
+  private readonly db: Pool;
+
+  constructor(pool: Pool) {
     this.db = pool;
   }
 
-  async getProfile(userId) {
+  async getProfile(userId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT id, email, full_name AS "fullName", phone,
               email_verified AS "emailVerified", status, created_at AS "createdAt"
@@ -18,7 +23,7 @@ class PgUserReadModel {
   }
 
   /** AccessPolicy'nin kurulduğu kaynak: rol atamaları ve getirdikleri izinler. */
-  async getAccessPolicy(userId) {
+  async getAccessPolicy(userId: string): Promise<RoleAssignmentRow[]> {
     const { rows } = await this.db.query(
       `SELECT ur.role_code AS "roleCode",
               ur.store_id  AS "storeId",
@@ -32,16 +37,15 @@ class PgUserReadModel {
     return rows;
   }
 
-  async getSessionVersion(userId) {
-    const { rows } = await this.db.query(
-      "SELECT session_version AS version, status FROM users WHERE id = $1",
-      [userId]
-    );
+  async getSessionVersion(userId: string): Promise<number | null> {
+    const { rows } = await this.db.query("SELECT session_version AS version, status FROM users WHERE id = $1", [
+      userId
+    ]);
     if (!rows[0] || rows[0].status !== "active") return null;
     return rows[0].version;
   }
 
-  async listAddresses(userId) {
+  async listAddresses(userId: string): Promise<Row[]> {
     const { rows } = await this.db.query(
       `SELECT id, title, full_name AS "fullName", phone, city, district, line,
               postal_code AS "postalCode"
@@ -51,9 +55,9 @@ class PgUserReadModel {
     return rows;
   }
 
-  async listForAdmin(filters) {
+  async listForAdmin(filters: ListFilters): Promise<Row> {
     const { params, bind } = binder();
-    const where = [];
+    const where: string[] = [];
 
     if (filters.search) {
       const term = bind(`%${escapeLike(filters.search)}%`);
@@ -61,7 +65,9 @@ class PgUserReadModel {
     }
     if (filters.status) where.push(`u.status = ${bind(filters.status)}`);
     if (filters.role) {
-      where.push(`EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role_code = ${bind(filters.role)})`);
+      where.push(
+        `EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role_code = ${bind(filters.role)})`
+      );
     }
 
     const from = `FROM users u ${where.length ? `WHERE ${where.join(" AND ")}` : ""}`;
@@ -86,5 +92,3 @@ class PgUserReadModel {
     return paginate(rows, count.rows[0].total, filters);
   }
 }
-
-module.exports = { PgUserReadModel };

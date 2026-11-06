@@ -4,22 +4,41 @@
  * Port arayüzleri — application katmanının dış dünyadan beklediği şekiller.
  *
  * ports.ts ÇALIŞMA ZAMANINDA doğrular (metot var mı), bu dosya DERLEMEDE
- * doğrular (doğru adla ve doğru argümanlarla mı çağrılıyor). İkisi birlikte
- * çalışır.
+ * doğrular (doğru adla, doğru argümanlarla çağrılıyor mu ve gerçekten bir
+ * şey döndürüyor mu). İkisi birlikte çalışır.
  *
- * İmzalar infrastructure'daki gerçek repository'lerden birebir çıkarıldı.
+ * İmzalar tahminle değil, infrastructure'daki gerçek sınıflardan çıkarıldı ve
+ * her biri "implements" ile bağlandı; adaptör sözleşmeden saparsa derleme durur.
  *
- * Satır şekilleri hakkında dürüst not: repository'ler veritabanı satırı
- * döndürür. Bu adımda metot adları ve ARGÜMANLAR tam tiplidir; dönen satırın
- * içeriği "Row" ile geçilmiştir ve infrastructure TypeScript'e taşındığında
- * somut tiplerle daraltılacaktır.
+ * Satır şekilleri hakkında dürüst sınır: sorgu sonuçları "Row" ile geçiyor.
+ * Metot adları, argümanlar ve DÖNÜŞ OLUP OLMADIĞI tam tipli; satırın içindeki
+ * alan adları henüz denetlenmiyor.
  */
 
 import type { RoleAssignment as RoleAssignmentRow } from "../../domain/identity/AccessPolicy";
 import type { DomainEventShape } from "../../domain/shared/DomainEvent";
+import type { CartLine } from "../../domain/ordering/Cart";
 
-/** Veritabanı satırı. İnfrastructure göçünde somut tiplerle değişecek. */
+/** Veritabanı satırı. */
 export type Row = Record<string, any>;
+
+/**
+ * Sayfalama alanları.
+ *
+ * Sorgu işleyicileri bu dördünü HER ZAMAN hesaplayıp geçirir: limit/offset
+ * SQL'e, page/pageSize yanıttaki sayfa bilgisine gider. Row'un indeks imzası
+ * "bu alanlar olabilir" der, bu arayüz "olmak zorunda" der — read model'ler
+ * sayfalamayı kendileri uydurmasın diye ayrı tutuluyor.
+ */
+export interface Paging {
+  readonly limit: number;
+  readonly offset: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+/** Liste sorgusu girdisi: serbest filtreler + zorunlu sayfalama. */
+export type ListFilters = Row & Paging;
 
 /* ---------------------------------------------------------------- */
 /* Yazma tarafı: repository'ler ve transaction sınırı                 */
@@ -35,12 +54,13 @@ export interface UserRepository {
   }): Promise<Row | null>;
   findCredentialsByEmail(email: string): Promise<Row | null>;
   findById(id: string): Promise<Row | null>;
-  updatePasswordHash(id: string, passwordHash: string): Promise<Row | null>;
-  changePassword(id: string, passwordHash: string): Promise<Row | null>;
-  updateProfile(id: string, input: { fullName: string; phone: string | null }): Promise<Row | null>;
-  markEmailVerified(id: string): Promise<Row | null>;
-  setStatus(id: string, status: string): Promise<Row | null>;
-  touchLastLogin(id: string): Promise<unknown>;
+  updatePasswordHash(id: string, passwordHash: string): Promise<void>;
+  /** Oturum sürümünü artırır ve yeni değerini döndürür; eski jetonlar düşer. */
+  changePassword(id: string, passwordHash: string): Promise<number | null>;
+  updateProfile(id: string, input: { fullName: string; phone: string | null }): Promise<void>;
+  markEmailVerified(id: string): Promise<void>;
+  setStatus(id: string, status: string): Promise<void>;
+  touchLastLogin(id: string): Promise<void>;
   addAddress(userId: string, address: Row): Promise<Row>;
   updateAddress(userId: string, addressId: string, address: Row): Promise<Row | null>;
   removeAddress(userId: string, addressId: string): Promise<boolean>;
@@ -48,7 +68,7 @@ export interface UserRepository {
 
 export interface RoleRepository {
   findByCode(code: string): Promise<Row | null>;
-  assign(input: { userId: string; roleCode: string; storeId?: string | null }): Promise<Row>;
+  assign(input: { userId: string; roleCode: string; storeId?: string | null }): Promise<void>;
   revoke(input: { userId: string; roleCode: string; storeId?: string | null }): Promise<boolean>;
   /** roleCode + storeId + permissions döndürür; AccessPolicy doğrudan bunu alır. */
   listForUser(userId: string): Promise<RoleAssignmentRow[]>;
@@ -66,32 +86,32 @@ export interface AuthSessionRepository {
   }): Promise<Row>;
   findByTokenHash(tokenHash: string): Promise<Row | null>;
   findActiveByTokenHash(tokenHash: string, now: Date): Promise<Row | null>;
-  findActiveById(id: string, now: Date): Promise<Row | null>;
-  revoke(id: string): Promise<boolean>;
-  revokeAllForUser(userId: string): Promise<number>;
-  purgeExpired(): Promise<number>;
+  findActiveById(id: string | null, now: Date): Promise<Row | null>;
+  revoke(id: string | null): Promise<void>;
+  revokeAllForUser(userId: string): Promise<void>;
+  purgeExpired(): Promise<void>;
 }
 
 export interface OAuthRepository {
   findClient(clientId: string): Promise<Row | null>;
-  saveAuthorizationCode(code: Row): Promise<Row>;
+  saveAuthorizationCode(code: Row): Promise<void>;
   /** Kodu TÜKETİR: tek kullanımlıktır ve doğrulamadan ÖNCE yakılır. */
   consumeAuthorizationCode(codeHash: string, now: Date): Promise<Row | null>;
-  saveRefreshToken(token: Row): Promise<Row>;
+  saveRefreshToken(token: Row): Promise<void>;
   findRefreshTokenByHash(tokenHash: string): Promise<Row | null>;
-  markRefreshTokenUsed(id: string, now: Date): Promise<Row | null>;
+  markRefreshTokenUsed(id: string, now: Date): Promise<void>;
   /** Çalınan jeton tespitinde tüm aileyi iptal eder. */
-  revokeRefreshTokenFamily(familyId: string): Promise<number>;
-  revokeRefreshTokensForUser(userId: string): Promise<number>;
-  revokeRefreshTokensForSession(sessionId: string): Promise<number>;
-  upsertClient(client: Row): Promise<Row>;
-  purgeExpired(): Promise<number>;
+  revokeRefreshTokenFamily(familyId: string): Promise<void>;
+  revokeRefreshTokensForUser(userId: string): Promise<void>;
+  revokeRefreshTokensForSession(sessionId: string | null): Promise<void>;
+  upsertClient(client: Row): Promise<void>;
+  purgeExpired(): Promise<void>;
 }
 
 export interface VerificationTokenRepository {
-  replace(input: { purpose: string; userId: string; tokenHash: string; expiresAt: Date }): Promise<Row>;
+  replace(input: { purpose: string; userId: string; tokenHash: string; expiresAt: Date }): Promise<void>;
   consume(purpose: string, tokenHash: string, now: Date): Promise<Row | null>;
-  purgeExpired(): Promise<number>;
+  purgeExpired(): Promise<void>;
 }
 
 export interface StoreRepository {
@@ -103,7 +123,7 @@ export interface StoreRepository {
   update(id: string, data: Row): Promise<Row | null>;
   setStatus(id: string, status: string): Promise<Row | null>;
   /** Demo tohumlaması doğrudan sorgu çalıştırmak için kullanır. */
-  readonly db?: { query(text: string, params?: readonly unknown[]): Promise<{ rows: Row[] }> };
+  readonly db?: unknown;
 }
 
 export interface ProductRepository {
@@ -117,12 +137,11 @@ export interface ProductRepository {
   findPurchasable(productId: string): Promise<Row | null>;
   /**
    * SELECT … FOR UPDATE: eş zamanlı siparişlerde fazla satışı engeller.
-   * Dizi değil MAP döndürür (ürün numarası -> satır); Order.place doğrudan
-   * .get() ile arar.
+   * Dizi değil MAP döndürür (ürün numarası -> satır).
    */
   lockForOrder(productIds: readonly string[]): Promise<Map<string, Row>>;
-  decreaseStock(productId: string, quantity: number): Promise<Row | null>;
-  increaseStock(productId: string, quantity: number): Promise<Row | null>;
+  decreaseStock(productId: string, quantity: number): Promise<void>;
+  increaseStock(productId: string, quantity: number): Promise<void>;
 }
 
 export interface CategoryRepository {
@@ -131,17 +150,17 @@ export interface CategoryRepository {
 }
 
 export interface CartRepository {
-  findById(id: string): Promise<Row | null>;
+  findById(id: string | null): Promise<Row | null>;
   findByUser(userId: string): Promise<Row | null>;
   findOrCreateForUser(userId: string): Promise<Row>;
   createGuestCart(): Promise<Row>;
-  listLines(cartId: string): Promise<Row[]>;
+  listLines(cartId: string): Promise<CartLine[]>;
   setLine(cartId: string, productId: string, quantity: number): Promise<Row | null>;
-  removeLine(cartId: string, productId: string): Promise<boolean>;
-  replaceLines(cartId: string, lines: readonly Row[]): Promise<unknown>;
-  remove(cartId: string): Promise<boolean>;
-  markConverted(cartId: string, orderId: string): Promise<boolean>;
-  touch(cartId: string): Promise<unknown>;
+  removeLine(cartId: string, productId: string): Promise<void>;
+  replaceLines(cartId: string, lines: readonly CartLine[]): Promise<void>;
+  remove(cartId: string): Promise<void>;
+  markConverted(cartId: string, orderId: string): Promise<void>;
+  touch(cartId: string): Promise<void>;
   purgeAbandonedGuestCarts(before: Date): Promise<number>;
 }
 
@@ -150,7 +169,11 @@ export interface OrderRepository {
   create(order: Row): Promise<Row>;
   findById(id: string): Promise<Row | null>;
   lockForUser(orderId: string, userId: string | null): Promise<Row | null>;
-  lockForPayment(input: { orderId: string; userId?: string | null; trackingCodeHash?: string | null }): Promise<Row | null>;
+  lockForPayment(input: {
+    orderId: string;
+    userId?: string | null;
+    trackingCodeHash?: string | null;
+  }): Promise<Row | null>;
   lockUnpaidOlderThan(cutoff: Date, limit: number): Promise<Row[]>;
   listPackages(orderId: string): Promise<Row[]>;
   listPackageStatuses(orderId: string): Promise<string[]>;
@@ -159,9 +182,9 @@ export interface OrderRepository {
   setStatus(orderId: string, status: string): Promise<Row | null>;
   setPackageStatus(packageId: string, status: string): Promise<Row | null>;
   /** Stoğun yalnızca BİR KEZ iade edilmesini sağlar. */
-  markPackageStockReleased(packageId: string): Promise<boolean>;
+  markPackageStockReleased(packageId: string): Promise<void>;
   setPackageShipping(packageId: string, storeId: string, shipping: Row): Promise<Row | null>;
-  recordPayment(payment: Row): Promise<Row>;
+  recordPayment(payment: Row): Promise<void>;
 }
 
 export interface SupportRepository {
@@ -173,16 +196,16 @@ export interface SupportRepository {
     authorUserId: string | null;
     body: string;
     isStaff: boolean;
-  }): Promise<Row>;
+  }): Promise<void>;
   setTicketStatus(ticketId: string, status: string): Promise<Row | null>;
 }
 
 export interface OutboxRepository {
   /** Olay, onu doğuran veriyle AYNI transaction'da yazılır. */
-  add(event: DomainEventShape): Promise<Row>;
+  add(event: DomainEventShape): Promise<void>;
   claimPending(limit: number): Promise<Row[]>;
-  markPublished(ids: readonly string[]): Promise<unknown>;
-  markFailed(id: string, error: string): Promise<unknown>;
+  markPublished(ids: readonly (string | number)[]): Promise<void>;
+  markFailed(id: string | number, error: unknown): Promise<void>;
 }
 
 export interface AuditRepository {
@@ -193,7 +216,7 @@ export interface AuditRepository {
     resourceId?: string | null;
     metadata?: Row;
     context?: Row;
-  }): Promise<Row | null>;
+  }): Promise<void>;
 }
 
 /** Tek transaction içinde verilen repository seti. */
@@ -228,32 +251,21 @@ export interface UnitOfWork {
 /* ---------------------------------------------------------------- */
 
 export interface CatalogReadModel {
-  listProducts(filters: Row): Promise<Row>;
+  listProducts(filters: ListFilters): Promise<Row>;
   getProductBySlug(storeSlug: string, productSlug: string): Promise<Row | null>;
   listCategories(): Promise<Row[]>;
-  listStoreProducts(storeId: string, filters: Row): Promise<Row>;
+  listStoreProducts(storeId: string, filters: ListFilters): Promise<Row>;
   getProductForStore(storeId: string, productId: string): Promise<Row | null>;
 }
 
 export interface StoreReadModel {
   getBySlug(slug: string): Promise<Row | null>;
-  listPublic(filters: Row): Promise<Row>;
-  listForAdmin(filters: Row): Promise<Row>;
+  listPublic(filters: Row): Promise<Row[]>;
+  listForAdmin(filters: ListFilters): Promise<Row>;
   getForMember(storeId: string): Promise<Row | null>;
   listMembers(storeId: string): Promise<Row[]>;
   /** Mağaza KİMLİKLERİ alır (kullanıcı değil): panel menüsü için. */
   listForMember(storeIds: readonly string[]): Promise<Row[]>;
-}
-
-export interface CartReadModel {
-  /** Satırlar ve güncel ürün bilgisi birlikte döner; dizi değil nesne. */
-  getLines(cartId: string): Promise<{ lines: CartLineRow[]; products: CartProductRow[] }>;
-  findCartId(input: { userId?: string | null; guestCartId?: string | null }): Promise<string | null>;
-}
-
-export interface CartLineRow {
-  readonly productId: string;
-  readonly quantity: number;
 }
 
 export interface CartProductRow extends Row {
@@ -261,20 +273,26 @@ export interface CartProductRow extends Row {
   readonly priceCents: number;
 }
 
+export interface CartReadModel {
+  /** Satırlar ve güncel ürün bilgisi birlikte döner; dizi değil nesne. */
+  getLines(cartId: string): Promise<{ lines: CartLine[]; products: CartProductRow[] }>;
+  findCartId(input: { userId?: string | null; guestCartId?: string | null }): Promise<string | null>;
+}
+
 export interface OrderReadModel {
-  listForUser(userId: string, filters: Row): Promise<Row>;
+  listForUser(userId: string, filters: ListFilters): Promise<Row>;
   getForUser(orderId: string, userId: string): Promise<Row | null>;
   getByTrackingCode(orderNumber: string, trackingCodeHash: string): Promise<Row | null>;
-  listForStore(storeId: string, filters: Row): Promise<Row>;
+  listForStore(storeId: string, filters: ListFilters): Promise<Row>;
   /** Sıra: önce PAKET, sonra mağaza. */
   getForStore(packageId: string, storeId: string): Promise<Row | null>;
-  listForAdmin(filters: Row): Promise<Row>;
+  listForAdmin(filters: ListFilters): Promise<Row>;
   getForAdmin(orderId: string): Promise<Row | null>;
 }
 
 export interface UserReadModel {
   getProfile(userId: string): Promise<Row | null>;
-  listForAdmin(filters: Row): Promise<Row>;
+  listForAdmin(filters: ListFilters): Promise<Row>;
   /** Ham rol atamalarını döndürür; AccessPolicy nesnesini çağıran kurar. */
   getAccessPolicy(userId: string): Promise<RoleAssignmentRow[]>;
   getSessionVersion(userId: string): Promise<number | null>;
@@ -282,9 +300,9 @@ export interface UserReadModel {
 }
 
 export interface SupportReadModel {
-  listForUser(userId: string, filters: Row): Promise<Row>;
-  listForStore(storeId: string, filters: Row): Promise<Row>;
-  listForAdmin(filters: Row): Promise<Row>;
+  listForUser(userId: string, filters: ListFilters): Promise<Row>;
+  listForStore(storeId: string, filters: ListFilters): Promise<Row>;
+  listForAdmin(filters: ListFilters): Promise<Row>;
   get(ticketId: string, scope: Row): Promise<Row | null>;
 }
 

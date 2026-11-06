@@ -1,5 +1,8 @@
 "use strict";
 
+import type { Db } from "../pool";
+import type { OAuthRepository, Row } from "../../../../application/shared/contracts";
+
 const CLIENT = `
   client_id AS "clientId", name, secret_hash AS "secretHash",
   redirect_uris AS "redirectUris", grant_types AS "grantTypes", scopes,
@@ -10,23 +13,35 @@ const REFRESH = `
   session_id AS "sessionId", scope, expires_at AS "expiresAt",
   used_at AS "usedAt", revoked_at AS "revokedAt"`;
 
-class PgOAuthRepository {
-  constructor(client) {
+export class PgOAuthRepository implements OAuthRepository {
+  private readonly db: Db;
+
+  constructor(client: Db) {
     this.db = client;
   }
 
-  async findClient(clientId) {
+  async findClient(clientId: string): Promise<Row | null> {
     if (typeof clientId !== "string" || !clientId) return null;
     const { rows } = await this.db.query(`SELECT ${CLIENT} FROM oauth_clients WHERE client_id = $1`, [clientId]);
     return rows[0] || null;
   }
 
-  async saveAuthorizationCode(code) {
+  async saveAuthorizationCode(code: Row): Promise<void> {
     await this.db.query(
       `INSERT INTO oauth_authorization_codes
          (code_hash, client_id, user_id, session_id, redirect_uri, scope, nonce, code_challenge, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [code.codeHash, code.clientId, code.userId, code.sessionId, code.redirectUri, code.scope, code.nonce, code.codeChallenge, code.expiresAt]
+      [
+        code.codeHash,
+        code.clientId,
+        code.userId,
+        code.sessionId,
+        code.redirectUri,
+        code.scope,
+        code.nonce,
+        code.codeChallenge,
+        code.expiresAt
+      ]
     );
   }
 
@@ -34,7 +49,7 @@ class PgOAuthRepository {
    * Kodu atomik olarak tüketir: DELETE ... RETURNING sayesinde aynı kod iki
    * istek tarafından aynı anda kullanılamaz.
    */
-  async consumeAuthorizationCode(codeHash, now) {
+  async consumeAuthorizationCode(codeHash: string, now: Date): Promise<Row | null> {
     const { rows } = await this.db.query(
       `DELETE FROM oauth_authorization_codes
        WHERE code_hash = $1 AND expires_at > $2
@@ -47,43 +62,51 @@ class PgOAuthRepository {
     return rows[0] || null;
   }
 
-  async saveRefreshToken(token) {
+  async saveRefreshToken(token: Row): Promise<void> {
     await this.db.query(
       `INSERT INTO oauth_refresh_tokens
          (id, family_id, user_id, client_id, session_id, scope, token_hash, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [token.id, token.familyId, token.userId, token.clientId, token.sessionId, token.scope, token.tokenHash, token.expiresAt]
+      [
+        token.id,
+        token.familyId,
+        token.userId,
+        token.clientId,
+        token.sessionId,
+        token.scope,
+        token.tokenHash,
+        token.expiresAt
+      ]
     );
   }
 
-  async findRefreshTokenByHash(tokenHash) {
-    const { rows } = await this.db.query(
-      `SELECT ${REFRESH} FROM oauth_refresh_tokens WHERE token_hash = $1`,
-      [tokenHash]
-    );
+  async findRefreshTokenByHash(tokenHash: string): Promise<Row | null> {
+    const { rows } = await this.db.query(`SELECT ${REFRESH} FROM oauth_refresh_tokens WHERE token_hash = $1`, [
+      tokenHash
+    ]);
     return rows[0] || null;
   }
 
-  async markRefreshTokenUsed(id, now) {
+  async markRefreshTokenUsed(id: string, now: Date): Promise<void> {
     await this.db.query("UPDATE oauth_refresh_tokens SET used_at = $1 WHERE id = $2", [now, id]);
   }
 
   /** Jeton tekrar kullanıldığında tüm zinciri iptal eder. */
-  async revokeRefreshTokenFamily(familyId) {
+  async revokeRefreshTokenFamily(familyId: string): Promise<void> {
     await this.db.query(
       "UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE family_id = $1 AND revoked_at IS NULL",
       [familyId]
     );
   }
 
-  async revokeRefreshTokensForUser(userId) {
+  async revokeRefreshTokensForUser(userId: string): Promise<void> {
     await this.db.query(
       "UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL",
       [userId]
     );
   }
 
-  async revokeRefreshTokensForSession(sessionId) {
+  async revokeRefreshTokensForSession(sessionId: string | null): Promise<void> {
     if (!sessionId) return;
     await this.db.query(
       "UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE session_id = $1 AND revoked_at IS NULL",
@@ -91,7 +114,7 @@ class PgOAuthRepository {
     );
   }
 
-  async upsertClient(client) {
+  async upsertClient(client: Row): Promise<void> {
     await this.db.query(
       `INSERT INTO oauth_clients
          (client_id, name, secret_hash, redirect_uris, grant_types, scopes, is_confidential, is_first_party)
@@ -103,14 +126,21 @@ class PgOAuthRepository {
          scopes = EXCLUDED.scopes,
          is_confidential = EXCLUDED.is_confidential,
          is_first_party = EXCLUDED.is_first_party`,
-      [client.clientId, client.name, client.secretHash ?? null, client.redirectUris, client.grantTypes, client.scopes, client.isConfidential, client.isFirstParty]
+      [
+        client.clientId,
+        client.name,
+        client.secretHash ?? null,
+        client.redirectUris,
+        client.grantTypes,
+        client.scopes,
+        client.isConfidential,
+        client.isFirstParty
+      ]
     );
   }
 
-  async purgeExpired() {
+  async purgeExpired(): Promise<void> {
     await this.db.query("DELETE FROM oauth_authorization_codes WHERE expires_at < NOW()");
     await this.db.query("DELETE FROM oauth_refresh_tokens WHERE expires_at < NOW() - INTERVAL '7 days'");
   }
 }
-
-module.exports = { PgOAuthRepository };
