@@ -310,8 +310,9 @@ export interface TokenIssuer {
 
 export interface OpaqueTokens {
   generate(): string;
-  hash(value: string): string;
-  isWellFormed(value: unknown): boolean;
+  hash(token: unknown): string;
+  /** Tip daraltıcı: geçen değer çağıran tarafta artık string olarak bilinir. */
+  isWellFormed(token: unknown): token is string;
 }
 
 export interface PasswordHasher {

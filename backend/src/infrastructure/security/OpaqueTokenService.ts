@@ -1,6 +1,7 @@
 "use strict";
 
-const crypto = require("crypto");
+import crypto from "node:crypto";
+import type { OpaqueTokens } from "../../application/shared/contracts";
 
 /**
  * Tahmin edilemez tek kullanımlık kodlar: oturum çerezi, yenileme jetonu,
@@ -10,25 +11,25 @@ const crypto = require("crypto");
  * tutulur. Veritabanı sızsa bile özetlerden jeton üretilemez — düz SHA-256
  * yerine gizli anahtarlı HMAC kullanılmasının nedeni budur.
  */
-class OpaqueTokenService {
-  constructor(pepper) {
+export class OpaqueTokenService implements OpaqueTokens {
+  private readonly pepper: string;
+
+  constructor(pepper: string) {
     if (!pepper || pepper.length < 32) {
       throw new Error("TOKEN_PEPPER en az 32 karakter olmalı.");
     }
     this.pepper = pepper;
   }
 
-  generate() {
+  generate(): string {
     return crypto.randomBytes(32).toString("hex");
   }
 
-  hash(token) {
+  hash(token: unknown): string {
     return crypto.createHmac("sha256", this.pepper).update(String(token)).digest("hex");
   }
 
-  isWellFormed(token) {
+  isWellFormed(token: unknown): token is string {
     return typeof token === "string" && /^[a-f0-9]{64}$/.test(token);
   }
 }
-
-module.exports = { OpaqueTokenService };

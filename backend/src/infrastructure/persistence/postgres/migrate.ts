@@ -1,16 +1,22 @@
 "use strict";
 
-const fs = require("fs/promises");
-const path = require("path");
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { Pool } from "pg";
 
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 const LOCK_KEY = 7705_2026; // aynı anda iki sunucu migration çalıştırmasın
+
+export interface MigrationResult {
+  readonly applied: number;
+  readonly total: number;
+}
 
 /**
  * migrations/ klasöründeki .sql dosyalarını ad sırasıyla, her birini kendi
  * transaction'ında ve yalnızca bir kez çalıştırır.
  */
-async function runMigrations(pool, log = console.log) {
+export async function runMigrations(pool: Pool, log: (message: string) => void = console.log): Promise<MigrationResult> {
   const client = await pool.connect();
   try {
     await client.query("SELECT pg_advisory_lock($1)", [LOCK_KEY]);
@@ -21,8 +27,8 @@ async function runMigrations(pool, log = console.log) {
       )
     `);
 
-    const applied = new Set(
-      (await client.query("SELECT name FROM schema_migrations")).rows.map((row) => row.name)
+    const applied = new Set<string>(
+      (await client.query<{ name: string }>("SELECT name FROM schema_migrations")).rows.map((row) => row.name)
     );
     const files = (await fs.readdir(MIGRATIONS_DIR)).filter((file) => file.endsWith(".sql")).sort();
 
@@ -39,7 +45,8 @@ async function runMigrations(pool, log = console.log) {
         count++;
       } catch (error) {
         await client.query("ROLLBACK");
-        throw new Error(`Migration başarısız (${file}): ${error.message}`);
+        const mesaj = error instanceof Error ? error.message : String(error);
+        throw new Error(`Migration başarısız (${file}): ${mesaj}`);
       }
     }
     return { applied: count, total: files.length };
@@ -48,5 +55,3 @@ async function runMigrations(pool, log = console.log) {
     client.release();
   }
 }
-
-module.exports = { runMigrations };

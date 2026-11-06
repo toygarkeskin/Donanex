@@ -1,6 +1,6 @@
 "use strict";
 
-const { Pool, types } = require("pg");
+import { Pool, types, type PoolClient } from "pg";
 
 /**
  * BIGINT (int8) sütunları pg varsayılan olarak STRING döndürür: 2^53 üstü
@@ -10,9 +10,18 @@ const { Pool, types } = require("pg");
  * Çevirmezsek "6700000" gibi metinler para hesaplarına karışır ve
  * Money sınıfı bunları geçersiz sayar. Bu yüzden tek yerde sayıya çeviriyoruz.
  */
-types.setTypeParser(types.builtins.INT8, (value) => (value === null ? null : Number(value)));
+types.setTypeParser(types.builtins.INT8, (value: string | null) => (value === null ? null : Number(value)));
 
-function createPool(dbConfig) {
+export interface DbConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly database: string;
+  readonly user: string;
+  readonly password: string;
+  readonly poolSize?: number;
+}
+
+export function createPool(dbConfig: DbConfig): Pool {
   const pool = new Pool({
     host: dbConfig.host,
     port: dbConfig.port,
@@ -26,14 +35,21 @@ function createPool(dbConfig) {
     statement_timeout: 15_000
   });
 
-  pool.on("error", (error) => {
+  pool.on("error", (error: Error) => {
     console.error("Beklenmeyen PostgreSQL bağlantı hatası:", error.message);
   });
   return pool;
 }
 
 /** Veritabanı hazır olana kadar bekler (Docker'da db konteyneri geç açılabilir). */
-async function waitForDatabase(pool, { attempts = 30, delayMs = 1000, log = console.log } = {}) {
+export async function waitForDatabase(
+  pool: Pool,
+  {
+    attempts = 30,
+    delayMs = 1000,
+    log = console.log
+  }: { attempts?: number; delayMs?: number; log?: (message: string) => void } = {}
+): Promise<void> {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       await pool.query("SELECT 1");
@@ -46,4 +62,5 @@ async function waitForDatabase(pool, { attempts = 30, delayMs = 1000, log = cons
   }
 }
 
-module.exports = { createPool, waitForDatabase };
+/** Repository'lerin aldığı bağlantı: havuz ya da transaction içindeki istemci. */
+export type Db = Pool | PoolClient;
