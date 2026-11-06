@@ -1,0 +1,49 @@
+{
+  // Donanex backend — temel TypeScript yapılandırması.
+  //
+  // Bu dosya TİP DENETİMİ içindir (editör + "npm run typecheck"); çıktı üretmez.
+  // Üretim derlemesi tsconfig.build.json ile yapılır.
+  //
+  // Geçiş kademeli: "allowJs" sayesinde henüz çevrilmemiş .js dosyaları da
+  // çözümlenir, böylece her adımda sistem çalışır ve testler yeşil kalır.
+  // Tüm dosyalar .ts olunca allowJs kaldırılabilir.
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+
+    // Proje CommonJS; require/module.exports düzeni korunuyor. ESM'e geçmek
+    // ayrı bir karardır ve bu göçün kapsamı dışında.
+    // TypeScript 7 eski "node" (node10) çözümlemesini kaldırdı; CommonJS için
+    // doğru çift artık node16. package.json'da "type": "module" olmadığı için
+    // dosyalar CommonJS sayılır.
+    "module": "node16",
+    "moduleResolution": "node16",
+
+    // Asıl kazanç burada: tip hatalarını derlemede yakalamak.
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+
+    // Bilinçli olarak KAPALI:
+    //  · noUncheckedIndexedAccess — 10 bin satırlık göçte her dizi erişimini
+    //    sarmalamak gürültü üretir; asıl değer strictNullChecks'te.
+    //  · noUnusedParameters — Express ara katmanları imza gereği kullanılmayan
+    //    "next" parametresi alır.
+    "noUncheckedIndexedAccess": false,
+    "noUnusedParameters": false,
+
+    "allowJs": true,
+    // Henüz çevrilmemiş .js dosyaları denetlenmez; yoksa göç ilk adımda
+    // binlerce hatayla kilitlenirdi. Her dosya .ts olduğunda denetime girer.
+    "checkJs": false,
+
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

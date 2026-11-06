@@ -8,9 +8,16 @@
  *   store  → bir mağazaya bağlı olarak verilir (ör. kendi ürününü düzenlemek)
  *   both   → her iki şekilde de verilebilir
  */
-const Scope = Object.freeze({ GLOBAL: "global", STORE: "store", BOTH: "both" });
+export const Scope = { GLOBAL: "global", STORE: "store", BOTH: "both" } as const;
 
-const PERMISSIONS = Object.freeze({
+export type ScopeKind = (typeof Scope)[keyof typeof Scope];
+
+interface PermissionInfo {
+  readonly scope: ScopeKind;
+  readonly label: string;
+}
+
+export const PERMISSIONS = {
   "catalog:product:read": { scope: Scope.BOTH, label: "Ürünleri görüntüle" },
   "catalog:product:write": { scope: Scope.BOTH, label: "Ürün ekle ve düzenle" },
   "catalog:product:delete": { scope: Scope.BOTH, label: "Ürün sil" },
@@ -33,11 +40,21 @@ const PERMISSIONS = Object.freeze({
   "role:assign": { scope: Scope.GLOBAL, label: "Rol ata" },
   "system:audit": { scope: Scope.GLOBAL, label: "Denetim kaydını görüntüle" },
   "system:settings": { scope: Scope.GLOBAL, label: "Sistem ayarlarını yönet" }
-});
+} as const satisfies Record<string, PermissionInfo>;
 
-const ALL_PERMISSIONS = Object.freeze(Object.keys(PERMISSIONS));
+/**
+ * Geçerli izin kodlarının tipi.
+ *
+ * Bunun değeri şurada: assertCan(context, "catalog:product:writ") gibi bir
+ * yazım hatası artık çalışma zamanında sessizce "izin yok" demek yerine
+ * derlemede hata verir.
+ */
+export type PermissionCode = keyof typeof PERMISSIONS;
 
-const isPermission = (code) => Object.hasOwn(PERMISSIONS, code);
-const permissionScope = (code) => PERMISSIONS[code]?.scope ?? null;
+export const ALL_PERMISSIONS = Object.freeze(Object.keys(PERMISSIONS) as PermissionCode[]);
 
-module.exports = { PERMISSIONS, ALL_PERMISSIONS, Scope, isPermission, permissionScope };
+export const isPermission = (code: unknown): code is PermissionCode =>
+  typeof code === "string" && Object.hasOwn(PERMISSIONS, code);
+
+export const permissionScope = (code: string): ScopeKind | null =>
+  isPermission(code) ? PERMISSIONS[code].scope : null;

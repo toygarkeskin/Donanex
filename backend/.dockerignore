@@ -5,3 +5,7 @@ npm-debug.log*
 var
 Dockerfile
 .dockerignore
+
+# Derleme çıktısı imaj içinde üretilir; yereldeki eskisi bağlama sızmasın
+dist
+.build

@@ -1,0 +1,19 @@
+{
+  // Üretim derlemesi: yalnızca src/, dist/ altına düz yapıyla.
+  //
+  // rootDir "src" olması önemli: src/config/env.ts -> dist/config/env.js.
+  // Böylece __dirname'e göre çözülen yollar (.env, var/, migrations/) derleme
+  // sonrasında da kaynaktakiyle aynı yere bakar. rootDir "." olsaydı çıktı
+  // dist/src/... olur ve bu yollar bir klasör kayardı.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "noEmit": false,
+    "sourceMap": true,
+    "declaration": false,
+    "removeComments": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "tests", "scripts"]
+}

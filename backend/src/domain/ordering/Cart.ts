@@ -1,11 +1,58 @@
 "use strict";
 
-const { ConflictError, ValidationError } = require("../shared/errors");
-const { Money } = require("../shared/Money");
-const { requireQuantity } = require("../shared/guards");
+import { ConflictError, ValidationError } from "../shared/errors";
+import { Money, type MoneyView } from "../shared/Money";
+import { requireQuantity } from "../shared/guards";
 
-const MAX_DISTINCT_ITEMS = 50;
-const MAX_QUANTITY_PER_ITEM = 99;
+export const MAX_DISTINCT_ITEMS = 50;
+export const MAX_QUANTITY_PER_ITEM = 99;
+
+/** Sepet satırı: yalnızca ürün ve adet. Fiyat BİLEREK tutulmaz. */
+export interface CartLine {
+  productId: string;
+  quantity: number;
+}
+
+/** Sepeti görüntülerken okunan güncel ürün bilgisi. */
+export interface CartProduct {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly price: Money;
+  readonly stock: number;
+  readonly status: string;
+  readonly storeId: string;
+  readonly storeName: string;
+  readonly storeSlug: string;
+  readonly imageUrl: string;
+}
+
+/** Satırın neden kullanılamadığı. */
+export type CartIssue = "removed" | "unavailable" | "insufficient_stock" | null;
+
+export interface CartItemView {
+  readonly productId: string;
+  readonly name?: string;
+  readonly slug?: string;
+  readonly imageUrl?: string;
+  readonly storeId?: string;
+  readonly storeName?: string;
+  readonly storeSlug?: string;
+  readonly unitPrice?: MoneyView;
+  readonly quantity: number;
+  readonly lineTotal?: MoneyView;
+  readonly stock?: number;
+  readonly available: boolean;
+  readonly issue: CartIssue;
+}
+
+export interface CartView {
+  readonly items: readonly CartItemView[];
+  readonly itemCount: number;
+  readonly subtotal: MoneyView;
+  readonly hasIssues: boolean;
+  readonly canCheckout: boolean;
+}
 
 /**
  * Sepet hesaplamaları. Sepet satırlarında yalnızca ürün ve adet tutulur;
@@ -14,24 +61,23 @@ const MAX_QUANTITY_PER_ITEM = 99;
  *
  * Misafir sepeti de giriş yapmış kullanıcının sepeti de aynı kuralları kullanır.
  */
-class Cart {
-  /**
-   * @param {Array<{productId:string, quantity:number}>} lines
-   * @param {Map<string, {id,name,price:Money,stock,status,storeId,storeName,imageUrl}>} products
-   */
-  constructor(lines, products) {
+export class Cart {
+  readonly lines: readonly CartLine[];
+  readonly products: ReadonlyMap<string, CartProduct>;
+
+  constructor(lines: readonly CartLine[], products: ReadonlyMap<string, CartProduct>) {
     this.lines = lines;
     this.products = products;
     Object.freeze(this);
   }
 
-  static assertCanAdd(lines, productId, quantity) {
-    requireQuantity(quantity, "Adet", MAX_QUANTITY_PER_ITEM);
+  static assertCanAdd(lines: readonly CartLine[], productId: string, quantity: unknown): number {
+    const adet = requireQuantity(quantity, "Adet", MAX_QUANTITY_PER_ITEM);
     const existing = lines.find((line) => line.productId === productId);
     if (!existing && lines.length >= MAX_DISTINCT_ITEMS) {
       throw new ConflictError(`Sepete en fazla ${MAX_DISTINCT_ITEMS} farklı ürün ekleyebilirsiniz.`);
     }
-    const total = (existing?.quantity || 0) + quantity;
+    const total = (existing?.quantity || 0) + adet;
     if (total > MAX_QUANTITY_PER_ITEM) {
       throw new ConflictError(`Bir üründen en fazla ${MAX_QUANTITY_PER_ITEM} adet alabilirsiniz.`);
     }
@@ -43,8 +89,8 @@ class Cart {
    * kullanıcı hiçbir ürününü kaybetmez; aynı ürün iki sepette de varsa
    * adetler toplanır (üst sınırı aşmadan).
    */
-  static merge(targetLines, sourceLines) {
-    const merged = targetLines.map((line) => ({ ...line }));
+  static merge(targetLines: readonly CartLine[], sourceLines: readonly CartLine[]): CartLine[] {
+    const merged: CartLine[] = targetLines.map((line) => ({ ...line }));
     for (const line of sourceLines) {
       const existing = merged.find((item) => item.productId === line.productId);
       if (existing) {
@@ -57,8 +103,8 @@ class Cart {
   }
 
   /** Vitrin görünümü: her satırın güncel fiyatı, stok durumu ve uyarısı. */
-  toView() {
-    const items = this.lines.map((line) => {
+  toView(): CartView {
+    const items: CartItemView[] = this.lines.map((line) => {
       const product = this.products.get(line.productId);
       if (!product) {
         return { productId: line.productId, quantity: line.quantity, available: false, issue: "removed" };
@@ -83,7 +129,7 @@ class Cart {
     });
 
     const usable = items.filter((item) => item.available);
-    const subtotal = Money.sum(usable.map((item) => Money.fromCents(item.lineTotal.cents)));
+    const subtotal = Money.sum(usable.map((item) => Money.fromCents(item.lineTotal!.cents)));
 
     return {
       items,
@@ -95,7 +141,7 @@ class Cart {
   }
 
   /** Siparişe çevrilebilir mi? Sorunlu satır varsa sipariş açılmaz. */
-  assertCheckoutReady() {
+  assertCheckoutReady(): CartView {
     const view = this.toView();
     if (!view.items.length) throw new ValidationError("Sepetiniz boş.");
     if (!view.canCheckout) {
@@ -104,5 +150,3 @@ class Cart {
     return view;
   }
 }
-
-module.exports = { Cart, MAX_DISTINCT_ITEMS, MAX_QUANTITY_PER_ITEM };

@@ -15,3 +15,7 @@ _eski/
 
 # 4K ekran görüntüleri: yerelde tutulur, depoya girmez (8 MB)
 docs/ekranlar/
+
+# TypeScript derleme çıktısı
+backend/dist/
+backend/.build/

@@ -1,6 +1,6 @@
 "use strict";
 
-const { ALL_PERMISSIONS } = require("./Permission");
+import { ALL_PERMISSIONS, type PermissionCode } from "./Permission";
 
 /**
  * Sistemle birlikte gelen roller. Bunlar silinemez; yeni rol eklenebilir.
@@ -10,14 +10,31 @@ const { ALL_PERMISSIONS } = require("./Permission");
  *  STORE_STAFF   — mağaza çalışanı; ürün ve sipariş işler, mağazayı değiştiremez
  *  CUSTOMER      — alışveriş yapan kullanıcı; yönetim izni yoktur
  */
-const RoleCodes = Object.freeze({
+export const RoleCodes = {
   SYSTEM_ADMIN: "SYSTEM_ADMIN",
   STORE_OWNER: "STORE_OWNER",
   STORE_STAFF: "STORE_STAFF",
   CUSTOMER: "CUSTOMER"
-});
+} as const;
 
-const SYSTEM_ROLES = Object.freeze([
+export type RoleCode = (typeof RoleCodes)[keyof typeof RoleCodes];
+
+/** Rolün nerede geçerli olabileceği. */
+export type RoleScope = "global" | "store";
+
+export interface SystemRole {
+  readonly code: RoleCode;
+  readonly name: string;
+  readonly description: string;
+  readonly scope: RoleScope;
+  /*
+   * PermissionCode dizisi: kataloğa eklenmemiş bir izin kodu yazılırsa
+   * derleme hata verir. Önceden yazım hatası sessizce "izin yok" oluyordu.
+   */
+  readonly permissions: readonly PermissionCode[];
+}
+
+export const SYSTEM_ROLES: readonly SystemRole[] = Object.freeze([
   {
     code: RoleCodes.SYSTEM_ADMIN,
     name: "Sistem Yöneticisi",
@@ -67,5 +84,3 @@ const SYSTEM_ROLES = Object.freeze([
     permissions: []
   }
 ]);
-
-module.exports = { RoleCodes, SYSTEM_ROLES };
