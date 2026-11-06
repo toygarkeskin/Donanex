@@ -1,28 +1,67 @@
 <script setup>
-import { onMounted, ref } from "vue";
-import { RouterLink, RouterView, useRouter } from "vue-router";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useCartStore } from "../stores/cart";
 import ThemeToggle from "../components/ThemeToggle.vue";
+import BrandLogo from "../components/BrandLogo.vue";
 
 const auth = useAuthStore();
 const cart = useCartStore();
 const router = useRouter();
+const route = useRoute();
 
 const menuOpen = ref(false);
 const accountOpen = ref(false);
+const hesapKutusu = ref(null);
 
+// "Destek" buradan kaldırıldı: hesap menüsüne ve alt bilgiye taşındı.
 const nav = [
   { to: { name: "products" }, label: "Ürünler" },
   { to: { name: "stores" }, label: "Mağazalar" },
-  { to: { name: "track" }, label: "Sipariş Takibi" },
-  { to: { name: "support" }, label: "Destek" }
+  { to: { name: "track" }, label: "Sipariş Takibi" }
 ];
+
+/*
+ * Açılır menüleri kapatma.
+ *
+ * Önceden yalnızca düğmeye ikinci kez basınca kapanıyordu; kullanıcı sayfanın
+ * başka bir yerine tıkladığında menü açık kalıyordu. Üç kapanma yolu var:
+ * dışarı tıklama, Esc ve sayfa değişimi.
+ */
+function disaridaTiklandi(olay) {
+  // Menünün kendi içindeki tıklamalar (düğme dahil) menüyü kapatmamalı.
+  if (hesapKutusu.value && !hesapKutusu.value.contains(olay.target)) {
+    accountOpen.value = false;
+  }
+}
+
+function tusaBasildi(olay) {
+  if (olay.key !== "Escape") return;
+  accountOpen.value = false;
+  menuOpen.value = false;
+}
 
 onMounted(() => {
   // Sepet kayıtsız kullanıcı için de yüklenir.
   if (!cart.loaded) cart.load().catch(() => {});
+  document.addEventListener("click", disaridaTiklandi);
+  document.addEventListener("keydown", tusaBasildi);
 });
+
+onBeforeUnmount(() => {
+  document.removeEventListener("click", disaridaTiklandi);
+  document.removeEventListener("keydown", tusaBasildi);
+});
+
+// Başka bir sayfaya geçilince açık kalan menü kapanır.
+watch(
+  () => route.fullPath,
+  () => {
+    accountOpen.value = false;
+    menuOpen.value = false;
+  }
+);
 
 async function signOut() {
   accountOpen.value = false;
@@ -37,8 +76,8 @@ async function signOut() {
   <div class="flex min-h-screen flex-col">
     <header class="sticky top-0 z-30 border-b border-ink-200 bg-surface/95 backdrop-blur">
       <div class="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4">
-        <RouterLink :to="{ name: 'home' }" class="flex items-center gap-2 text-lg font-bold text-ink-900">
-          <span aria-hidden="true">💻</span> Donanex
+        <RouterLink :to="{ name: 'home' }" class="shrink-0" aria-label="Donanex ana sayfa">
+          <BrandLogo />
         </RouterLink>
 
         <nav class="hidden flex-1 items-center gap-1 md:flex" aria-label="Ana menü">
@@ -70,7 +109,7 @@ async function signOut() {
 
           <ThemeToggle />
 
-          <div v-if="auth.isSignedIn" class="relative">
+          <div v-if="auth.isSignedIn" ref="hesapKutusu" class="relative">
             <button type="button" class="btn-secondary" :aria-expanded="accountOpen" @click="accountOpen = !accountOpen">
               <span aria-hidden="true">👤</span>
               <span class="hidden sm:inline">{{ auth.displayName.split(" ")[0] }}</span>
@@ -92,6 +131,11 @@ async function signOut() {
               </RouterLink>
               <RouterLink :to="{ name: 'account-profile' }" class="block px-4 py-2 text-sm hover:bg-ink-50">
                 Hesap Bilgilerim
+              </RouterLink>
+
+              <hr class="my-1 border-ink-200" />
+              <RouterLink :to="{ name: 'support' }" class="block px-4 py-2 text-sm hover:bg-ink-50">
+                Destek
               </RouterLink>
 
               <template v-if="auth.hasStorePanel">
@@ -160,7 +204,7 @@ async function signOut() {
     <footer class="border-t border-ink-200 bg-surface">
       <div class="mx-auto grid max-w-7xl gap-8 px-4 py-10 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <p class="text-base font-bold text-ink-900">💻 Donanex</p>
+          <BrandLogo :size="28" />
           <p class="mt-2 text-ink-500">Çok satıcılı teknoloji mağazası. Onlarca mağaza, tek sepet.</p>
         </div>
         <div>

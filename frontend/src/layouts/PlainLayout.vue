@@ -1,12 +1,13 @@
 <script setup>
+import BrandLogo from "../components/BrandLogo.vue";
 import { RouterLink, RouterView } from "vue-router";
 </script>
 
 <template>
   <div class="flex min-h-screen flex-col bg-ink-100">
     <header class="px-4 py-6">
-      <RouterLink :to="{ name: 'home' }" class="flex items-center gap-2 text-lg font-bold text-ink-900">
-        <span aria-hidden="true">💻</span> Donanex
+      <RouterLink :to="{ name: 'home' }" aria-label="Donanex ana sayfa">
+        <BrandLogo />
       </RouterLink>
     </header>
 

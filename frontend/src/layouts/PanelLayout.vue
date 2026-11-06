@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import ThemeToggle from "../components/ThemeToggle.vue";
+import BrandLogo from "../components/BrandLogo.vue";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -49,7 +50,7 @@ async function signOut() {
       :class="{ 'translate-x-0': sidebarOpen }"
     >
       <div class="flex h-16 items-center gap-2 border-b border-ink-200 px-5">
-        <RouterLink :to="{ name: 'home' }" class="text-base font-bold text-ink-900">💻 Donanex</RouterLink>
+        <RouterLink :to="{ name: 'home' }" aria-label="Donanex ana sayfa"><BrandLogo :size="26" /></RouterLink>
       </div>
 
       <div class="px-5 py-4">
