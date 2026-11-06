@@ -7,41 +7,78 @@
  * derleme kırılır. Bu dosya Clean Architecture'ın bağımlılık yönünü ve
  * CQRS'in komut/sorgu ayrımını koruyan bekçidir.
  */
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("fs");
-const path = require("path");
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "fs";
+import path from "path";
 
 const SRC = path.resolve(__dirname, "../../src");
-const { PORTS, assertPorts } = require("../../src/application/shared/ports");
+import { PORTS, assertPorts } from "../../src/application/shared/ports";
+import { Command, Query } from "../../src/application/shared/cqrs/Message";
+import { CommandBus, QueryBus } from "../../src/application/shared/cqrs/bus";
 
-function walk(dir) {
+/**
+ * Kaynak dosyalari toplar.
+ *
+ * Hem ".ts" hem ".js" kabul edilir. Bu testler normalde DERLENMİŞ çıktıya
+ * karşı koşar (.build/src); orada dosyalar ".js" olur ve bağımlılıklar
+ * require() biçimindedir. İkisini birden desteklemek, testin doğrudan kaynak
+ * ağacına karşı çalıştırıldığında da gerçek dosyaları görmesini sağlar —
+ * tek bir uzantıya bağlı kalmak, kuralların sessizce sıfır dosya üzerinde
+ * dönmesi riskini taşır.
+ */
+const UZANTILAR = [".js", ".ts"];
+
+function walk(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) return walk(full);
-    return entry.name.endsWith(".js") ? [full] : [];
+    if (entry.name.endsWith(".d.ts")) return [];
+    return UZANTILAR.some((uzanti) => entry.name.endsWith(uzanti)) ? [full] : [];
   });
 }
 
-const rel = (file) => path.relative(SRC, file).split(path.sep).join("/");
+const rel = (file: string) => path.relative(SRC, file).split(path.sep).join("/");
 
 /*
  * Yorumlar elenir: bir AÇIKLAMADA "unitOfWork" ya da "SELECT ... FOR UPDATE"
  * geçmesi kural ihlali değildir. Kural kodu bağlar, açıklama metnini değil.
  */
-const withoutComments = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const withoutComments = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-/** Dosyanın require ettiği hedefleri, göreli olanları SRC köküne çevirerek verir. */
-function requiresOf(file) {
+/**
+ * Dosyanın bağımlı olduğu hedefleri, göreli olanları SRC köküne çevirerek verir.
+ *
+ * Hem CommonJS require hem ES import/export yakalanır, böylece test
+ * derlenmiş çıktıya da kaynak ağacına da uygulanabilir.
+ *
+ * ES desenleri SATIR BAŞINA sabitlenmiştir. Sabitlenmezse repository'lerdeki
+ * SQL içindeki `FROM "sutun"` gibi parçalar bağımlılık sanılır ve test
+ * uydurma sonuçlar üzerinde karar verir.
+ *
+ * "import type" de dahildir: tip içe aktarması derlenmiş çıktıda yer almaz,
+ * ama katman kuralı derleme zamanı bağımlılığını da kapsar — presentation'ın
+ * infrastructure'ın iç tiplerini tanıması, o dosyaya bağlanması demektir.
+ */
+const BAGIMLILIK_DESENLERI = [
+  /\brequire\s*\(\s*"([^"]+)"\s*\)/g,
+  /^\s*(?:import|export)\s[^;\n]*?\bfrom\s*"([^"]+)"/gm,
+  /^\s*import\s*"([^"]+)"/gm
+];
+
+function requiresOf(file: string) {
   const source = fs.readFileSync(file, "utf8");
-  return [...source.matchAll(/require\("([^"]+)"\)/g)].map(([, target]) => {
+  const hedefler = BAGIMLILIK_DESENLERI.flatMap((desen) =>
+    [...source.matchAll(desen)].map(([, target]) => target)
+  );
+  return hedefler.map((target) => {
     if (!target.startsWith(".")) return { external: true, target };
     return { external: false, target: rel(path.resolve(path.dirname(file), target)) };
   });
 }
 
 const files = walk(SRC);
-const inLayer = (layer) => files.filter((file) => rel(file).startsWith(`${layer}/`));
+const inLayer = (layer: string) => files.filter((file) => rel(file).startsWith(`${layer}/`));
 
 test("domain hiçbir şeye bağımlı değildir", () => {
   for (const file of inLayer("domain")) {
@@ -123,7 +160,6 @@ test("CQRS: her komut Command'dan, her sorgu Query'den türer ve kayıtlıdır",
 
   assert.ok(contexts.length >= 5, `en az 5 bağlam beklenir, ${contexts.length} bulundu`);
 
-  const { Command, Query } = require("../../src/application/shared/cqrs/Message");
   let useCases = 0;
 
   for (const context of contexts) {
@@ -147,8 +183,6 @@ test("CQRS: her komut Command'dan, her sorgu Query'den türer ve kayıtlıdır",
 });
 
 test("Bus yanlış türdeki mesajı reddeder", () => {
-  const { CommandBus, QueryBus } = require("../../src/application/shared/cqrs/bus");
-  const { Command, Query } = require("../../src/application/shared/cqrs/Message");
 
   class SahteKomut extends Command {}
   class SahteSorgu extends Query {}
@@ -163,9 +197,11 @@ test("Bus yanlış türdeki mesajı reddeder", () => {
 });
 
 test("Port sözleşmesi eksik adaptörü açılışta yakalar", () => {
-  assert.throws(() => assertPorts({}), /Port sözleşmesi karşılanmıyor/);
+  // Buradaki donusumler KASTEN gecersiz girdi veriyor: sinanan sey tam da
+  // assertPorts in sozlesmeyi karsilamayan bir torbayi aciklista yakalamasi.
+  assert.throws(() => assertPorts({} as never), /Port sözleşmesi karşılanmıyor/);
   assert.throws(
-    () => assertPorts({ ...Object.fromEntries(Object.keys(PORTS).map((key) => [key, {}])) }),
+    () => assertPorts(Object.fromEntries(Object.keys(PORTS).map((key) => [key, {}])) as never),
     /eksik|fonksiyon/
   );
   assert.ok(PORTS.unitOfWork.includes("run"));

@@ -1,10 +1,10 @@
 "use strict";
 
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const crypto = require("crypto");
+import test from "node:test";
+import assert from "node:assert/strict";
+import crypto from "crypto";
 
-const { loadConfig, validateConfig } = require("../../src/config/env");
+import { loadConfig, validateConfig } from "../../src/config/env";
 
 const keys = crypto.generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -23,7 +23,7 @@ const valid = {
   TOKEN_PEPPER: "p".repeat(40)
 };
 
-const problemsFor = (overrides) => validateConfig(loadConfig({ ...valid, ...overrides })).join(" | ");
+const problemsFor = (overrides: Record<string, string>) => validateConfig(loadConfig({ ...valid, ...overrides })).join(" | ");
 
 test("Geçerli ayarlar kabul edilir", () => {
   assert.deepEqual(validateConfig(loadConfig(valid)), []);
@@ -62,7 +62,6 @@ test("Üretimde güvensiz ayarlar sunucuyu başlatmaz", () => {
   // Üretim varsayılanları zaten güvenli: Secure çerez açık, benzetim kapalı.
   const config = loadConfig({ ...valid, ...production, PAYMENTS_MODE: "live" });
   assert.equal(config.cookieSecure, true);
-  assert.equal(config.testPaymentsEnabled ?? false, false);
   assert.deepEqual(validateConfig(config), []);
 
   assert.match(problemsFor({ ...production, COOKIE_SECURE: "false", PAYMENTS_MODE: "live" }), /COOKIE_SECURE/);

@@ -56,7 +56,7 @@ export class ScryptPasswordHasher implements PasswordHasher {
     return `scrypt$${PARAMS.N}$${PARAMS.r}$${PARAMS.p}$${salt}$${key.toString("hex")}`;
   }
 
-  async verify(password: string, storedHash: string): Promise<boolean> {
+  async verify(password: string, storedHash: unknown): Promise<boolean> {
     const parsed = parse(storedHash);
     if (!parsed) return false;
 
@@ -77,7 +77,7 @@ export class ScryptPasswordHasher implements PasswordHasher {
   }
 
   /** Parametreler sertleştirildiğinde eski özetler girişte yükseltilsin diye. */
-  needsRehash(storedHash: string): boolean {
+  needsRehash(storedHash: unknown): boolean {
     const parsed = parse(storedHash);
     if (!parsed) return true;
     return parsed.params.N !== PARAMS.N || parsed.params.r !== PARAMS.r || parsed.params.p !== PARAMS.p;

@@ -134,10 +134,10 @@ export function buildContainer(
 
   for (const module of MODULES) {
     for (const [Message, Handler] of module.commandHandlers) {
-      commands.register(Message, new (Handler as HandlerClass)(services as never));
+      commands.register(Message, new (Handler as HandlerClass)(services));
     }
     for (const [Message, Handler] of module.queryHandlers) {
-      queries.register(Message, new (Handler as HandlerClass)(services as never));
+      queries.register(Message, new (Handler as HandlerClass)(services));
     }
   }
 

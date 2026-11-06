@@ -1,29 +1,31 @@
 "use strict";
 
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import type { Row } from "../../src/application/shared/contracts";
 
-const { Money } = require("../../src/domain/shared/Money");
-const { isUuid, isEmail, isPhone, slugify, requireQuantity } = require("../../src/domain/shared/guards");
-const { ValidationError, ConflictError, ForbiddenError } = require("../../src/domain/shared/errors");
+import test from "node:test";
+import assert from "node:assert/strict";
 
-const { Product, ProductStatus } = require("../../src/domain/catalog/Product");
-const { Order } = require("../../src/domain/ordering/Order");
-const {
+import { Money } from "../../src/domain/shared/Money";
+import { isUuid, isEmail, isPhone, slugify, requireQuantity } from "../../src/domain/shared/guards";
+import { ValidationError, ConflictError, ForbiddenError } from "../../src/domain/shared/errors";
+
+import { Product, ProductStatus } from "../../src/domain/catalog/Product";
+import { Order } from "../../src/domain/ordering/Order";
+import {
   OrderStatus,
   PackageStatus,
   assertPackageTransition,
   deriveOrderStatus,
   canCustomerCancel,
   releasesStock
-} = require("../../src/domain/ordering/OrderStatus");
-const { Cart } = require("../../src/domain/ordering/Cart");
-const { createShipping } = require("../../src/domain/ordering/Shipping");
-const { AccessPolicy } = require("../../src/domain/identity/AccessPolicy");
-const { RoleCodes } = require("../../src/domain/identity/Role");
-const { assertPasswordStrength, validateRegistration } = require("../../src/domain/identity/User");
-const { createStoreApplication, assertStoreTransition, StoreStatus } = require("../../src/domain/stores/Store");
-const { assertRedirectUri, resolveScope } = require("../../src/domain/identity/OAuthClient");
+} from "../../src/domain/ordering/OrderStatus";
+import { Cart } from "../../src/domain/ordering/Cart";
+import { createShipping } from "../../src/domain/ordering/Shipping";
+import { AccessPolicy } from "../../src/domain/identity/AccessPolicy";
+import { RoleCodes } from "../../src/domain/identity/Role";
+import { assertPasswordStrength, validateRegistration } from "../../src/domain/identity/User";
+import { createStoreApplication, assertStoreTransition, StoreStatus } from "../../src/domain/stores/Store";
+import { assertRedirectUri, resolveScope } from "../../src/domain/identity/OAuthClient";
 
 /* ----------------------------------------------------------------- para */
 
@@ -105,7 +107,7 @@ test("Product.fromImportRow eksik alanlara varsayılan verir ve satırı bildiri
 
 /* -------------------------------------------------------------- sepet */
 
-const cartProduct = (overrides) => ({
+const cartProduct = (overrides: Row) => ({
   id: "p1",
   name: "Ürün",
   slug: "urun",
@@ -175,13 +177,13 @@ test("Cart boş veya sorunluysa siparişe çevrilemez", () => {
 
 /* ----------------------------------------------------------- sipariş */
 
-const checkout = (overrides = {}) => ({
+const checkout = (overrides: Record<string, unknown> = {}) => ({
   contact: { email: "ALI@Example.com", fullName: "Ali Veli", phone: "0555 000 00 00" },
   shippingAddress: { fullName: "Ali Veli", city: "İstanbul", district: "Kadıköy", line: "Adres 1" },
   ...overrides
 });
 
-const orderProduct = (overrides) => ({
+const orderProduct = (overrides: Row) => ({
   id: "p1",
   name: "Ürün",
   priceCents: 10000,

@@ -1,15 +1,15 @@
 "use strict";
 
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const crypto = require("crypto");
+import test from "node:test";
+import assert from "node:assert/strict";
+import crypto from "crypto";
 
-const { RsaTokenIssuer } = require("../../src/infrastructure/security/RsaTokenIssuer");
-const { ScryptPasswordHasher } = require("../../src/infrastructure/security/ScryptPasswordHasher");
-const { OpaqueTokenService } = require("../../src/infrastructure/security/OpaqueTokenService");
-const { Pkce } = require("../../src/infrastructure/security/Pkce");
-const { safeEqual } = require("../../src/infrastructure/security/safeEqual");
-const { InMemoryCache } = require("../../src/infrastructure/cache/RedisCache");
+import { RsaTokenIssuer } from "../../src/infrastructure/security/RsaTokenIssuer";
+import { ScryptPasswordHasher } from "../../src/infrastructure/security/ScryptPasswordHasher";
+import { OpaqueTokenService } from "../../src/infrastructure/security/OpaqueTokenService";
+import { Pkce } from "../../src/infrastructure/security/Pkce";
+import { safeEqual } from "../../src/infrastructure/security/safeEqual";
+import { InMemoryCache } from "../../src/infrastructure/cache/RedisCache";
 
 const keyPair = crypto.generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -17,7 +17,7 @@ const keyPair = crypto.generateKeyPairSync("rsa", {
   publicKeyEncoding: { type: "spki", format: "pem" }
 });
 
-const issuerFor = (now) =>
+const issuerFor = (now: () => number | string) =>
   new RsaTokenIssuer({
     privateKeyPem: keyPair.privateKey,
     publicKeyPem: keyPair.publicKey,
@@ -25,7 +25,7 @@ const issuerFor = (now) =>
     clock: { now: () => new Date(now()) }
   });
 
-const accessToken = (tokens, overrides = {}) =>
+const accessToken = (tokens: RsaTokenIssuer, overrides: Record<string, unknown> = {}) =>
   tokens.issueAccessToken({
     subject: "user-1",
     audience: "donanex-web",
@@ -44,6 +44,7 @@ test("Jeton üretilir ve doğrulanır", async () => {
   const token = await accessToken(tokens);
   const payload = await tokens.verifyAccessToken(token);
 
+  assert.ok(payload, "gecerli jeton dogrulanmali");
   assert.equal(payload.sub, "user-1");
   assert.equal(payload.iss, "https://donanex.test");
   assert.equal(payload.sid, "session-1");

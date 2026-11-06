@@ -1,12 +1,20 @@
 "use strict";
 
 import type { Handler } from "./cqrs/Message";
+import type { Services } from "./contracts";
 
 /** Bir kullanım senaryosu dosyasının dışa açtıkları: <Ad>Command/Query + <Ad>Handler. */
 export type UseCaseModule = Record<string, unknown>;
 
-/** Handler sınıfı: container bunu servislerle kurar. */
-export type HandlerClass = new (services: never) => Handler<never, unknown, never>;
+/**
+ * Handler sınıfı: container bunu servislerle kurar.
+ *
+ * Parametre Services: her handler kendi yapıcısında YALNIZCA ihtiyaç duyduğu
+ * portları ister (en az yetki), Services ise hepsini taşır — bu yüzden her
+ * handler bu imzayı karşılar. Daha önce burada "never" yazıyordu, yani tip
+ * hiçbir şey doğrulamıyor, yalnızca hatayı susturuyordu.
+ */
+export type HandlerClass = new (services: Services) => Handler<never, unknown, never>;
 
 /**
  * Kullanım senaryosu adlarından mesaj sınıfı adlarını türetir.

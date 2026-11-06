@@ -363,13 +363,18 @@ export interface OpaqueTokens {
 
 export interface PasswordHasher {
   hash(password: string): Promise<string>;
-  verify(password: string, stored: string): Promise<boolean>;
+  /**
+   * stored unknown: veritabanindaki ozet bozuk, eksik ya da eski bicimde
+   * olabilir. Uygulama bunu zaten ele aliyor; imza da bunu soyluyor ki
+   * cagiran "yukarida dogrulanmistir" varsayimina kapilmasin.
+   */
+  verify(password: string, stored: unknown): Promise<boolean>;
   /**
    * Kullanıcı yokken de aynı süreyi harcar: zamanlama sızıntısını kapatır.
    * Her zaman false döner; verilen parolayı da özetler ki süre eşleşsin.
    */
   verifyDummy(password?: unknown): Promise<false>;
-  needsRehash(stored: string): boolean;
+  needsRehash(stored: unknown): boolean;
 }
 
 export interface Pkce {

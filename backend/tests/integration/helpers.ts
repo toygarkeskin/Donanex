@@ -7,21 +7,44 @@
  * TEST_DB_HOST verilmezse testler atlanır, böylece altyapısı olmayan bir
  * makinede birim testleri yine de çalışır.
  */
-const crypto = require("crypto");
-const fs = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
+import crypto from "crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-const { createPool, waitForDatabase } = require("../../src/infrastructure/persistence/postgres/pool");
-const { runMigrations } = require("../../src/infrastructure/persistence/postgres/migrate");
-const { RedisCache, InMemoryCache } = require("../../src/infrastructure/cache/RedisCache");
-const { buildContainer } = require("../../src/bootstrap/container");
-const { syncRolesAndPermissions, ensureSystemAdmin } = require("../../src/bootstrap/syncAccessControl");
-const { syncOAuthClients } = require("../../src/bootstrap/syncOAuthClients");
-const { seedDemoData, DEMO_PASSWORD } = require("../../src/bootstrap/demoSeed");
-const { createApp } = require("../../src/presentation/http/app");
-const { OutboxRelay } = require("../../src/infrastructure/messaging/OutboxRelay");
-const { renderEmail } = require("../../src/infrastructure/mail/templates");
+import { createPool, waitForDatabase } from "../../src/infrastructure/persistence/postgres/pool";
+import { runMigrations } from "../../src/infrastructure/persistence/postgres/migrate";
+import { RedisCache, InMemoryCache } from "../../src/infrastructure/cache/RedisCache";
+import { buildContainer } from "../../src/bootstrap/container";
+import { syncRolesAndPermissions, ensureSystemAdmin } from "../../src/bootstrap/syncAccessControl";
+import { syncOAuthClients } from "../../src/bootstrap/syncOAuthClients";
+import { seedDemoData, DEMO_PASSWORD } from "../../src/bootstrap/demoSeed";
+import { createApp } from "../../src/presentation/http/app";
+import { OutboxRelay } from "../../src/infrastructure/messaging/OutboxRelay";
+import { renderEmail } from "../../src/infrastructure/mail/templates";
+
+import type { Server } from "node:net";
+import type { AppConfig } from "../../src/config/env";
+import type { Cache, Logger, Row } from "../../src/application/shared/contracts";
+
+/**
+ * API yanitinin test tarafindaki gorunumu.
+ *
+ * data bilincli olarak esnek (Row): testin DOGRULADIGI sey zaten o govdenin
+ * sekli. Burada siki bir tip yazmak, assert satirlarini gereksiz kilar ve
+ * API degistiginde testin degil tipin kirilmasina yol acardi.
+ */
+export interface ApiResponse {
+  readonly status: number;
+  readonly data: Row;
+  readonly headers: Headers;
+}
+
+/** Toplanan sahte e-posta. */
+interface SentMail extends Row {
+  readonly to: string;
+  readonly subject: string;
+}
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
 const skip = enabled ? false : "TEST_DB_HOST tanımlı değil";
@@ -36,12 +59,12 @@ const keys = crypto.generateKeyPairSync("rsa", {
   publicKeyEncoding: { type: "spki", format: "pem" }
 });
 
-const silentLogger = {
+const silentLogger: Logger & { child(): Logger } = {
   debug() {},
   info() {},
   warn() {},
   // Beklenmeyen hatalar sessizce yutulmaz: test ciktisinda gorunur.
-  error(template, properties) {
+  error(template: string, properties?: Record<string, unknown>) {
     console.error("[test-api-error]", template, JSON.stringify(properties));
   },
   child() {
@@ -49,19 +72,34 @@ const silentLogger = {
   }
 };
 
+/**
+ * Dinleyen sunucunun portu.
+ *
+ * address() string ya da null da dondurebilir (unix soketi, kapali sunucu);
+ * test icin daraltmak yerine duruyoruz, cunku port yoksa hicbir istek
+ * gonderilemez ve sessizce bos adrese baglanmak kafa karistirir.
+ */
+function portOf(server: Server): number {
+  const adres = server.address();
+  if (adres === null || typeof adres === "string") {
+    throw new Error("Test sunucusu TCP portuna baglanamadi.");
+  }
+  return adres.port;
+}
+
 /** Gönderilen e-postaları toplayan sahte posta kutusu. */
 function createOutbox() {
-  const messages = [];
+  const messages: SentMail[] = [];
   return {
     messages,
     mailer: {
-      async send(message) {
-        messages.push(message);
+      async send(message: Row) {
+        messages.push(message as SentMail);
         return true;
       }
     },
     /** Olaylar kuyruktan geçtiği için e-posta gecikmeli gelir. */
-    async waitFor(predicate, timeoutMs = 5000) {
+    async waitFor(predicate: (mail: SentMail) => boolean, timeoutMs = 5000): Promise<SentMail | null> {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
         const found = messages.find(predicate);
@@ -74,7 +112,7 @@ function createOutbox() {
 }
 
 async function startHarness() {
-  const config = Object.freeze({
+  const config: AppConfig = Object.freeze({
     role: "api",
     port: 0,
     isProduction: false,
@@ -88,18 +126,19 @@ async function startHarness() {
     // Her koşu kendi geçici klasörüne yazar; testler birbirinin dosyasını görmez.
     uploadDir: fs.mkdtempSync(path.join(os.tmpdir(), "donanex-yukleme-")),
     db: {
-      host: process.env.TEST_DB_HOST,
+      host: process.env.TEST_DB_HOST!,
       port: Number(process.env.TEST_DB_PORT || 5432),
-      database: process.env.TEST_DB_NAME,
-      user: process.env.TEST_DB_USER,
-      password: process.env.TEST_DB_PASSWORD,
+      database: process.env.TEST_DB_NAME!,
+      user: process.env.TEST_DB_USER!,
+      password: process.env.TEST_DB_PASSWORD!,
       poolSize: 10
     },
     redisUrl: process.env.TEST_REDIS_URL || "",
     rabbitUrl: "",
     jwt: { privateKey: keys.privateKey, publicKey: keys.publicKey },
     tokenPepper: "t".repeat(48),
-    logging: { url: "", apiKey: "", level: "error" },
+    // "as const": aksi halde string e genisler ve LogLevel i karsilamaz.
+    logging: { url: "", apiKey: "", level: "error" as const },
     smtp: {},
     bootstrapAdmin: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD }
   });
@@ -111,7 +150,9 @@ async function startHarness() {
   await pool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
   await runMigrations(pool, () => {});
 
-  let cache = new InMemoryCache();
+  // Sozlesme tipi kullaniliyor: Redis varsa onunla, yoksa bellek ici surumle
+  // ayni testler kosuyor.
+  let cache: Cache & { close(): Promise<void> } = new InMemoryCache();
   if (config.redisUrl) {
     const redis = new RedisCache(config.redisUrl, silentLogger);
     await redis.connect();
@@ -136,7 +177,7 @@ async function startHarness() {
    * e-posta zinciri uçtan uca sınanır, yalnızca AMQP atlaması atlanır.
    */
   const directBroker = {
-    async publish(type, message) {
+    async publish(type: string, message: Row) {
       const email = renderEmail(type, message.payload, { publicUrl: config.publicUrl });
       if (email && message.payload.email) {
         await outbox.mailer.send({ to: message.payload.email, ...email });
@@ -152,13 +193,13 @@ async function startHarness() {
   relay.start();
 
   const app = createApp({ commands, queries, services, config, rateLimits: false });
-  const server = await new Promise((resolve) => {
+  const server = await new Promise<Server>((resolve) => {
     const listener = app.listen(0, () => resolve(listener));
   });
 
   /** Hız sınırları açık ayrı bir sunucu; yalnızca sınır testi kullanır. */
   const limited = createApp({ commands, queries, services, config, rateLimits: true });
-  const limitedServer = await new Promise((resolve) => {
+  const limitedServer = await new Promise<Server>((resolve) => {
     const listener = limited.listen(0, () => resolve(listener));
   });
 
@@ -170,31 +211,54 @@ async function startHarness() {
     queries,
     services,
     config,
-    base: `http://127.0.0.1:${server.address().port}`,
-    limitedBase: `http://127.0.0.1:${limitedServer.address().port}`,
+    base: `http://127.0.0.1:${portOf(server)}`,
+    limitedBase: `http://127.0.0.1:${portOf(limitedServer)}`,
     relay,
     async stop() {
       relay.stop();
-      await new Promise((resolve) => server.close(resolve));
-      await new Promise((resolve) => limitedServer.close(resolve));
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await new Promise<void>((resolve) => limitedServer.close(() => resolve()));
       await pool.end();
-      await cache.close?.();
+      await cache.close();
     }
   };
 }
+
+/**
+ * signIn sonucu.
+ *
+ * Basarisizlikta FIRLATMAZ: testlerin bir kismi kasten yanlis parolayla
+ * giris deneyip reddedildigini dogruluyor. Ayrim ok alanindadir.
+ */
+type SignInOutcome =
+  // reason?: undefined — basari dalinda da alan OKUNABILIR olsun diye.
+  // assert.ok(result.ok, result.reason) kalibi boylece daralmaya gerek duymaz.
+  | { ok: true; tokens: Row; verifier: string; state: string | null; reason?: undefined }
+  | { ok: false; reason?: string; status?: number };
 
 /**
  * Çerezleri ve erişim jetonunu taşıyan basit istemci.
  * signIn gerçek OAuth akışını baştan sona yürütür.
  */
 class Client {
-  constructor(base) {
+  readonly base: string;
+  /**
+   * Sunucunun Set-Cookie ile verdigi cerezler; gercek tarayici gibi tasinir.
+   * Testler HttpOnly cerezlerin gerceken verildigini buradan dogruluyor.
+   */
+  readonly cookies: Record<string, string> = {};
+  accessToken: string | null = null;
+
+  constructor(base: string) {
     this.base = base;
-    this.cookies = {};
-    this.accessToken = null;
   }
 
-  async request(method, path, body, extraHeaders = {}) {
+  async request(
+    method: string,
+    path: string,
+    body?: unknown,
+    extraHeaders: Record<string, string> = {}
+  ): Promise<ApiResponse> {
     const cookie = Object.entries(this.cookies)
       .map(([name, value]) => `${name}=${value}`)
       .join("; ");
@@ -209,7 +273,7 @@ class Client {
         ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
         ...extraHeaders
       },
-      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body)
+      body: body === undefined ? undefined : isForm ? (body as string) : JSON.stringify(body)
     });
 
     for (const raw of response.headers.getSetCookie()) {
@@ -221,7 +285,7 @@ class Client {
     }
 
     const text = await response.text();
-    let data = {};
+    let data: Row = {};
     try {
       data = JSON.parse(text);
     } catch {
@@ -231,7 +295,7 @@ class Client {
   }
 
   /* Ham ikili gövde — görsel yükleme ucu multipart değil, dosyanın kendisini bekler. */
-  async upload(path, buffer, contentType) {
+  async upload(path: string, buffer: Buffer, contentType: string): Promise<ApiResponse> {
     const cookie = Object.entries(this.cookies)
       .map(([name, value]) => `${name}=${value}`)
       .join("; ");
@@ -248,7 +312,7 @@ class Client {
     });
 
     const text = await response.text();
-    let data = {};
+    let data: Row = {};
     try {
       data = JSON.parse(text);
     } catch {
@@ -257,23 +321,23 @@ class Client {
     return { status: response.status, data, headers: response.headers };
   }
 
-  get(path, headers) {
+  get(path: string, headers?: Record<string, string>) {
     return this.request("GET", path, undefined, headers);
   }
-  post(path, body = {}, headers) {
+  post(path: string, body: unknown = {}, headers?: Record<string, string>) {
     return this.request("POST", path, body, headers);
   }
-  put(path, body = {}) {
+  put(path: string, body: unknown = {}) {
     return this.request("PUT", path, body);
   }
-  patch(path, body = {}) {
+  patch(path: string, body: unknown = {}) {
     return this.request("PATCH", path, body);
   }
-  delete(path) {
+  delete(path: string) {
     return this.request("DELETE", path);
   }
 
-  form(path, params, headers = {}) {
+  form(path: string, params: Record<string, string>, headers: Record<string, string> = {}) {
     return this.request("POST", path, new URLSearchParams(params).toString(), {
       "Content-Type": "application/x-www-form-urlencoded",
       ...headers
@@ -281,7 +345,7 @@ class Client {
   }
 
   /** Tam yetkilendirme kodu akışı: authorize → giriş → kod → jeton. */
-  async signIn(email, password) {
+  async signIn(email: string, password: string): Promise<SignInOutcome> {
     const verifier = crypto.randomBytes(48).toString("base64url");
     const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
 
@@ -304,9 +368,13 @@ class Client {
     }
 
     const url = new URL(redirectTo);
+    const code = url.searchParams.get("code");
+    // Kod yoksa bos bir jeton istegi gondermek yerine nedenini soyluyoruz.
+    if (!code) return { ok: false, reason: `yonlendirmede kod yok: ${redirectTo}` };
+
     const token = await this.form("/oauth/token", {
       grant_type: "authorization_code",
-      code: url.searchParams.get("code"),
+      code,
       redirect_uri: REDIRECT_URI,
       client_id: "donanex-web",
       code_verifier: verifier
@@ -318,4 +386,4 @@ class Client {
   }
 }
 
-module.exports = { enabled, skip, startHarness, Client, ADMIN_EMAIL, ADMIN_PASSWORD, DEMO_PASSWORD, REDIRECT_URI };
+export { enabled, skip, startHarness, Client, ADMIN_EMAIL, ADMIN_PASSWORD, DEMO_PASSWORD, REDIRECT_URI };

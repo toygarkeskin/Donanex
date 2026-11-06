@@ -5,10 +5,10 @@
  * Çalıştırmak için:
  *   docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
  */
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import test from "node:test";
+import assert from "node:assert/strict";
 
-const {
+import {
   enabled,
   skip,
   startHarness,
@@ -17,13 +17,25 @@ const {
   ADMIN_PASSWORD,
   DEMO_PASSWORD,
   REDIRECT_URI
-} = require("./helpers");
+} from "./helpers";
 
+import type { Row } from "../../src/application/shared/contracts";
+import type { ApiResponse } from "./helpers";
+import crypto from "crypto";
+
+/**
+ * skip bir metin ya da false olabilir (helpers, TEST_DB_HOST yoksa nedenini
+ * metin olarak verir). node:test ikisini de kabul eder.
+ */
 const opts = { skip };
-let app;
-let anon;
 
-const checkout = (overrides = {}) => ({
+/** startHarness in dondurdugu kosum takimi. */
+type Harness = Awaited<ReturnType<typeof startHarness>>;
+
+let app: Harness;
+let anon: Client;
+
+const checkout = (overrides: Row = {}) => ({
   contact: { email: "misafir@example.com", fullName: "Misafir Alıcı", phone: "0555 000 11 22" },
   shippingAddress: {
     fullName: "Misafir Alıcı",
@@ -37,30 +49,43 @@ const checkout = (overrides = {}) => ({
 
 const firstProduct = async (minStock = 1) => {
   const { data } = await anon.get("/api/products?pageSize=60");
-  return data.items.find((product) => product.stock >= minStock);
+  return data.items.find((product: Row) => product.stock >= minStock);
 };
 
-const stockOf = async (id) => {
+const stockOf = async (id: string) => {
   const { data } = await anon.get(`/api/products?pageSize=60`);
-  return data.items.find((product) => product.id === id)?.stock ?? null;
+  return data.items.find((product: Row) => product.id === id)?.stock ?? null;
 };
+
+/**
+ * Yanit basligi. Yoksa testi anlasilir bir mesajla dusurur: headers.get()
+ * null donebilir ve "null regex e uymadi" demek nedeni gizler.
+ */
+function header(response: ApiResponse, name: string): string {
+  const deger = response.headers.get(name);
+  assert.ok(deger !== null, `${name} basligi yok`);
+  return deger;
+}
 
 /** Sepete ekleyip sipariş veren kısa yol. */
-async function placeGuestOrder(client, productId, quantity = 1) {
+async function placeGuestOrder(client: Client, productId: string, quantity = 1) {
   await client.post("/api/cart/items", { productId, quantity });
   const response = await client.post("/api/orders", checkout());
   return response;
 }
 
+// opts BURADA GECIRILMEZ: node:test in HookOptions tipi skip kabul etmiyor,
+// yani eskiden verilen { skip } sessizce yok sayiliyordu. Atlamayi asagidaki
+// enabled kontrolu yapiyor; testlerin kendisi opts i kullanmaya devam ediyor.
 test.before(async () => {
   if (!enabled) return;
   app = await startHarness();
   anon = new Client(app.base);
-}, opts);
+});
 
 test.after(async () => {
   if (app) await app.stop();
-}, opts);
+});
 
 /* ------------------------------------------------------ sağlık ve keşif */
 
@@ -78,7 +103,7 @@ test("güvenlik başlıkları ve önbellek politikası", opts, async () => {
   const health = await anon.get("/api/health");
   assert.equal(health.headers.get("x-powered-by"), null, "sunucu yazılımı gizlenir");
   assert.equal(health.headers.get("x-content-type-options"), "nosniff");
-  assert.match(health.headers.get("content-security-policy"), /default-src 'none'/);
+  assert.match(header(health, "content-security-policy"), /default-src 'none'/);
 
   const products = await anon.get("/api/products");
   assert.equal(products.headers.get("cache-control"), "no-store", "API yanıtları önbelleklenmez");
@@ -338,7 +363,7 @@ test("yetkilendirme kodu akışı PKCE ile tamamlanır", opts, async () => {
   const client = new Client(app.base);
   const result = await client.signIn("musteri@donanex.test", DEMO_PASSWORD);
 
-  assert.ok(result.ok, result.reason);
+  assert.ok(result.ok, result.reason ?? "giris basarisiz");
   assert.ok(result.tokens.access_token);
   assert.ok(result.tokens.id_token, "openid istendiğinde id_token verilir");
   assert.equal(result.tokens.token_type, "Bearer");
@@ -348,7 +373,6 @@ test("yetkilendirme kodu akışı PKCE ile tamamlanır", opts, async () => {
 });
 
 test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => {
-  const crypto = require("crypto");
   const client = new Client(app.base);
   const verifier = crypto.randomBytes(48).toString("base64url");
   const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
@@ -357,13 +381,14 @@ test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => 
     `/oauth/authorize?response_type=code&client_id=donanex-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
       `&scope=openid&state=s&code_challenge=${challenge}&code_challenge_method=S256`
   );
-  const authRequestId = new URL(authorize.headers.get("location")).searchParams.get("auth");
+  const authRequestId = new URL(header(authorize, "location")).searchParams.get("auth");
   const signIn = await client.post("/api/auth/sign-in", {
     email: "musteri@donanex.test",
     password: DEMO_PASSWORD,
     authRequestId
   });
   const code = new URL(signIn.data.redirectTo).searchParams.get("code");
+  assert.ok(code !== null, "yonlendirmede yetkilendirme kodu yok");
 
   const wrongVerifier = await client.form("/oauth/token", {
     grant_type: "authorization_code",
@@ -488,7 +513,7 @@ test("mağaza sahibi yalnızca kendi mağazasını yönetir", opts, async () => 
   assert.ok(myStore);
 
   const allStores = (await anon.get("/api/storefront/stores")).data.items;
-  const foreign = allStores.find((store) => store.id !== myStore.id);
+  const foreign = allStores.find((store: Row) => store.id !== myStore.id);
 
   assert.equal((await owner.get(`/api/stores/${myStore.id}/products`)).status, 200);
   assert.equal((await owner.get(`/api/stores/${foreign.id}/products`)).status, 403);
@@ -608,7 +633,7 @@ test("mağaza siparişi hazırlar, kargolar ve müşteri bilgilendirilir", opts,
   const storeId = (await owner.get("/api/me")).data.stores[0].id;
 
   const products = (await owner.get(`/api/stores/${storeId}/products?status=active`)).data.items;
-  const product = products.find((item) => item.stock > 0);
+  const product = products.find((item: Row) => item.stock > 0);
 
   const guest = new Client(app.base);
   const order = await placeGuestOrder(guest, product.id);
@@ -779,7 +804,7 @@ test("başvuru onaylanınca mağaza sahibi yetkisi verilir", opts, async () => {
   const refreshed = new Client(app.base);
   await refreshed.signIn(email, "AdaySatici1");
   const me = await refreshed.get("/api/me");
-  assert.ok(me.data.stores.some((store) => store.id === storeId), "mağaza panelde görünür");
+  assert.ok(me.data.stores.some((store: Row) => store.id === storeId), "mağaza panelde görünür");
   assert.equal((await refreshed.get(`/api/stores/${storeId}/products`)).status, 200);
 
   const approval = await app.outbox.waitFor((message) => message.subject.includes("onaylandı"));
@@ -842,7 +867,7 @@ test("askıya alınan mağazanın ürünleri vitrinden düşer", opts, async () 
   await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
 
   const stores = await admin.get("/api/admin/stores?status=active");
-  const store = stores.data.items.find((item) => item.productCount > 0);
+  const store = stores.data.items.find((item: Row) => item.productCount > 0);
   const before = (await anon.get(`/api/products?store=${store.slug}`)).data.total;
   assert.ok(before > 0);
 
@@ -937,7 +962,7 @@ test("hız sınırı hatalı girişleri durdurur", opts, async () => {
 
 test("her yanıt istek numarası taşır", opts, async () => {
   const response = await anon.get("/api/products");
-  assert.match(response.headers.get("x-request-id"), /[0-9a-f-]{36}/);
+  assert.match(header(response, "x-request-id"), /[0-9a-f-]{36}/);
 });
 
 /* ------------------------------------------------------------------ */
@@ -997,7 +1022,7 @@ test("görsel yükleme sahte dosyayı ve yabancı mağazayı reddeder", opts, as
   assert.equal(metin.status, 415);
 
   // Başka mağazanın numarasıyla yükleme yapılamaz.
-  const yabanci = (await anon.get("/api/storefront/stores")).data.items.find((store) => store.id !== storeId);
+  const yabanci = (await anon.get("/api/storefront/stores")).data.items.find((store: Row) => store.id !== storeId);
   const izinsiz = await owner.upload(`/api/stores/${yabanci.id}/gorseller`, GECERLI_PNG, "image/png");
   assert.equal(izinsiz.status, 403);
 

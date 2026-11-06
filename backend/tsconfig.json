@@ -4,9 +4,11 @@
   // Bu dosya TİP DENETİMİ içindir (editör + "npm run typecheck"); çıktı üretmez.
   // Üretim derlemesi tsconfig.build.json ile yapılır.
   //
-  // Geçiş kademeli: "allowJs" sayesinde henüz çevrilmemiş .js dosyaları da
-  // çözümlenir, böylece her adımda sistem çalışır ve testler yeşil kalır.
-  // Tüm dosyalar .ts olunca allowJs kaldırılabilir.
+  // Geçiş TAMAMLANDI: src/ ve tests/ altında JavaScript dosyası kalmadı,
+  // bu yüzden "allowJs" kapatıldı. Kapalı olması bir temizlik tercihi değil,
+  // güvencenin kendisi: açık kalsaydı sonradan eklenen bir .js dosyası
+  // sessizce denetim dışında kalır ve tip güvenliğinde fark edilmeyen bir
+  // boşluk açardı. Artık böyle bir dosya derlemede çözümlenemez.
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023"],
@@ -33,10 +35,7 @@
     "noUncheckedIndexedAccess": false,
     "noUnusedParameters": false,
 
-    "allowJs": true,
-    // Henüz çevrilmemiş .js dosyaları denetlenmez; yoksa göç ilk adımda
-    // binlerce hatayla kilitlenirdi. Her dosya .ts olduğunda denetime girer.
-    "checkJs": false,
+    "allowJs": false,
 
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -44,6 +43,9 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src/**/*", "tests/**/*", "scripts/**/*"],
+  // scripts/ kapsam dışında: copy-assets.js ve generate-env.js uygulama kodu
+  // değil, npm komutlarının doğrudan "node" ile çağırdığı derleme araçlarıdır.
+  // Hiçbir kaynak dosya onları içe aktarmaz.
+  "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -31,7 +31,7 @@ export interface OAuthClient {
  * Yönlendirme adresi doğrulaması. OAuth 2.1'in istediği gibi TAM eşleşme aranır;
  * joker ya da ön ek eşleşmesi kabul edilmez (açık yönlendirme açığı).
  */
-export function assertRedirectUri(client: OAuthClient, redirectUri: unknown): string {
+export function assertRedirectUri(client: Pick<OAuthClient, "redirectUris">, redirectUri: unknown): string {
   if (typeof redirectUri !== "string" || !client.redirectUris.includes(redirectUri)) {
     throw new ValidationError("redirect_uri bu istemci için kayıtlı değil.");
   }
@@ -45,7 +45,7 @@ export function assertGrantAllowed(client: OAuthClient, grantType: string): void
 }
 
 /** İstenen izinleri istemcinin izin verilenleriyle kesiştirir. */
-export function resolveScope(client: OAuthClient, requested: unknown): string {
+export function resolveScope(client: Pick<OAuthClient, "scopes">, requested: unknown): string {
   const asked: readonly string[] =
     typeof requested === "string" && requested.trim() ? requested.trim().split(/\s+/) : client.scopes;
 
