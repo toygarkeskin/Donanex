@@ -1,6 +1,8 @@
 "use strict";
 
-const { createClient } = require("redis");
+import { createClient, type RedisClientType } from "redis";
+
+import type { Cache, Logger } from "../../application/shared/contracts";
 
 /**
  * Redis önbelleği.
@@ -9,15 +11,20 @@ const { createClient } = require("redis");
  * ve istek sınırlama sayaçları. Önbellek kullanılamazsa sistem çalışmayı
  * sürdürür (sadece yavaşlar) — bu yüzden okuma hataları yutulur.
  */
-class RedisCache {
-  constructor(url, logger = console) {
+export class RedisCache implements Cache {
+  private readonly logger: Partial<Logger>;
+  private readonly client: RedisClientType;
+  /** Bağlantı kopmuşsa önbelleğe hiç gidilmez, doğrudan kaynağa düşülür. */
+  private available = false;
+
+  constructor(url: string, logger: Partial<Logger> = console) {
     this.logger = logger;
-    this.available = false;
     this.client = createClient({
       url,
-      socket: { reconnectStrategy: (retries) => Math.min(retries * 200, 5000) }
-    });
-    this.client.on("error", (error) => {
+      socket: { reconnectStrategy: (retries: number) => Math.min(retries * 200, 5000) }
+    }) as RedisClientType;
+
+    this.client.on("error", (error: Error) => {
       if (this.available) this.logger.warn?.("Redis bağlantı hatası: {Reason}", { Reason: error.message });
       this.available = false;
     });
@@ -26,26 +33,26 @@ class RedisCache {
     });
   }
 
-  async connect() {
+  async connect(): Promise<void> {
     await this.client.connect();
     this.available = true;
   }
 
-  async close() {
+  async close(): Promise<void> {
     if (this.client.isOpen) await this.client.quit();
   }
 
-  async get(key) {
+  async get<T = any>(key: string): Promise<T | null> {
     if (!this.available) return null;
     try {
       const value = await this.client.get(key);
-      return value === null ? null : JSON.parse(value);
+      return value === null ? null : (JSON.parse(value) as T);
     } catch {
       return null;
     }
   }
 
-  async set(key, value, ttlSeconds) {
+  async set(key: string, value: unknown, ttlSeconds: number): Promise<void> {
     if (!this.available) return;
     try {
       await this.client.set(key, JSON.stringify(value), { EX: Math.max(1, Math.floor(ttlSeconds)) });
@@ -54,7 +61,7 @@ class RedisCache {
     }
   }
 
-  async delete(key) {
+  async delete(key: string): Promise<void> {
     if (!this.available) return;
     try {
       await this.client.del(key);
@@ -64,7 +71,7 @@ class RedisCache {
   }
 
   /** SCAN ile ilerler; KEYS kullanılmaz çünkü büyük veride sunucuyu kilitler. */
-  async deleteByPrefix(prefix) {
+  async deleteByPrefix(prefix: string): Promise<void> {
     if (!this.available) return;
     try {
       for await (const keys of this.client.scanIterator({ MATCH: `${prefix}*`, COUNT: 200 })) {
@@ -77,37 +84,38 @@ class RedisCache {
   }
 }
 
-/** Testler ve Redis'siz çalışma için bellek içi karşılık. */
-class InMemoryCache {
-  constructor() {
-    this.store = new Map();
-  }
+interface CacheEntry {
+  readonly value: unknown;
+  readonly expiresAt: number;
+}
 
-  async get(key) {
+/** Testler ve Redis'siz çalışma için bellek içi karşılık. */
+export class InMemoryCache implements Cache {
+  private readonly store = new Map<string, CacheEntry>();
+
+  async get<T = any>(key: string): Promise<T | null> {
     const entry = this.store.get(key);
     if (!entry) return null;
     if (entry.expiresAt <= Date.now()) {
       this.store.delete(key);
       return null;
     }
-    return structuredClone(entry.value);
+    return structuredClone(entry.value) as T;
   }
 
-  async set(key, value, ttlSeconds) {
+  async set(key: string, value: unknown, ttlSeconds: number): Promise<void> {
     this.store.set(key, { value: structuredClone(value), expiresAt: Date.now() + ttlSeconds * 1000 });
   }
 
-  async delete(key) {
+  async delete(key: string): Promise<void> {
     this.store.delete(key);
   }
 
-  async deleteByPrefix(prefix) {
+  async deleteByPrefix(prefix: string): Promise<void> {
     for (const key of this.store.keys()) {
       if (key.startsWith(prefix)) this.store.delete(key);
     }
   }
 
-  async close() {}
+  async close(): Promise<void> {}
 }
-
-module.exports = { RedisCache, InMemoryCache };

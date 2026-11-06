@@ -4,12 +4,33 @@
  * E-posta metinleri. Tek yerde tutulur ki ton ve bağlantı biçimi her yerde aynı olsun.
  * Her şablon hem düz metin hem HTML üretir.
  */
-const escapeHtml = (value) =>
-  String(value ?? "").replace(/[&<>"']/g, (char) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]
-  );
+const HTML_KACIS: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
 
-function layout(title, bodyHtml) {
+/** Şablonlara giren her değer buradan geçer: e-postaya HTML enjekte edilemez. */
+const escapeHtml = (value: unknown): string =>
+  String(value ?? "").replace(/[&<>"']/g, (char) => HTML_KACIS[char] ?? char);
+
+/** Üretilen e-postanın üç parçası; hepsi zorunlu. */
+export interface EmailContent {
+  readonly subject: string;
+  readonly text: string;
+  readonly html: string;
+}
+
+/** Şablonun ihtiyaç duyduğu ortam bilgisi (bağlantıları kurmak için). */
+export interface TemplateOptions {
+  readonly publicUrl: string;
+}
+
+type Template = (payload: any, options: TemplateOptions) => EmailContent;
+
+function layout(title: string, bodyHtml: string): string {
   return `<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head>
 <body style="margin:0;background:#f6f7f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1f2430">
@@ -25,10 +46,10 @@ function layout(title, bodyHtml) {
 </body></html>`;
 }
 
-const button = (href, label) =>
+const button = (href: string, label: string): string =>
   `<p style="margin:24px 0"><a href="${escapeHtml(href)}" style="background:#1f2430;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;display:inline-block">${escapeHtml(label)}</a></p>`;
 
-const templates = {
+const templates: Record<string, Template> = {
   "user.registered": ({ fullName, verificationToken }, { publicUrl }) => {
     const link = `${publicUrl}/eposta-dogrula#token=${verificationToken}`;
     return {
@@ -121,7 +142,7 @@ const templates = {
   }),
 
   "order.package_status_changed": ({ fullName, orderNumber, status }, { publicUrl }) => {
-    const labels = {
+    const labels: Record<string, string> = {
       preparing: "hazırlanıyor",
       shipped: "kargoya verildi",
       delivered: "teslim edildi",
@@ -175,9 +196,9 @@ const templates = {
 };
 
 /** Olay tipine karşılık gelen e-postayı üretir; şablon yoksa null döner. */
-function renderEmail(type, payload, options) {
+export function renderEmail(type: string, payload: any, options: TemplateOptions): EmailContent | null {
   const template = templates[type];
   return template ? template(payload, options) : null;
 }
 
-module.exports = { renderEmail, templates };
+export { templates };

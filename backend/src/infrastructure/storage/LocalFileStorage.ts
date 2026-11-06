@@ -1,10 +1,11 @@
 "use strict";
 
-const fs = require("node:fs/promises");
-const path = require("node:path");
-const crypto = require("node:crypto");
+import fs from "node:fs/promises";
+import path from "node:path";
+import crypto from "node:crypto";
 
-const { ValidationError, NotFoundError } = require("../../domain/shared/errors");
+import { ValidationError, NotFoundError } from "../../domain/shared/errors";
+import type { FileStorage } from "../../application/shared/contracts";
 
 /**
  * Yüklenen görselleri diske yazar.
@@ -25,10 +26,16 @@ const { ValidationError, NotFoundError } = require("../../domain/shared/errors")
  *     sadece yazarken kontrol etmek yetmez.
  */
 
-const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+export const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+
+interface GorselTuru {
+  readonly uzanti: string;
+  readonly mime: string;
+  readonly esle: (b: Buffer) => boolean;
+}
 
 // Sihirli sayı → uzantı. Sıra önemli değil; eşleşen ilk kayıt kullanılır.
-const TURLER = [
+const TURLER: readonly GorselTuru[] = [
   {
     uzanti: ".png",
     mime: "image/png",
@@ -50,22 +57,20 @@ const TURLER = [
 // Üretilen adın biçimi. Okurken bu kalıba uymayan hiçbir şey açılmaz.
 const AD_KALIBI = /^[0-9a-f]{32}\.(png|jpg|webp)$/;
 
-class LocalFileStorage {
-  constructor({ directory }) {
+export class LocalFileStorage implements FileStorage {
+  private readonly directory: string;
+
+  constructor({ directory }: { directory: string }) {
     this.directory = path.resolve(directory);
   }
 
   /** Klasörü açılışta hazırlar; ilk yüklemede hata çıkmasın. */
-  async init() {
+  async init(): Promise<void> {
     await fs.mkdir(this.directory, { recursive: true });
   }
 
-  /**
-   * Görseli yazar ve dosya adını döndürür.
-   * @param {Buffer} icerik ham dosya
-   * @returns {Promise<{ fileName: string, contentType: string, size: number }>}
-   */
-  async save(icerik) {
+  /** Görseli yazar ve dosya adını döndürür. */
+  async save(icerik: Buffer): Promise<{ fileName: string; contentType: string; size: number }> {
     if (!Buffer.isBuffer(icerik) || icerik.length === 0) {
       throw new ValidationError("Dosya boş.");
     }
@@ -87,11 +92,8 @@ class LocalFileStorage {
     return { fileName, contentType: tur.mime, size: icerik.length };
   }
 
-  /**
-   * Dosyayı okur. Ad kalıba uymuyorsa hiç diske gidilmez.
-   * @returns {Promise<{ content: Buffer, contentType: string }>}
-   */
-  async read(fileName) {
+  /** Dosyayı okur. Ad kalıba uymuyorsa hiç diske gidilmez. */
+  async read(fileName: string): Promise<{ content: Buffer; contentType: string }> {
     if (typeof fileName !== "string" || !AD_KALIBI.test(fileName)) {
       throw new NotFoundError("Görsel bulunamadı.");
     }
@@ -102,7 +104,7 @@ class LocalFileStorage {
       throw new NotFoundError("Görsel bulunamadı.");
     }
 
-    let content;
+    let content: Buffer;
     try {
       content = await fs.readFile(tam);
     } catch {
@@ -114,5 +116,3 @@ class LocalFileStorage {
     return { content, contentType: tur?.mime ?? "application/octet-stream" };
   }
 }
-
-module.exports = { LocalFileStorage, MAX_BYTES };

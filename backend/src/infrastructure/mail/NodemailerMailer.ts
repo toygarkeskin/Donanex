@@ -1,6 +1,8 @@
 "use strict";
 
-const nodemailer = require("nodemailer");
+import nodemailer, { type Transporter } from "nodemailer";
+
+import type { Logger, Mailer } from "../../application/shared/contracts";
 
 /**
  * SMTP ile e-posta gönderir.
@@ -10,8 +12,28 @@ const nodemailer = require("nodemailer");
  * (kayıt doğrulama, parola sıfırlama, sipariş bildirimi) demoda eksiksiz
  * çalışır ve kimseye istenmeyen posta gitmez.
  */
-class NodemailerMailer {
-  constructor(smtp, logger = console) {
+export interface SmtpConfig {
+  readonly host?: string;
+  readonly port?: number;
+  readonly secure?: boolean;
+  readonly user?: string;
+  readonly pass?: string;
+  readonly from?: string;
+}
+
+export interface MailMessage {
+  readonly to: string;
+  readonly subject: string;
+  readonly text?: string;
+  readonly html?: string;
+}
+
+export class NodemailerMailer implements Mailer {
+  private readonly from: string | undefined;
+  private readonly logger: Partial<Logger>;
+  private readonly transporter: Transporter;
+
+  constructor(smtp: SmtpConfig, logger: Partial<Logger> = console) {
     this.from = smtp.from;
     this.logger = logger;
     this.transporter = nodemailer.createTransport({
@@ -24,7 +46,8 @@ class NodemailerMailer {
     });
   }
 
-  async send({ to, subject, text, html }) {
+  /** Gönderim başarısızsa FIRLATMAZ: false döner, çağıran akışı sürdürür. */
+  async send({ to, subject, text, html }: MailMessage): Promise<boolean> {
     try {
       const info = await this.transporter.sendMail({ from: this.from, to, subject, text, html });
       this.logger.info?.("E-posta gönderildi: {Subject} -> {Recipient}", {
@@ -34,20 +57,24 @@ class NodemailerMailer {
       });
       return true;
     } catch (error) {
-      this.logger.error?.("E-posta gönderilemedi: {Reason}", { Reason: error.message, Recipient: to });
+      const mesaj = error instanceof Error ? error.message : String(error);
+      this.logger.error?.("E-posta gönderilemedi: {Reason}", { Reason: mesaj, Recipient: to });
       return false;
     }
   }
 }
 
 /** SMTP tanımlı değilse: gönderilmiş gibi davranır, yalnızca günlüğe yazar. */
-class NullMailer {
-  constructor(logger = console) {
+export class NullMailer implements Mailer {
+  private readonly logger: Partial<Logger>;
+  /** Testler gönderilmeye çalışılan postaları buradan okur. */
+  readonly sent: MailMessage[] = [];
+
+  constructor(logger: Partial<Logger> = console) {
     this.logger = logger;
-    this.sent = [];
   }
 
-  async send(message) {
+  async send(message: MailMessage): Promise<boolean> {
     this.sent.push(message);
     this.logger.warn?.("SMTP ayarlı değil, e-posta gönderilmedi: {Subject} -> {Recipient}", {
       Subject: message.subject,
@@ -57,8 +84,6 @@ class NullMailer {
   }
 }
 
-function createMailer(smtp, logger) {
+export function createMailer(smtp: SmtpConfig, logger?: Partial<Logger>): Mailer {
   return smtp.host ? new NodemailerMailer(smtp, logger) : new NullMailer(logger);
 }
-
-module.exports = { createMailer, NodemailerMailer, NullMailer };

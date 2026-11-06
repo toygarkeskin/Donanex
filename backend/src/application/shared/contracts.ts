@@ -319,10 +319,17 @@ export interface HealthReadModel {
 /* Güvenlik ve altyapı servisleri                                     */
 /* ---------------------------------------------------------------- */
 
+/**
+ * JWT üretimi ve doğrulaması.
+ *
+ * issue* metotları imzalı jetonun KENDİSİNİ (string) döndürür, nesne değil.
+ * verifyAccessToken geçersiz jetonda fırlatmaz, null döner: çağıran "geçersiz"
+ * durumunu olağan bir akış olarak ele alır.
+ */
 export interface TokenIssuer {
-  issueAccessToken(input: Row): Row;
-  issueIdToken(input: Row): Row;
-  verifyAccessToken(token: string): Row;
+  issueAccessToken(input: Row): Promise<string>;
+  issueIdToken(input: Row): Promise<string>;
+  verifyAccessToken(token: unknown, options?: { audience?: string | null }): Promise<Row | null>;
   jwks(): Row;
 }
 
@@ -350,15 +357,28 @@ export interface Pkce {
   challengeFor(verifier: string): string;
 }
 
+/**
+ * Önbellek.
+ *
+ * ttlSeconds ZORUNLU: süresiz önbellek girdisi, veri değiştiğinde sessizce
+ * eskimiş yanıt döndürmenin en kolay yoludur. Her çağıran ömrünü bilinçli
+ * seçmek durumunda.
+ */
 export interface Cache {
   get<T = any>(key: string): Promise<T | null>;
-  set(key: string, value: unknown, ttlSeconds?: number): Promise<unknown>;
-  delete(key: string): Promise<unknown>;
-  deleteByPrefix(prefix: string): Promise<unknown>;
+  set(key: string, value: unknown, ttlSeconds: number): Promise<void>;
+  delete(key: string): Promise<void>;
+  deleteByPrefix(prefix: string): Promise<void>;
 }
 
+/**
+ * E-posta gönderimi.
+ *
+ * Gönderim başarısız olursa FIRLATMAZ, false döner: kayıt ya da sipariş akışı
+ * posta sunucusu yüzünden yarıda kalmasın. Sonucu önemseyen çağıran denetler.
+ */
 export interface Mailer {
-  send(message: Row): Promise<unknown>;
+  send(message: Row): Promise<boolean>;
 }
 
 export interface FileStorage {

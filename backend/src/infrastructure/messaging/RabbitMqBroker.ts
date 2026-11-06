@@ -1,8 +1,16 @@
 "use strict";
 
-const amqplib = require("amqplib");
+import amqplib, { type Channel, type ChannelModel, type ConsumeMessage } from "amqplib";
 
-const EXCHANGE = "donanex.events";
+import type { Logger } from "../../application/shared/contracts";
+
+export const EXCHANGE = "donanex.events";
+
+/** Kuyruktan gelen mesajın tüketiciye verilen hali. */
+export interface BrokerMessage {
+  readonly type: string;
+  readonly payload: unknown;
+}
 
 /**
  * RabbitMQ bağlantısı ve topic exchange.
@@ -11,20 +19,24 @@ const EXCHANGE = "donanex.events";
  * kuyruk geçici olarak erişilemez olsa bile hiçbir olay kaybolmaz, yalnızca
  * gecikir. Bağlantı koptuğunda kendiliğinden yeniden kurulur.
  */
-class RabbitMqBroker {
-  constructor(url, logger = console) {
+export class RabbitMqBroker {
+  private readonly url: string;
+  private readonly logger: Partial<Logger>;
+  private connection: ChannelModel | null = null;
+  private channel: Channel | null = null;
+  /** Kasıtlı kapanışta yeniden bağlanma denenmesin. */
+  private closing = false;
+
+  constructor(url: string, logger: Partial<Logger> = console) {
     this.url = url;
     this.logger = logger;
-    this.connection = null;
-    this.channel = null;
-    this.closing = false;
   }
 
-  async connect() {
+  async connect(): Promise<Channel> {
     if (this.channel) return this.channel;
 
     this.connection = await amqplib.connect(this.url);
-    this.connection.on("error", (error) =>
+    this.connection.on("error", (error: Error) =>
       this.logger.warn?.("RabbitMQ bağlantı hatası: {Reason}", { Reason: error.message })
     );
     this.connection.on("close", () => {
@@ -38,7 +50,7 @@ class RabbitMqBroker {
   }
 
   /** Kalıcı (persistent) yayın: broker yeniden başlasa da mesaj durur. */
-  async publish(type, payload) {
+  async publish(type: string, payload: unknown): Promise<boolean> {
     const channel = await this.connect();
     return channel.publish(EXCHANGE, type, Buffer.from(JSON.stringify(payload)), {
       contentType: "application/json",
@@ -49,11 +61,16 @@ class RabbitMqBroker {
   }
 
   /**
-   * @param {string} queue      dayanıklı kuyruk adı
-   * @param {string[]} patterns bağlanacak yönlendirme desenleri (ör. "order.*")
-   * @param {(message)=>Promise} handler
+   * @param queue    dayanıklı kuyruk adı
+   * @param patterns bağlanacak yönlendirme desenleri (ör. "order.*")
+   * @param handler  mesajı işleyen fonksiyon; fırlatırsa mesaj ölü mektup
+   *                 kuyruğuna gider, sonsuz döngüye girmez
    */
-  async subscribe(queue, patterns, handler) {
+  async subscribe(
+    queue: string,
+    patterns: readonly string[],
+    handler: (message: BrokerMessage) => Promise<unknown>
+  ): Promise<void> {
     const channel = await this.connect();
     await channel.assertQueue(queue, {
       durable: true,
@@ -66,7 +83,7 @@ class RabbitMqBroker {
     for (const pattern of patterns) await channel.bindQueue(queue, EXCHANGE, pattern);
     await channel.prefetch(10);
 
-    await channel.consume(queue, async (message) => {
+    await channel.consume(queue, async (message: ConsumeMessage | null) => {
       if (!message) return;
       try {
         await handler({
@@ -75,8 +92,9 @@ class RabbitMqBroker {
         });
         channel.ack(message);
       } catch (error) {
+        const mesaj = error instanceof Error ? error.message : String(error);
         this.logger.error?.("Kuyruk mesajı işlenemedi: {Reason}", {
-          Reason: error.message,
+          Reason: mesaj,
           Queue: queue,
           RoutingKey: message.fields.routingKey
         });
@@ -86,7 +104,7 @@ class RabbitMqBroker {
     });
   }
 
-  async close() {
+  async close(): Promise<void> {
     this.closing = true;
     try {
       if (this.channel) await this.channel.close();
@@ -96,5 +114,3 @@ class RabbitMqBroker {
     }
   }
 }
-
-module.exports = { RabbitMqBroker, EXCHANGE };
