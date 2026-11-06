@@ -87,7 +87,7 @@ onMounted(() => cart.load().catch(() => {}));
           v-for="item in cart.items"
           :key="item.productId"
           class="card flex flex-wrap items-center gap-4 p-4"
-          :class="{ 'border-amber-300 bg-amber-50/40': !item.available }"
+          :class="{ 'border-amber-400 bg-amber-400/10': !item.available }"
         >
           <img
             v-if="item.imageUrl"

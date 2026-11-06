@@ -5,17 +5,17 @@ const { GrantTypes } = require("../domain/identity/OAuthClient");
 /**
  * Sistemin kendi OAuth istemcilerini tanımlar.
  *
- *  pazar-web  — tarayıcıdaki Vue uygulaması. AÇIK (public) istemcidir:
+ *  donanex-web  — tarayıcıdaki Vue uygulaması. AÇIK (public) istemcidir:
  *               parola saklayamaz, bu yüzden PKCE zorunludur.
- *  pazar-ops  — makineden makineye entegrasyon örneği. GİZLİ istemcidir;
+ *  donanex-ops  — makineden makineye entegrasyon örneği. GİZLİ istemcidir;
  *               parolası yalnızca ilk oluşturmada gösterilir.
  */
 async function syncOAuthClients({ unitOfWork, passwordHasher, config, logger }) {
   const base = config.publicUrl;
 
   const web = {
-    clientId: "pazar-web",
-    name: "Pazar Web",
+    clientId: "donanex-web",
+    name: "Donanex Web",
     secretHash: null,
     redirectUris: [
       `${base}/auth/callback`,

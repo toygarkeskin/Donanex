@@ -69,7 +69,7 @@ onMounted(load);
     />
 
     <AlertBox tone="info" class="mb-6">
-      Çalışan eklemek için kişinin Pazar'da hesabı olmalı. Verdiğiniz yetki <strong>yalnızca bu
+      Çalışan eklemek için kişinin Donanex'da hesabı olmalı. Verdiğiniz yetki <strong>yalnızca bu
       mağazada</strong> geçerlidir; başka mağazaların verisine erişemez.
     </AlertBox>
 

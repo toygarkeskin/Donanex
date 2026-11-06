@@ -75,6 +75,12 @@ onMounted(load);
   <div>
     <PageHeader title="Ürünler" description="Mağazanızın kataloğu.">
       <template #actions>
+        <RouterLink
+          :to="{ name: 'store-product-import', params: { storeId: route.params.storeId } }"
+          class="btn-secondary"
+        >
+          CSV ile aktar
+        </RouterLink>
         <RouterLink :to="{ name: 'store-product-new', params: { storeId: route.params.storeId } }" class="btn-primary">
           + Yeni ürün
         </RouterLink>

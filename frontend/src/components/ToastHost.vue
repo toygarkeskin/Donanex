@@ -22,7 +22,7 @@ const tones = {
         v-for="toast in toasts.items"
         :key="toast.id"
         role="status"
-        class="pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-lg"
+        class="bildirim pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-lg"
         :class="tones[toast.tone] || tones.info"
       >
         <span class="flex-1">{{ toast.message }}</span>

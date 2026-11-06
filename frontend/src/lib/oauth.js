@@ -6,8 +6,8 @@
  * ve jeton alınırken aslı kanıt olarak sunulur (PKCE). Yetkilendirme kodu
  * çalınsa bile doğrulayıcı olmadan jetona çevrilemez.
  */
-const CLIENT_ID = "pazar-web";
-const STORAGE_KEY = "pazar.oauth";
+const CLIENT_ID = "donanex-web";
+const STORAGE_KEY = "donanex.oauth";
 const SCOPES = "openid profile email shop store:manage admin";
 
 const base64url = (bytes) =>

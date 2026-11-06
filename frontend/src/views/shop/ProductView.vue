@@ -61,7 +61,7 @@ watch(() => route.fullPath, load);
   </EmptyState>
 
   <div v-else class="grid gap-8 lg:grid-cols-2">
-    <div class="card flex items-center justify-center overflow-hidden bg-white p-8">
+    <div class="card flex items-center justify-center overflow-hidden bg-surface p-8">
       <img :src="product.imageUrl" :alt="product.name" class="max-h-[420px] w-full object-contain" />
     </div>
 

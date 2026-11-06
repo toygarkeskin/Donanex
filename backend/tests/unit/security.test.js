@@ -21,14 +21,14 @@ const issuerFor = (now) =>
   new RsaTokenIssuer({
     privateKeyPem: keyPair.privateKey,
     publicKeyPem: keyPair.publicKey,
-    issuer: "https://pazar.test",
+    issuer: "https://donanex.test",
     clock: { now: () => new Date(now()) }
   });
 
 const accessToken = (tokens, overrides = {}) =>
   tokens.issueAccessToken({
     subject: "user-1",
-    audience: "pazar-web",
+    audience: "donanex-web",
     scope: "openid shop",
     sessionId: "session-1",
     roles: [],
@@ -45,7 +45,7 @@ test("Jeton üretilir ve doğrulanır", async () => {
   const payload = await tokens.verifyAccessToken(token);
 
   assert.equal(payload.sub, "user-1");
-  assert.equal(payload.iss, "https://pazar.test");
+  assert.equal(payload.iss, "https://donanex.test");
   assert.equal(payload.sid, "session-1");
   assert.ok(payload.jti, "her jetonun tekil kimliği olmalı");
 });
@@ -56,7 +56,7 @@ test("Kurcalanmış, yanlış imzalı ve 'alg: none' jetonlar reddedilir", async
   const [header, body, signature] = token.split(".");
 
   const forgedBody = Buffer.from(
-    JSON.stringify({ sub: "hacker", iss: "https://pazar.test", exp: 9e9, iat: 1, jti: "x" })
+    JSON.stringify({ sub: "hacker", iss: "https://donanex.test", exp: 9e9, iat: 1, jti: "x" })
   ).toString("base64url");
   assert.equal(await tokens.verifyAccessToken(`${header}.${forgedBody}.${signature}`), null, "gövde değişimi");
 
@@ -83,7 +83,7 @@ test("Başka anahtarla imzalanmış jeton kabul edilmez", async () => {
       publicKeyEncoding: { type: "spki", format: "pem" }
     }).privateKey,
     publicKeyPem: keyPair.publicKey,
-    issuer: "https://pazar.test"
+    issuer: "https://donanex.test"
   });
 
   const foreign = await accessToken(other);

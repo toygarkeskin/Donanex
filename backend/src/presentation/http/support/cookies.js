@@ -14,9 +14,9 @@
  * CSRF yüzeyi daralır ve jeton sekme kapanınca kaybolur.
  */
 const COOKIES = Object.freeze({
-  SSO: "pzr_sso",
-  REFRESH: "pzr_rt",
-  CART: "pzr_cart"
+  SSO: "dnx_sso",
+  REFRESH: "dnx_rt",
+  CART: "dnx_cart"
 });
 
 function parseCookies(req) {

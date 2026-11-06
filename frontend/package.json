@@ -1,8 +1,8 @@
 {
-  "name": "pazar-web",
+  "name": "donanex-web",
   "version": "1.0.0",
   "private": true,
-  "description": "Çok satıcılı pazar yeri arayüzü (Vue 3 + Vite + Tailwind)",
+  "description": "Çok satıcılı teknoloji mağazası arayüzü (Vue 3 + Vite + Tailwind)",
   "type": "module",
   "scripts": {
     "dev": "vite",

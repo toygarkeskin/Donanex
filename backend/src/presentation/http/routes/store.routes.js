@@ -1,12 +1,13 @@
 "use strict";
 
-const { Router } = require("express");
+const { Router, raw } = require("express");
 const {
   CreateProductCommand,
   UpdateProductCommand,
   SetProductStatusCommand,
   DeleteProductCommand,
   ImportProductsCommand,
+  UploadProductImageCommand,
   ListStoreProductsQuery
 } = require("../../../application/catalog");
 const {
@@ -82,6 +83,35 @@ function storePanelRoutes({ commands, queries }) {
       message: `${result.count} ürün taslak olarak içe aktarıldı. Gözden geçirip yayınlayabilirsiniz.`
     });
   });
+
+  /*
+   * Ürün görseli yükleme.
+   *
+   * Gövde HAM ikili veridir, multipart değil: tek dosya için multipart hem
+   * fazladan bir ayrıştırıcı bağımlılığı hem de fazladan bir saldırı yüzeyi
+   * demekti. Tarayıcı File nesnesini doğrudan gövdeye koyar.
+   *
+   * Content-Type allowlist'i burada yalnızca kapıyı daraltır; dosyanın
+   * gerçekte ne olduğuna LocalFileStorage baytlara bakarak karar verir.
+   */
+  router.post(
+    "/:storeId/gorseller",
+    may("catalog:product:write"),
+    raw({ type: ["image/png", "image/jpeg", "image/webp"], limit: "2mb" }),
+    async (req, res) => {
+      if (!Buffer.isBuffer(req.body)) {
+        return res.status(415).json({
+          error: "unsupported_media_type",
+          message: "Görsel PNG, JPEG ya da WebP olmalı ve ham veri olarak gönderilmeli."
+        });
+      }
+      const result = await commands.execute(
+        new UploadProductImageCommand({ storeId: req.params.storeId, content: req.body }),
+        req.context()
+      );
+      res.status(201).json(result);
+    }
+  );
 
   router.put("/:storeId/products/:productId", may("catalog:product:write"), async (req, res) => {
     const product = await commands.execute(

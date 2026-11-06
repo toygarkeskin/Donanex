@@ -78,6 +78,13 @@ Bir kuralı çiğnemek gerekiyorsa testi değiştirmeden önce nedenini
 - **Kullanıcı girdisinden gelen her kimlik UUID doğrulamasından geçer** (`requireUuid`).
 - **Kapsamlı yetki:** mağazaya bağlı izinler `{ storeId }` ile sorulur. Kapsamsız sorulursa
   mağaza rolü izni vermez — bu kasıtlıdır.
+- **Tema bileşenlerde değil, belirteçte durur.** Bileşenler ham renk ya da `bg-white` yazmaz;
+  `bg-surface` ve `ink-*` kullanır. Koyu tema yalnızca `style.css` içindeki
+  `:root[data-theme="dark"]` bloğunda belirteçleri yeniden tanımlar. Yeni bir ekranda ham renk
+  kullanırsanız o ekran koyu temada bozulur.
+- **Yüklenen dosyanın adı kullanıcıdan gelmez.** `LocalFileStorage` adı kendisi üretir ve türü
+  dosyanın ilk baytlarından doğrular; `Content-Type` başlığı tek başına kanıt değildir. SVG
+  bilerek kabul edilmez. Okurken de ad kalıbı yeniden denetlenir.
 - **Olaylar kendi kendine yeterli olmalı.** E-posta tüketicisi alıcıyı yalnızca olay içeriğinden
   bulur; veritabanına geri dönmez. Yeni olay eklerken `email` ve `fullName` koymayı unutmayın.
 

@@ -13,7 +13,7 @@ const tones = {
 </script>
 
 <template>
-  <div class="rounded-lg border px-4 py-3 text-sm" :class="tones[tone] || tones.info" role="status">
+  <div class="alert rounded-lg border px-4 py-3 text-sm" :class="tones[tone] || tones.info" role="status">
     <p v-if="title" class="font-semibold">{{ title }}</p>
     <div :class="title ? 'mt-1' : ''"><slot /></div>
   </div>

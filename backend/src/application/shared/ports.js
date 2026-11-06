@@ -47,6 +47,8 @@ const PORTS = Object.freeze({
   /* ---------- Altyapı servisleri ---------- */
   cache: ["get", "set", "delete", "deleteByPrefix"],
   mailer: ["send"],
+  // Yüklenen ürün görselleri; ad sunucuda üretilir, tür baytlardan doğrulanır
+  fileStorage: ["save", "read"],
   clock: ["now"],
   ids: ["uuid"],
   logger: ["debug", "info", "warn", "error"]

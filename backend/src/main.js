@@ -26,7 +26,7 @@ async function start() {
     process.exit(1);
   }
 
-  const logger = new SeqLogger({ ...config.logging, service: "pazar-api" });
+  const logger = new SeqLogger({ ...config.logging, service: "donanex-api" });
   const pool = createPool(config.db);
   const cache = new RedisCache(config.redisUrl, logger);
 
@@ -44,6 +44,9 @@ async function start() {
 
   const { commands, queries, services } = buildContainer({ pool, cache, logger, config });
   services.redisClient = cache.available ? cache.client : null;
+
+  // Görsel klasörü ilk yüklemede değil, açılışta hazırlanır.
+  await services.fileStorage.init();
 
   await syncRolesAndPermissions(services.unitOfWork, logger);
   await syncOAuthClients({ ...services, config, logger });

@@ -76,7 +76,7 @@ onMounted(load);
               v-for="message in detail.messages"
               :key="message.id"
               class="rounded-lg border p-3 text-sm"
-              :class="message.isStaff ? 'border-brand-200 bg-white' : 'border-ink-200 bg-white'"
+              :class="message.isStaff ? 'border-brand-200 bg-surface' : 'border-ink-200 bg-surface'"
             >
               <p class="mb-1 text-xs font-medium text-ink-500">
                 {{ message.isStaff ? "Destek ekibi" : "Siz" }} · {{ formatDate(message.createdAt) }}

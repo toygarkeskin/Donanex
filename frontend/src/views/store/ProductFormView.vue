@@ -27,6 +27,40 @@ const form = reactive({
 });
 
 const categories = ref([]);
+const yukleniyor = ref(false);
+const dosyaAlani = ref(null);
+
+const EN_BUYUK = 2 * 1024 * 1024;
+
+/*
+ * Görsel, ürün kaydedilmeden ÖNCE yüklenir ve dönen adres forma yazılır.
+ * Böylece henüz var olmayan bir ürüne de görsel seçilebilir; sunucu tarafında
+ * görsel bir ürüne bağlı değildir.
+ */
+async function gorselSecildi(olay) {
+  const dosya = olay.target.files?.[0];
+  if (!dosya) return;
+
+  // Sunucu da aynı sınırı uygular; buradaki denetim yalnızca 2 MB'lık bir
+  // dosyayı boşuna yüklememek için.
+  if (dosya.size > EN_BUYUK) {
+    toast.error("Görsel en fazla 2 MB olabilir.");
+    if (dosyaAlani.value) dosyaAlani.value.value = "";
+    return;
+  }
+
+  yukleniyor.value = true;
+  try {
+    const sonuc = await api.upload(`/stores/${storeId()}/gorseller`, dosya);
+    form.imageUrl = sonuc.imageUrl;
+    toast.success("Görsel yüklendi.");
+  } catch (hata) {
+    toast.error(hata.message ?? "Görsel yüklenemedi.");
+    if (dosyaAlani.value) dosyaAlani.value.value = "";
+  } finally {
+    yukleniyor.value = false;
+  }
+}
 const saving = ref(false);
 const error = ref("");
 const loading = ref(true);
@@ -113,11 +147,26 @@ onMounted(load);
         </FormField>
       </div>
 
+      <FormField id="gorselDosya" label="Görsel" hint="PNG, JPEG ya da WebP — en fazla 2 MB.">
+        <div class="flex flex-wrap items-center gap-3">
+          <input
+            id="gorselDosya"
+            ref="dosyaAlani"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            class="field"
+            :disabled="yukleniyor"
+            @change="gorselSecildi"
+          />
+          <span v-if="yukleniyor" class="text-xs text-ink-500">Yükleniyor…</span>
+        </div>
+      </FormField>
+
       <FormField
         id="imageUrl"
         label="Görsel adresi"
         required
-        hint="/images/… ile başlayan yerel bir yol ya da https:// ile başlayan bir adres."
+        hint="Dosya seçerseniz burası kendiliğinden dolar. Dilerseniz /images/… ya da https:// ile başlayan bir adres de yazabilirsiniz."
       >
         <input id="imageUrl" v-model="form.imageUrl" type="text" class="field" required maxlength="500" />
       </FormField>

@@ -39,6 +39,7 @@ const { OpaqueTokenService } = require("../infrastructure/security/OpaqueTokenSe
 const { Pkce } = require("../infrastructure/security/Pkce");
 const { safeEqual } = require("../infrastructure/security/safeEqual");
 const { createMailer } = require("../infrastructure/mail/NodemailerMailer");
+const { LocalFileStorage } = require("../infrastructure/storage/LocalFileStorage");
 const { SystemClock } = require("../infrastructure/support/Clock");
 const { UuidGenerator } = require("../infrastructure/support/Ids");
 
@@ -80,6 +81,7 @@ function buildContainer({ pool, cache, logger, config }, overrides = {}) {
     // altyapı
     cache,
     mailer: createMailer(config.smtp, logger),
+    fileStorage: new LocalFileStorage({ directory: config.uploadDir }),
     clock,
     ids: new UuidGenerator(),
     logger,

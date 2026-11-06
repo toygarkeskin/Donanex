@@ -14,12 +14,12 @@ function layout(title, bodyHtml) {
 <html lang="tr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head>
 <body style="margin:0;background:#f6f7f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1f2430">
   <div style="max-width:560px;margin:0 auto;padding:32px 20px">
-    <div style="font-weight:700;font-size:20px;margin-bottom:20px">Pazar</div>
+    <div style="font-weight:700;font-size:20px;margin-bottom:20px">Donanex</div>
     <div style="background:#fff;border-radius:12px;padding:28px;line-height:1.6">
       ${bodyHtml}
     </div>
     <p style="color:#6b7280;font-size:12px;margin-top:20px">
-      Bu ileti Pazar demo ortamından gönderildi.
+      Bu ileti Donanex demo ortamından gönderildi.
     </p>
   </div>
 </body></html>`;
@@ -32,12 +32,12 @@ const templates = {
   "user.registered": ({ fullName, verificationToken }, { publicUrl }) => {
     const link = `${publicUrl}/eposta-dogrula#token=${verificationToken}`;
     return {
-      subject: "Pazar'a hoş geldiniz — e-postanızı doğrulayın",
-      text: `Merhaba ${fullName},\n\nPazar hesabınız oluşturuldu. E-posta adresinizi doğrulamak için:\n\n${link}\n\nBu bağlantı 3 gün geçerlidir.`,
+      subject: "Donanex'a hoş geldiniz — e-postanızı doğrulayın",
+      text: `Merhaba ${fullName},\n\nDonanex hesabınız oluşturuldu. E-posta adresinizi doğrulamak için:\n\n${link}\n\nBu bağlantı 3 gün geçerlidir.`,
       html: layout(
         "Hoş geldiniz",
         `<p>Merhaba <strong>${escapeHtml(fullName)}</strong>,</p>
-         <p>Pazar hesabınız oluşturuldu. E-posta adresinizi doğrulayarak tüm özellikleri kullanmaya başlayabilirsiniz.</p>
+         <p>Donanex hesabınız oluşturuldu. E-posta adresinizi doğrulayarak tüm özellikleri kullanmaya başlayabilirsiniz.</p>
          ${button(link, "E-postamı doğrula")}
          <p style="color:#6b7280;font-size:13px">Bağlantı 3 gün geçerlidir.</p>`
       )

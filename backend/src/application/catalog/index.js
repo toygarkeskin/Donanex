@@ -10,6 +10,7 @@ module.exports = defineContext({
     SetProductStatus: require("./commands/SetProductStatus"),
     DeleteProduct: require("./commands/DeleteProduct"),
     ImportProducts: require("./commands/ImportProducts"),
+    UploadProductImage: require("./commands/UploadProductImage"),
     CreateCategory: require("./commands/CreateCategory")
   },
   queries: {

@@ -30,18 +30,18 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-12">
-    <section class="overflow-hidden rounded-2xl bg-ink-900 px-6 py-14 text-white sm:px-12">
+    <section class="overflow-hidden rounded-2xl bg-night px-6 py-14 text-white sm:px-12">
       <div class="max-w-2xl">
-        <p class="text-sm font-medium text-brand-200">Çok satıcılı pazar yeri</p>
+        <p class="text-sm font-medium text-night-accent">Çok satıcılı teknoloji mağazası</p>
         <h1 class="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
           Onlarca mağaza, tek sepet, tek ödeme.
         </h1>
-        <p class="mt-4 text-ink-300">
+        <p class="mt-4 text-night-muted">
           Ürünleri gezmek ve sepete eklemek için üye olmanıza gerek yok. İsterseniz kayıt olmadan da
           sipariş verebilirsiniz.
         </p>
         <div class="mt-7 flex flex-wrap gap-3">
-          <RouterLink :to="{ name: 'products' }" class="btn bg-white px-5 py-2.5 text-ink-900 hover:bg-ink-100">
+          <RouterLink :to="{ name: 'products' }" class="btn bg-white px-5 py-2.5 text-night hover:bg-white/90">
             Ürünleri keşfet
           </RouterLink>
           <RouterLink

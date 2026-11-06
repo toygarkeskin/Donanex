@@ -1,4 +1,4 @@
-# Pazar — çok satıcılı pazar yeri. Tüm sistem tek komutla:
+# Donanex — çok satıcılı teknoloji mağazası. Tüm sistem tek komutla:
 #   docker compose up --build -d
 #
 # Demo adresleri (varsayılan portlarla):
@@ -10,7 +10,7 @@
 # Değerler proje kökündeki .env dosyasından okunur (.env.example'a bakın).
 # Veritabanı, Redis ve RabbitMQ dışarıya açılmaz; yalnızca Docker ağı içinden erişilir.
 
-name: pazar
+name: donanex
 
 x-hardening: &hardening
   restart: unless-stopped
@@ -32,7 +32,7 @@ x-backend-env: &backend-env
   DB_USER: ${DB_USER:?.env içinde tanımlı olmalı}
   DB_PASSWORD: ${DB_PASSWORD:?.env içinde tanımlı olmalı}
   REDIS_URL: redis://cache:6379
-  RABBITMQ_URL: amqp://${RABBITMQ_USER:-pazar}:${RABBITMQ_PASSWORD:?.env içinde tanımlı olmalı}@queue:5672
+  RABBITMQ_URL: amqp://${RABBITMQ_USER:-donanex}:${RABBITMQ_PASSWORD:?.env içinde tanımlı olmalı}@queue:5672
   SEQ_URL: http://logs:5341
   SEQ_API_KEY: ${SEQ_API_KEY:-}
   LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -41,13 +41,13 @@ x-backend-env: &backend-env
   SMTP_SECURE: ${SMTP_SECURE:-false}
   SMTP_USER: ${SMTP_USER:-}
   SMTP_PASS: ${SMTP_PASS:-}
-  SMTP_FROM: ${SMTP_FROM:-Pazar <bildirim@pazar.test>}
+  SMTP_FROM: ${SMTP_FROM:-Donanex <bildirim@donanex.test>}
   PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8090}
   JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?.env içinde tanımlı olmalı — generate-env.js ile üretin}
   JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?.env içinde tanımlı olmalı}
   TOKEN_PEPPER: ${TOKEN_PEPPER:?.env içinde tanımlı olmalı}
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
-  BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@pazar.test}
+  BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@donanex.test}
   BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
   SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
   PAYMENTS_MODE: ${PAYMENTS_MODE:-simulated}
@@ -89,7 +89,7 @@ services:
     <<: *hardening
     image: rabbitmq:4-management-alpine
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-pazar}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-donanex}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - queue-data:/var/lib/rabbitmq
@@ -149,6 +149,9 @@ services:
     volumes:
       # İlk kurulumda üretilen yönetici parolası buraya yazılır
       - bootstrap:/app/var
+      # Panelden yüklenen ürün görselleri. Ayrı volume: yönetici parolasıyla
+      # aynı yerde durmasınlar, yedeklemesi ayrı yapılabilsin.
+      - uploads:/app/var/uploads
     expose: ["3000"]
 
   worker:
@@ -199,3 +202,4 @@ volumes:
   queue-data:
   seq-data:
   bootstrap:
+  uploads:

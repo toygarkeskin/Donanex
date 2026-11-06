@@ -2,7 +2,7 @@
 
 const { renderEmail } = require("../infrastructure/mail/templates");
 
-const QUEUE = "pazar.email";
+const QUEUE = "donanex.email";
 const PATTERNS = ["user.*", "order.*", "store.*", "support.*"];
 
 /**

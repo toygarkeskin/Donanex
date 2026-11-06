@@ -44,7 +44,7 @@ export async function refreshAccessToken() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ grant_type: "refresh_token", client_id: "pazar-web" })
+        body: new URLSearchParams({ grant_type: "refresh_token", client_id: "donanex-web" })
       });
       if (!response.ok) return null;
       const data = await response.json();
@@ -60,16 +60,17 @@ export async function refreshAccessToken() {
   return refreshing;
 }
 
-async function send(path, { method = "GET", body, headers = {} } = {}) {
+async function send(path, { method = "GET", body, raw, headers = {} } = {}) {
   const response = await fetch(`${BASE}${path}`, {
     method,
     credentials: "same-origin",
     headers: {
+      // "raw" gövdede Content-Type çağıran tarafından verilir (dosyanın türü).
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...headers
     },
-    body: body === undefined ? undefined : JSON.stringify(body)
+    body: raw !== undefined ? raw : body === undefined ? undefined : JSON.stringify(body)
   });
 
   if (response.status === 204) return null;
@@ -102,6 +103,12 @@ export async function api(path, options = {}) {
 
 api.get = (path, options) => api(path, { ...options, method: "GET" });
 api.post = (path, body, options) => api(path, { ...options, method: "POST", body: body ?? {} });
+/*
+ * Dosyayı HAM gövde olarak gönderir (multipart değil). Sunucu tek dosya
+ * beklediği için multipart'a gerek yok; File nesnesi doğrudan gövdeye konur
+ * ve türü Content-Type başlığıyla bildirilir.
+ */
+api.upload = (path, file) => api(path, { method: "POST", raw: file, headers: { "Content-Type": file.type } });
 api.put = (path, body, options) => api(path, { ...options, method: "PUT", body: body ?? {} });
 api.patch = (path, body, options) => api(path, { ...options, method: "PATCH", body: body ?? {} });
 api.delete = (path, options) => api(path, { ...options, method: "DELETE" });

@@ -20,7 +20,7 @@ const state = computed(() => describe(props.map, props.value));
 
 <template>
   <span
-    class="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset"
+    class="rozet inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset"
     :class="tones[state.tone] || tones.neutral"
   >
     {{ state.label }}

@@ -20,6 +20,7 @@ const { accountRoutes } = require("./routes/account.routes");
 const { storePanelRoutes } = require("./routes/store.routes");
 const { adminRoutes } = require("./routes/admin.routes");
 const { supportRoutes } = require("./routes/support.routes");
+const { uploadRoutes } = require("./routes/uploads.routes");
 
 const BULK_IMPORT = /\/products\/bulk$/;
 
@@ -49,6 +50,10 @@ function createApp({ commands, queries, services, config, rateLimits = true }) {
 
   // Sağlık uçları: sık çağrılır, sınırlara ve oturum çözümüne takılmasın.
   app.use("/api", healthRoutes({ queries }));
+
+  // Yüklenen ürün görselleri. Oturum çözümünden ve gövde ayrıştırmadan önce:
+  // statik içeriktir, hiçbirine ihtiyacı yoktur.
+  app.use("/yuklenen", uploadRoutes({ services }));
 
   app.use(accessLog());
 

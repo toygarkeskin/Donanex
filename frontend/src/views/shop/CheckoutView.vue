@@ -63,7 +63,7 @@ async function submit() {
     cart.reset();
     // Takip kodu yalnızca bu yanıtta açık gelir; ödeme ekranına taşınır.
     sessionStorage.setItem(
-      `pazar.order.${result.orderId}`,
+      `donanex.order.${result.orderId}`,
       JSON.stringify({ trackingCode: result.trackingCode, orderNumber: result.orderNumber })
     );
     router.push({ name: "payment", params: { orderId: result.orderId } });

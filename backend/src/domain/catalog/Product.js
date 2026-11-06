@@ -21,12 +21,15 @@ function assertImageUrl(value) {
   if (!image) throw new ValidationError("Görsel adresi zorunludur.");
   if (/[\s"'<>\\]/.test(image)) throw new ValidationError("Görsel adresi geçersiz karakter içeriyor.");
   if (image.startsWith("/images/") && !image.includes("..")) return image;
+  // Panelden yüklenen görseller. Ad sunucuda üretildiği için kalıbı sabittir;
+  // serbest bir yol değil, yalnızca bu biçim kabul edilir.
+  if (/^\/yuklenen\/[0-9a-f]{32}\.(png|jpg|webp)$/.test(image)) return image;
   try {
     if (new URL(image).protocol === "https:") return image;
   } catch {
     /* aşağıda reddedilir */
   }
-  throw new ValidationError("Görsel adresi /images/ ile veya https:// ile başlamalı.");
+  throw new ValidationError("Görsel adresi /images/ ile, /yuklenen/ ile veya https:// ile başlamalı.");
 }
 
 function assertStock(value) {

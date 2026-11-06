@@ -29,16 +29,16 @@ Sistem yöneticisinin parolası ilk açılışta üretilir:
 docker compose exec api cat /app/var/bootstrap-admin.txt
 ```
 
-Demo hesaplarının hepsinde aynı parola vardır: **`Pazar2026Demo`**
+Demo hesaplarının hepsinde aynı parola vardır: **`Donanex2026Demo`**
 
 | Rol | E-posta | Ne görür |
 |---|---|---|
 | Sistem Yöneticisi | `.txt` dosyasındaki adres | Yönetim paneli: mağaza onayı, kullanıcılar, roller |
-| Mağaza Sahibi | `teknoloji@pazar.test` | Teknoloji Deposu paneli (5 ürün, siparişler, çalışanlar) |
-| Mağaza Sahibi | `oyuncu@pazar.test` | Oyuncu Dünyası paneli (6 ürün) |
-| Mağaza Çalışanı | `calisan@pazar.test` | Teknoloji Deposu paneli — **ayarlar ve çalışanlar sekmesi yok** |
-| Müşteri | `musteri@pazar.test` | 2 siparişi, 1 adresi, 1 destek talebi var |
-| Müşteri | `ahmet@pazar.test` | Boş hesap |
+| Mağaza Sahibi | `teknoloji@donanex.test` | Teknoloji Deposu paneli (5 ürün, siparişler, çalışanlar) |
+| Mağaza Sahibi | `oyuncu@donanex.test` | Oyuncu Dünyası paneli (6 ürün) |
+| Mağaza Çalışanı | `calisan@donanex.test` | Teknoloji Deposu paneli — **ayarlar ve çalışanlar sekmesi yok** |
+| Müşteri | `musteri@donanex.test` | 2 siparişi, 1 adresi, 1 destek talebi var |
+| Müşteri | `ahmet@donanex.test` | Boş hesap |
 
 ## Hazır veri
 
@@ -76,10 +76,10 @@ varsa adetler toplanır, stok sınırı aşılmaz).
 
 ### 3. Mağaza paneli — siparişi kargoya verme
 
-1. `teknoloji@pazar.test` ile gir. Paneldeki özet kutuları: ciro, bekleyen paket, stoğu azalan ürün.
+1. `teknoloji@donanex.test` ile gir. Paneldeki özet kutuları: ciro, bekleyen paket, stoğu azalan ürün.
 2. Siparişler → "hazırlanıyor" paketi aç.
 3. Kargo firması ve takip numarası gir, durumu **kargoya verildi** yap.
-4. Müşteri hesabına (`musteri@pazar.test`) geç: paket kargoda, takip numarası görünür.
+4. Müşteri hesabına (`musteri@donanex.test`) geç: paket kargoda, takip numarası görünür.
 5. Mailpit: müşteriye kargo bildirimi gitmiş.
 
 > Bir paket geriye alınamaz: teslim edilmiş ya da iptal edilmiş paket yeniden hazırlığa çekilemez.
@@ -93,14 +93,14 @@ varsa adetler toplanır, stok sınırı aşılmaz).
 
 ### 5. Rol ayrımı
 
-1. `calisan@pazar.test` ile gir (aynı mağaza).
+1. `calisan@donanex.test` ile gir (aynı mağaza).
 2. Ürün ve siparişlere erişir; **Mağaza ayarları** ve **Çalışanlar** sekmeleri yoktur.
 3. Adres çubuğundan `/magaza/.../ayarlar` adresine gitmeyi dene: sunucu da reddeder (403).
    Arayüzdeki gizleme kolaylık içindir, denetim sunucudadır.
 
 ### 6. Mağazalar arası yalıtım
 
-1. `oyuncu@pazar.test` ile gir, adres çubuğuna diğer mağazanın kimliğini yaz.
+1. `oyuncu@donanex.test` ile gir, adres çubuğuna diğer mağazanın kimliğini yaz.
 2. Sunucu 403 döner. Mağaza rolü **yalnızca kendi mağazasında** geçerlidir.
 
 ### 7. Yönetim paneli — mağaza başvurusu onayı
@@ -127,9 +127,20 @@ varsa adetler toplanır, stok sınırı aşılmaz).
 
 - **Seq** (8092): her istek yapılandırılmış olarak; `RequestId` ile bir isteğin tüm izi.
   Hata varsa yığın izi burada — kullanıcıya gösterilen yanıtta değil.
-- **RabbitMQ** (8094): `pazar.events` exchange'i, `email` kuyruğu. Sipariş verince mesaj akışı görünür.
+- **RabbitMQ** (8094): `donanex.events` exchange'i, `email` kuyruğu. Sipariş verince mesaj akışı görünür.
 - Olaylar önce `outbox_messages` tablosuna, veriyle **aynı transaction'da** yazılır. Kuyruğu
   durdurup sipariş verirsen olay kaybolmaz; kuyruk dönünce gönderilir.
+
+
+### 10. Tema, CSV ve görsel yükleme
+
+1. Üst menüde sepet ikonunun yanındaki ay/güneş düğmesine bas: site koyu temaya geçer.
+   Sayfayı yenile — tercih korunur. Başka bir sayfaya git, panellere gir: her yerde geçerli.
+2. Mağaza panelinde **Ürünler → CSV ile aktar**: örnek şablonu indir, bir satırın fiyatını
+   bilerek boz, dosyayı seç. Önizlemede bozuk satır kırmızı işaretlenir ve gönderilmez.
+3. **Ürünler → Yeni ürün**: Görsel alanından bir PNG seç. Yüklenir, adres alanı kendiliğinden
+   dolar, önizleme görünür. Bir `.txt` dosyasının adını `.png` yapıp denersen reddedilir —
+   tür baytlardan doğrulanıyor.
 
 ## Demoyu sıfırlama
 

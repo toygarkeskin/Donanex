@@ -15,8 +15,8 @@ const keys = crypto.generateKeyPairSync("rsa", {
 /** Geçerli bir ortam; testler bunun üzerine tek bir değeri bozar. */
 const valid = {
   NODE_ENV: "development",
-  DB_NAME: "pazar",
-  DB_USER: "pazar",
+  DB_NAME: "donanex",
+  DB_USER: "donanex",
   DB_PASSWORD: crypto.randomBytes(18).toString("hex"),
   JWT_PRIVATE_KEY: keys.privateKey.replace(/\n/g, "\n"),
   JWT_PUBLIC_KEY: keys.publicKey.replace(/\n/g, "\n"),
@@ -71,7 +71,7 @@ test("Üretimde güvensiz ayarlar sunucuyu başlatmaz", () => {
 });
 
 test("PUBLIC_URL sondaki eğik çizgiden arındırılır ve issuer olur", () => {
-  const config = loadConfig({ ...valid, PUBLIC_URL: "https://pazar.test/" });
-  assert.equal(config.publicUrl, "https://pazar.test");
-  assert.equal(config.issuer, "https://pazar.test");
+  const config = loadConfig({ ...valid, PUBLIC_URL: "https://donanex.test/" });
+  assert.equal(config.publicUrl, "https://donanex.test");
+  assert.equal(config.issuer, "https://donanex.test");
 });

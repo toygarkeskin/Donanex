@@ -38,7 +38,7 @@ Her yanıtta `X-Request-Id` başlığı vardır; Seq'te aynı numarayla isteğin
 
 - `Origin` ya da `Sec-Fetch-Site` denetimi geçilmelidir (CSRF). Tarayıcı bunu kendiliğinden yapar;
   `curl` ile denerken `-H "Origin: http://localhost:8090"` ekleyin.
-- Sepet uçları, oturumu olmayan ziyaretçi için **HttpOnly `pzr_cart` çerezi** kullanır; ilk sepet
+- Sepet uçları, oturumu olmayan ziyaretçi için **HttpOnly `dnx_cart` çerezi** kullanır; ilk sepet
   isteğinde kendiliğinden verilir. `curl -c` / `-b` ile çerez kavanozu tutun.
 
 ## Hız sınırları
@@ -123,7 +123,8 @@ Her uç izni **`{ storeId }` kapsamıyla** sorar: başka mağazanın kimliği 40
 | `PUT /api/stores/:storeId` | `store:write` |
 | `GET …/products` | `catalog:product:read` |
 | `POST …/products` · `PUT …/products/:productId` · `PATCH …/products/:productId/status` | `catalog:product:write` |
-| `POST …/products/bulk` | `catalog:product:write` (CSV ile toplu içe aktarma) |
+| `POST …/products/bulk` | `catalog:product:write` (CSV ile toplu içe aktarma, en fazla 500 satır) |
+| `POST …/gorseller` | `catalog:product:write` (ürün görseli yükleme) |
 | `DELETE …/products/:productId` | `catalog:product:delete` (siparişte geçen ürün arşivlenir, silinmez) |
 | `GET …/orders` · `GET …/orders/:packageId` | `order:read` |
 | `PATCH …/orders/:packageId/status` · `…/shipping` | `order:fulfil` |
@@ -166,3 +167,31 @@ Bu izinlerin kapsamı `global`'dir: mağazaya bağlı bir rol bunları **asla** 
 |---|---|
 | `GET /api/health` | Süreç ayakta mı (hız sınırı ve oturum çözümü uygulanmaz) |
 | `GET /api/ready` | Veritabanı ve Redis erişilebilir mi |
+
+## Görsel yükleme
+
+`POST /api/stores/:storeId/gorseller`
+
+Gövde **multipart değil, ham ikili veridir**: dosyanın kendisi. `Content-Type` başlığı
+`image/png`, `image/jpeg` ya da `image/webp` olmalıdır.
+
+```js
+await fetch(`/api/stores/${storeId}/gorseller`, {
+  method: "POST",
+  headers: { "Content-Type": file.type, Authorization: `Bearer ${token}` },
+  body: file
+});
+```
+
+Yanıt: `{ imageUrl: "/yuklenen/<32 onaltılık>.png", contentType, size }`
+
+| Kural | Değer |
+|---|---|
+| En büyük boyut | 2 MB |
+| Kabul edilen türler | PNG, JPEG, WebP |
+| Tür denetimi | Dosyanın **ilk baytlarından**; `Content-Type` başlığı tek başına yetmez |
+| Dosya adı | **Sunucu üretir** — istemciden gelen ad hiç kullanılmaz |
+| SVG | Kabul edilmez (içinde script çalışabilir) |
+
+Dönen adres `GET /yuklenen/<ad>` ile herkese açık olarak sunulur ve ürün kaydında
+`imageUrl` alanına yazılabilir.

@@ -5,7 +5,7 @@
 # Tek kullanımlık veritabanı kullanır; gerçek veriye, gerçek SMTP'ye ve
 # çalışan sisteme dokunmaz.
 
-name: pazar-test
+name: donanex-test
 
 services:
   test-db:

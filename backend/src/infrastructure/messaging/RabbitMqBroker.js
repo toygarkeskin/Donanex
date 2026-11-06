@@ -2,7 +2,7 @@
 
 const amqplib = require("amqplib");
 
-const EXCHANGE = "pazar.events";
+const EXCHANGE = "donanex.events";
 
 /**
  * RabbitMQ bağlantısı ve topic exchange.

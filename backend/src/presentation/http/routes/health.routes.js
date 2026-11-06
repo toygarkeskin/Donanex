@@ -8,7 +8,7 @@ function healthRoutes({ queries }) {
 
   // Canlılık: süreç ayakta mı? (Docker healthcheck bunu kullanır)
   router.get("/health", (_req, res) => {
-    res.json({ status: "ok", service: "pazar-api" });
+    res.json({ status: "ok", service: "donanex-api" });
   });
 
   // Hazırlık: bağımlılıklar (veritabanı, önbellek) yanıt veriyor mu?

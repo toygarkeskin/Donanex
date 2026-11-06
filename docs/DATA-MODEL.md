@@ -43,7 +43,7 @@ audit_log ──► users    (actor)
 
 ## Siparişin iki seviyesi
 
-Bu modelin can alıcı yeri burasıdır. Çok satıcılı bir pazarda bir sipariş birden çok mağazaya
+Bu modelin can alıcı yeri burasıdır. Çok satıcılı bir sistemde bir sipariş birden çok mağazaya
 düşebilir; müşteri tek ödeme yapar ama kargoyu her mağaza kendi yönetir.
 
 ```text

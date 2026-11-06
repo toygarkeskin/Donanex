@@ -23,7 +23,7 @@ const copied = ref(false);
  * bu sekme için saklanır. Sunucuda yalnızca özeti vardır.
  */
 onMounted(() => {
-  const stored = sessionStorage.getItem(`pazar.order.${route.params.orderId}`);
+  const stored = sessionStorage.getItem(`donanex.order.${route.params.orderId}`);
   if (stored) saved.value = JSON.parse(stored);
   cart.load().catch(() => {});
 });

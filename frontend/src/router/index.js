@@ -88,6 +88,13 @@ const routes = [
         component: () => import("../views/store/ProductFormView.vue")
       },
       {
+        // ":productId" kuralından ÖNCE gelmeli; yoksa "ice-aktar" bir ürün
+        // numarası sanılır ve düzenleme ekranı açılmaya çalışılır.
+        path: ":storeId/urunler/ice-aktar",
+        name: "store-product-import",
+        component: () => import("../views/store/ProductImportView.vue")
+      },
+      {
         path: ":storeId/urunler/:productId",
         name: "store-product-edit",
         component: () => import("../views/store/ProductFormView.vue")

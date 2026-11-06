@@ -20,7 +20,7 @@ const { RoleCodes } = require("../domain/identity/Role");
 const { slugify } = require("../domain/shared/guards");
 
 /** Demo hesaplarının ortak parolası. Parola kuralını karşılar. */
-const DEMO_PASSWORD = "Pazar2026Demo";
+const DEMO_PASSWORD = "Donanex2026Demo";
 
 const CATEGORIES = [
   "Laptop",
@@ -42,7 +42,7 @@ const STORES = [
     name: "Teknoloji Deposu",
     description:
       "Dizüstü bilgisayarlar ve ekran kartlarında geniş ürün yelpazesi. Tüm ürünler distribütör garantilidir.",
-    owner: { email: "teknoloji@pazar.test", fullName: "Elif Kaya" },
+    owner: { email: "teknoloji@donanex.test", fullName: "Elif Kaya" },
     logo: "/images/markalar/msi.png",
     products: [
       ["GIGABYTE GAMING A16 Dizüstü", "Ryzen 7 260, 16GB DDR5, RTX 5060, 16 inç FHD 165Hz oyuncu dizüstü bilgisayarı.", 67000, 12, "Laptop", image("laptopcard.png")],
@@ -56,7 +56,7 @@ const STORES = [
     key: "oyuncu-dunyasi",
     name: "Oyuncu Dünyası",
     description: "Oyuncu ekipmanları: mekanik klavyeler, yüksek hassasiyetli mouse'lar ve kulaklıklar.",
-    owner: { email: "oyuncu@pazar.test", fullName: "Mert Demir" },
+    owner: { email: "oyuncu@donanex.test", fullName: "Mert Demir" },
     logo: "/images/markalar/razer.png",
     products: [
       ["Logitech G515 TKL Mekanik Klavye", "RGB aydınlatmalı, düşük profilli anahtarlara sahip TKL mekanik klavye.", 5700, 20, "Klavye", image("klavyecard.png")],
@@ -71,7 +71,7 @@ const STORES = [
     key: "komponent-market",
     name: "Komponent Market",
     description: "İşlemci, bellek ve depolama birimlerinde uygun fiyat garantisi.",
-    owner: { email: "komponent@pazar.test", fullName: "Zeynep Arslan" },
+    owner: { email: "komponent@donanex.test", fullName: "Zeynep Arslan" },
     logo: "/images/markalar/intel.png",
     products: [
       ["Intel Core i7-11700KF İşlemci", "8 çekirdek, 16 iş parçacığı, LGA1200 soketli masaüstü işlemci.", 9800, 16, "İşlemci", image("katalog/i7-11700kf.jpg")],
@@ -83,7 +83,7 @@ const STORES = [
     key: "ekran-dunyasi",
     name: "Ekran Dünyası",
     description: "Oyuncu ve profesyonel monitörlerde uzman mağaza. Ölü piksel garantisi.",
-    owner: { email: "ekran@pazar.test", fullName: "Can Yıldız" },
+    owner: { email: "ekran@donanex.test", fullName: "Can Yıldız" },
     logo: "/images/markalar/philips.png",
     products: [
       ["Excalibur 27 inç Oyuncu Monitörü", "165Hz yenileme hızı, 1ms tepki süresi, çerçevesiz tasarım.", 8900, 8, "Monitör", image("katalog/excalibur-monitor-27.jpg")],
@@ -93,8 +93,8 @@ const STORES = [
 ];
 
 const CUSTOMERS = [
-  { email: "musteri@pazar.test", fullName: "Ayşe Yılmaz", phone: "0555 111 22 33" },
-  { email: "ahmet@pazar.test", fullName: "Ahmet Çelik", phone: "0555 444 55 66" }
+  { email: "musteri@donanex.test", fullName: "Ayşe Yılmaz", phone: "0555 111 22 33" },
+  { email: "ahmet@donanex.test", fullName: "Ahmet Çelik", phone: "0555 444 55 66" }
 ];
 
 const ADDRESS = {
@@ -175,7 +175,7 @@ async function seedDemoData({ unitOfWork, passwordHasher, opaqueTokens, ids, clo
     }
 
     /* ---------- mağaza çalışanı (rol ayrımını göstermek için) ---------- */
-    const staff = await createUser({ email: "calisan@pazar.test", fullName: "Burak Şahin" });
+    const staff = await createUser({ email: "calisan@donanex.test", fullName: "Burak Şahin" });
     await repos.roles.assign({
       userId: staff.id,
       roleCode: RoleCodes.STORE_STAFF,
@@ -307,11 +307,11 @@ async function seedDemoData({ unitOfWork, passwordHasher, opaqueTokens, ids, clo
 /** Demo hesaplarını konsola yazar; demoyu gösteren kişi aramak zorunda kalmasın. */
 function printDemoAccounts(config) {
   const rows = [
-    ["Mağaza Sahibi", "teknoloji@pazar.test"],
-    ["Mağaza Sahibi", "oyuncu@pazar.test"],
-    ["Mağaza Çalışanı", "calisan@pazar.test"],
-    ["Müşteri", "musteri@pazar.test"],
-    ["Müşteri", "ahmet@pazar.test"]
+    ["Mağaza Sahibi", "teknoloji@donanex.test"],
+    ["Mağaza Sahibi", "oyuncu@donanex.test"],
+    ["Mağaza Çalışanı", "calisan@donanex.test"],
+    ["Müşteri", "musteri@donanex.test"],
+    ["Müşteri", "ahmet@donanex.test"]
   ];
 
   console.log(

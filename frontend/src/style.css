@@ -22,6 +22,22 @@
   --color-brand-500: #3b6ef0;
   --color-brand-600: #2456d8;
   --color-brand-700: #1d44ae;
+
+  /* Kart, alan ve tablo yüzeyi. Koyu temada bu jeton değişir; bileşenler
+     "bg-white" yerine "bg-surface" kullandığı için tek yerden dönüşür. */
+  --color-surface: #ffffff;
+
+  /*
+   * Her iki temada da KOYU kalan yüzey: vitrin kahramanı ve pencere perdesi.
+   *
+   * Bunlar bilinçli olarak koyu tasarlanmış adacıklardır; "ink" rampasını
+   * kullansalardı koyu temada ters çevrilip beyaz üstüne beyaz yazıya
+   * dönerlerdi. Bu yüzden ayrı belirteçleri var ve aşağıdaki koyu tema
+   * bloğunda yeniden tanımlanmazlar.
+   */
+  --color-night: #1a1e25;
+  --color-night-muted: #b1b8c6;
+  --color-night-accent: #bfd3fe;
 }
 
 @layer base {
@@ -40,13 +56,13 @@
 
 @layer components {
   .card {
-    @apply rounded-xl border border-ink-200 bg-white;
+    @apply rounded-xl border border-ink-200 bg-surface;
   }
   .field-label {
     @apply mb-1.5 block text-sm font-medium text-ink-700;
   }
   .field {
-    @apply w-full rounded-lg border border-ink-300 bg-white px-3 py-2 text-sm placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:bg-ink-100 disabled:text-ink-400;
+    @apply w-full rounded-lg border border-ink-300 bg-surface px-3 py-2 text-sm placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:bg-ink-100 disabled:text-ink-400;
   }
   .field-error {
     @apply mt-1 text-xs text-red-600;
@@ -68,17 +84,17 @@
     @apply bg-brand-600 text-white hover:bg-brand-700;
   }
   .btn-secondary {
-    @apply border border-ink-300 bg-white text-ink-700 hover:bg-ink-50;
+    @apply border border-ink-300 bg-surface text-ink-700 hover:bg-ink-50;
   }
   .btn-danger {
-    @apply border border-red-200 bg-white text-red-700 hover:bg-red-50;
+    @apply border border-red-200 bg-surface text-red-700 hover:bg-red-50;
   }
   .btn-ghost {
     @apply text-ink-600 hover:bg-ink-100;
   }
 
   .table-wrap {
-    @apply overflow-x-auto rounded-xl border border-ink-200 bg-white;
+    @apply overflow-x-auto rounded-xl border border-ink-200 bg-surface;
   }
   .table {
     @apply w-full text-left text-sm;
@@ -92,4 +108,68 @@
   .table tbody tr:last-child td {
     @apply border-b-0;
   }
+}
+
+/*
+ * Koyu tema.
+ *
+ * Bileşenler ham renk kodu kullanmadığı için tema değişimi yalnızca
+ * belirteçleri yeniden tanımlamakla olur: "ink" rampası ters çevrilir,
+ * "surface" koyulaşır. Tek tek bileşen düzenlemek gerekmez.
+ *
+ * Tema <html data-theme="dark"> ile açılır. İlk boyamadan önce uygulanması
+ * için public/tema.js dosyası head içinde çalışır (CSP satır içi script'e
+ * izin vermediğinden ayrı dosyadır).
+ */
+:root[data-theme="dark"] {
+  --color-ink-50: #14171c;
+  --color-ink-100: #1e222a;
+  --color-ink-200: #2b313b;
+  --color-ink-300: #3d4553;
+  --color-ink-400: #7c8697;
+  --color-ink-500: #98a3b4;
+  --color-ink-600: #b7c0cd;
+  --color-ink-700: #cfd6e0;
+  --color-ink-800: #e4e9f0;
+  --color-ink-900: #f4f6f9;
+
+  /* Marka rengi koyu zeminde biraz açılır, soluk tonlar koyulaşır. */
+  --color-brand-50: #172039;
+  --color-brand-100: #1d2b4e;
+  --color-brand-200: #27395f;
+  --color-brand-500: #5b87f5;
+  --color-brand-600: #3b6ef0;
+  --color-brand-700: #5b87f5;
+
+  --color-surface: #1b1f27;
+}
+
+/* Koyu zeminde Tailwind'in sabit kırmızı tonları okunmuyor; yalnızca
+   bu iki bileşende ton kaydırılır. */
+:root[data-theme="dark"] .field-error {
+  @apply text-red-400;
+}
+:root[data-theme="dark"] .btn-danger {
+  @apply border-red-900 text-red-300 hover:bg-red-950;
+}
+
+/* Ürün görselleri çoğunlukla beyaz zeminli PNG; koyu temada parlamasın. */
+:root[data-theme="dark"] img {
+  filter: brightness(0.92);
+}
+
+/* Uyarı kutuları, rozetler ve bildirimler Tailwind'in sabit pastel tonlarını kullanır; koyu zeminde
+   parlak lekeye dönüşmesinler diye zemin koyulaştırılır, yazı açılır. */
+:root[data-theme="dark"] .alert,
+:root[data-theme="dark"] .rozet,
+:root[data-theme="dark"] .bildirim {
+  background-color: color-mix(in srgb, currentColor 12%, var(--color-surface));
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+  filter: brightness(1.35);
+}
+
+/* Rozetlerin halkası (ring) sabit açık tondadır; koyu temada yazının
+   kendi renginden türetilir ki çerçeve kaybolmasın ya da parlamasın. */
+:root[data-theme="dark"] .rozet {
+  --tw-ring-color: color-mix(in srgb, currentColor 40%, transparent);
 }

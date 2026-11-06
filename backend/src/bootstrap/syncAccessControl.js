@@ -136,7 +136,7 @@ function announce({ email, password, generated }, logger) {
     const file = path.join(VAR_DIR, "bootstrap-admin.txt");
     fs.writeFileSync(
       file,
-      `Pazar — ilk kurulum yönetici bilgileri\nOluşturulma: ${new Date().toISOString()}\n\nE-posta: ${email}\nParola : ${password}\n\nBu dosyayı güvenli bir yere taşıyıp silin.\n`,
+      `Donanex — ilk kurulum yönetici bilgileri\nOluşturulma: ${new Date().toISOString()}\n\nE-posta: ${email}\nParola : ${password}\n\nBu dosyayı güvenli bir yere taşıyıp silin.\n`,
       { mode: 0o600 }
     );
     console.log(`  (Aynı bilgi şu dosyaya da yazıldı: ${file})\n`);

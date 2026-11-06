@@ -24,7 +24,10 @@ COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node package.json ./
 COPY --chown=node:node src ./src
 COPY --chown=node:node scripts ./scripts
-RUN mkdir -p /app/var && chown node:node /app/var
+# Klasörler imajda ÖNCEDEN oluşturulur ve node'a verilir. Docker bir named
+# volume'u ilk kez bağlarken imajdaki dizinin sahipliğini kopyalar; klasör
+# imajda yoksa volume root'a ait olarak doğar ve root olmayan süreç yazamaz.
+RUN mkdir -p /app/var/uploads && chown -R node:node /app/var
 
 USER node
 EXPOSE 3000

@@ -139,7 +139,7 @@ test("misafir sepet açabilir, sepet sunucuda tutulur", opts, async () => {
   const added = await guest.post("/api/cart/items", { productId: product.id, quantity: 2 });
   assert.equal(added.status, 201);
   assert.equal(added.data.itemCount, 2);
-  assert.ok(guest.cookies.pzr_cart, "sepet kimliği HttpOnly çerezde taşınır");
+  assert.ok(guest.cookies.dnx_cart, "sepet kimliği HttpOnly çerezde taşınır");
 
   const cart = await guest.get("/api/cart");
   assert.equal(cart.data.items.length, 1);
@@ -204,7 +204,7 @@ test("geçersiz sipariş girdileri reddedilir", opts, async () => {
 
 test("eş zamanlı siparişler stoğu aşamaz", opts, async () => {
   const owner = new Client(app.base);
-  assert.ok((await owner.signIn("teknoloji@pazar.test", DEMO_PASSWORD)).ok);
+  assert.ok((await owner.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
   const me = await owner.get("/api/me");
   const storeId = me.data.stores[0].id;
 
@@ -324,7 +324,7 @@ test("kayıt kuralları ve yinelenen e-posta", opts, async () => {
 });
 
 test("hatalı giriş aynı mesajı döndürür ve oturum açmaz", opts, async () => {
-  const wrongPassword = await new Client(app.base).signIn("musteri@pazar.test", "YanlisParola1");
+  const wrongPassword = await new Client(app.base).signIn("musteri@donanex.test", "YanlisParola1");
   const unknownUser = await new Client(app.base).signIn("hicyok@example.com", "YanlisParola1");
 
   assert.equal(wrongPassword.ok, false);
@@ -336,7 +336,7 @@ test("hatalı giriş aynı mesajı döndürür ve oturum açmaz", opts, async ()
 
 test("yetkilendirme kodu akışı PKCE ile tamamlanır", opts, async () => {
   const client = new Client(app.base);
-  const result = await client.signIn("musteri@pazar.test", DEMO_PASSWORD);
+  const result = await client.signIn("musteri@donanex.test", DEMO_PASSWORD);
 
   assert.ok(result.ok, result.reason);
   assert.ok(result.tokens.access_token);
@@ -344,7 +344,7 @@ test("yetkilendirme kodu akışı PKCE ile tamamlanır", opts, async () => {
   assert.equal(result.tokens.token_type, "Bearer");
   assert.equal(result.state, "test-state", "state geri döner");
   assert.ok(!result.tokens.refresh_token, "yenileme jetonu gövdede dönmez");
-  assert.ok(client.cookies.pzr_rt, "yenileme jetonu HttpOnly çerezdedir");
+  assert.ok(client.cookies.dnx_rt, "yenileme jetonu HttpOnly çerezdedir");
 });
 
 test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => {
@@ -354,12 +354,12 @@ test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => 
   const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
 
   const authorize = await client.get(
-    `/oauth/authorize?response_type=code&client_id=pazar-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+    `/oauth/authorize?response_type=code&client_id=donanex-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
       `&scope=openid&state=s&code_challenge=${challenge}&code_challenge_method=S256`
   );
   const authRequestId = new URL(authorize.headers.get("location")).searchParams.get("auth");
   const signIn = await client.post("/api/auth/sign-in", {
-    email: "musteri@pazar.test",
+    email: "musteri@donanex.test",
     password: DEMO_PASSWORD,
     authRequestId
   });
@@ -369,7 +369,7 @@ test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => 
     grant_type: "authorization_code",
     code,
     redirect_uri: REDIRECT_URI,
-    client_id: "pazar-web",
+    client_id: "donanex-web",
     code_verifier: crypto.randomBytes(48).toString("base64url")
   });
   assert.equal(wrongVerifier.status, 400);
@@ -380,60 +380,60 @@ test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => 
     grant_type: "authorization_code",
     code,
     redirect_uri: REDIRECT_URI,
-    client_id: "pazar-web",
+    client_id: "donanex-web",
     code_verifier: verifier
   });
   assert.ok(retry.status >= 400, "tüketilen kod yeniden kullanılamaz");
 });
 
 test("authorize geçersiz istekleri reddeder", opts, async () => {
-  const base = `/oauth/authorize?response_type=code&client_id=pazar-web&scope=openid&code_challenge_method=S256&code_challenge=${"a".repeat(43)}`;
+  const base = `/oauth/authorize?response_type=code&client_id=donanex-web&scope=openid&code_challenge_method=S256&code_challenge=${"a".repeat(43)}`;
 
   const badRedirect = await anon.get(`${base}&redirect_uri=${encodeURIComponent("https://evil.test/callback")}`);
   assert.equal(badRedirect.status, 400, "kayıtlı olmayan redirect_uri reddedilir");
   assert.equal(badRedirect.headers.get("location"), null, "doğrulanmadan yönlendirme yapılmaz");
 
   const plain = await anon.get(
-    `/oauth/authorize?response_type=code&client_id=pazar-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=openid&code_challenge=x&code_challenge_method=plain`
+    `/oauth/authorize?response_type=code&client_id=donanex-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=openid&code_challenge=x&code_challenge_method=plain`
   );
   assert.equal(plain.status, 400, "düz PKCE kabul edilmez");
 
   const token = await anon.get(
-    `/oauth/authorize?response_type=token&client_id=pazar-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=openid&code_challenge_method=S256&code_challenge=${"a".repeat(43)}`
+    `/oauth/authorize?response_type=token&client_id=donanex-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=openid&code_challenge_method=S256&code_challenge=${"a".repeat(43)}`
   );
   assert.equal(token.status, 400, "örtük akış kapalı");
 
-  const unknownClient = await anon.get(`${base.replace("pazar-web", "uydurma")}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`);
+  const unknownClient = await anon.get(`${base.replace("donanex-web", "uydurma")}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`);
   assert.equal(unknownClient.status, 400);
 });
 
 test("yenileme jetonu döner ve tekrar kullanımı oturumu kapatır", opts, async () => {
   const client = new Client(app.base);
-  assert.ok((await client.signIn("ahmet@pazar.test", DEMO_PASSWORD)).ok);
-  const stolen = client.cookies.pzr_rt;
+  assert.ok((await client.signIn("ahmet@donanex.test", DEMO_PASSWORD)).ok);
+  const stolen = client.cookies.dnx_rt;
 
-  const refreshed = await client.form("/oauth/token", { grant_type: "refresh_token", client_id: "pazar-web" });
+  const refreshed = await client.form("/oauth/token", { grant_type: "refresh_token", client_id: "donanex-web" });
   assert.equal(refreshed.status, 200);
   assert.ok(refreshed.data.access_token);
-  assert.notEqual(client.cookies.pzr_rt, stolen, "yenileme jetonu döndürülür");
+  assert.notEqual(client.cookies.dnx_rt, stolen, "yenileme jetonu döndürülür");
 
   // Çalınan eski jeton kullanılırsa tüm zincir iptal edilir.
   const thief = new Client(app.base);
   const reuse = await thief.form("/oauth/token", {
     grant_type: "refresh_token",
-    client_id: "pazar-web",
+    client_id: "donanex-web",
     refresh_token: stolen
   });
   assert.equal(reuse.status, 401);
 
-  const afterReuse = await client.form("/oauth/token", { grant_type: "refresh_token", client_id: "pazar-web" });
+  const afterReuse = await client.form("/oauth/token", { grant_type: "refresh_token", client_id: "donanex-web" });
   assert.equal(afterReuse.status, 401, "hırsızlık tespit edilince aile iptal edilir");
 });
 
 test("çıkış oturumu sunucuda iptal eder", opts, async () => {
   const client = new Client(app.base);
-  await client.signIn("musteri@pazar.test", DEMO_PASSWORD);
-  const stolenRefresh = client.cookies.pzr_rt;
+  await client.signIn("musteri@donanex.test", DEMO_PASSWORD);
+  const stolenRefresh = client.cookies.dnx_rt;
 
   assert.equal((await client.get("/api/me")).status, 200);
   await client.post("/api/auth/sign-out");
@@ -441,7 +441,7 @@ test("çıkış oturumu sunucuda iptal eder", opts, async () => {
   const thief = new Client(app.base);
   const reuse = await thief.form("/oauth/token", {
     grant_type: "refresh_token",
-    client_id: "pazar-web",
+    client_id: "donanex-web",
     refresh_token: stolenRefresh
   });
   assert.equal(reuse.status, 401, "çalınmış jeton çıkıştan sonra işe yaramaz");
@@ -461,7 +461,7 @@ test("jeton olmadan ve sahte jetonla korunan uçlara girilemez", opts, async () 
 
 test("müşteri yönetim ve mağaza panellerine giremez", opts, async () => {
   const customer = new Client(app.base);
-  assert.ok((await customer.signIn("musteri@pazar.test", DEMO_PASSWORD)).ok);
+  assert.ok((await customer.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
 
   const me = await customer.get("/api/me");
   assert.deepEqual(me.data.roles, ["CUSTOMER"]);
@@ -480,7 +480,7 @@ test("müşteri yönetim ve mağaza panellerine giremez", opts, async () => {
 
 test("mağaza sahibi yalnızca kendi mağazasını yönetir", opts, async () => {
   const owner = new Client(app.base);
-  assert.ok((await owner.signIn("teknoloji@pazar.test", DEMO_PASSWORD)).ok);
+  assert.ok((await owner.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
 
   const me = await owner.get("/api/me");
   assert.deepEqual(me.data.roles, ["CUSTOMER", "STORE_OWNER"].filter((role) => me.data.roles.includes(role)));
@@ -510,7 +510,7 @@ test("mağaza sahibi yalnızca kendi mağazasını yönetir", opts, async () => 
 
 test("mağaza çalışanı ürün işler ama mağaza ayarlarına dokunamaz", opts, async () => {
   const staff = new Client(app.base);
-  assert.ok((await staff.signIn("calisan@pazar.test", DEMO_PASSWORD)).ok);
+  assert.ok((await staff.signIn("calisan@donanex.test", DEMO_PASSWORD)).ok);
 
   const me = await staff.get("/api/me");
   const storeId = me.data.stores[0].id;
@@ -525,7 +525,7 @@ test("mağaza çalışanı ürün işler ama mağaza ayarlarına dokunamaz", opt
 
 test("mağaza ürün yaşam döngüsünü yönetir", opts, async () => {
   const owner = new Client(app.base);
-  await owner.signIn("oyuncu@pazar.test", DEMO_PASSWORD);
+  await owner.signIn("oyuncu@donanex.test", DEMO_PASSWORD);
   const storeId = (await owner.get("/api/me")).data.stores[0].id;
 
   const body = {
@@ -563,7 +563,7 @@ test("mağaza ürün yaşam döngüsünü yönetir", opts, async () => {
 
 test("satılmış ürün silinmez, arşivlenir", opts, async () => {
   const owner = new Client(app.base);
-  await owner.signIn("oyuncu@pazar.test", DEMO_PASSWORD);
+  await owner.signIn("oyuncu@donanex.test", DEMO_PASSWORD);
   const storeId = (await owner.get("/api/me")).data.stores[0].id;
 
   const created = await owner.post(`/api/stores/${storeId}/products`, {
@@ -584,7 +584,7 @@ test("satılmış ürün silinmez, arşivlenir", opts, async () => {
 
 test("CSV toplu içe aktarma hep ya da hiç çalışır", opts, async () => {
   const owner = new Client(app.base);
-  await owner.signIn("komponent@pazar.test", DEMO_PASSWORD);
+  await owner.signIn("komponent@donanex.test", DEMO_PASSWORD);
   const storeId = (await owner.get("/api/me")).data.stores[0].id;
   const before = (await owner.get(`/api/stores/${storeId}/products`)).data.total;
 
@@ -604,7 +604,7 @@ test("CSV toplu içe aktarma hep ya da hiç çalışır", opts, async () => {
 
 test("mağaza siparişi hazırlar, kargolar ve müşteri bilgilendirilir", opts, async () => {
   const owner = new Client(app.base);
-  await owner.signIn("oyuncu@pazar.test", DEMO_PASSWORD);
+  await owner.signIn("oyuncu@donanex.test", DEMO_PASSWORD);
   const storeId = (await owner.get("/api/me")).data.stores[0].id;
 
   const products = (await owner.get(`/api/stores/${storeId}/products?status=active`)).data.items;
@@ -669,7 +669,7 @@ test("müşteri profilini, adresini ve siparişlerini yönetir", opts, async () 
 
   // Başkasının adresi silinemez.
   const other = new Client(app.base);
-  await other.signIn("musteri@pazar.test", DEMO_PASSWORD);
+  await other.signIn("musteri@donanex.test", DEMO_PASSWORD);
   const otherAddress = await other.post("/api/me/addresses", {
     title: "Ev",
     fullName: "Müşteri",
@@ -685,12 +685,12 @@ test("müşteri yalnızca kendi siparişini görür ve iptal eder", opts, async 
   const product = await firstProduct(2);
 
   const buyer = new Client(app.base);
-  await buyer.signIn("musteri@pazar.test", DEMO_PASSWORD);
+  await buyer.signIn("musteri@donanex.test", DEMO_PASSWORD);
   await buyer.post("/api/cart/items", { productId: product.id, quantity: 1 });
   const order = await buyer.post("/api/orders", checkout());
 
   const other = new Client(app.base);
-  await other.signIn("ahmet@pazar.test", DEMO_PASSWORD);
+  await other.signIn("ahmet@donanex.test", DEMO_PASSWORD);
 
   assert.equal((await other.get(`/api/me/orders/${order.data.orderId}`)).status, 404, "başkasının siparişi görünmez");
   assert.equal((await other.post(`/api/me/orders/${order.data.orderId}/cancel`)).status, 404);
@@ -925,7 +925,7 @@ test("hız sınırı hatalı girişleri durdurur", opts, async () => {
 
   for (let attempt = 0; attempt < 13; attempt++) {
     const response = await limited.post("/api/auth/sign-in", {
-      email: "musteri@pazar.test",
+      email: "musteri@donanex.test",
       password: "YanlisParola1"
     });
     statuses.push(response.status);
@@ -938,4 +938,70 @@ test("hız sınırı hatalı girişleri durdurur", opts, async () => {
 test("her yanıt istek numarası taşır", opts, async () => {
   const response = await anon.get("/api/products");
   assert.match(response.headers.get("x-request-id"), /[0-9a-f-]{36}/);
+});
+
+/* ------------------------------------------------------------------ */
+/* Ürün görseli yükleme                                                */
+/* ------------------------------------------------------------------ */
+
+// 1x1 saydam PNG — gerçek sihirli sayıyı taşıyan en küçük geçerli dosya.
+const GECERLI_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64"
+);
+
+test("yüklenen görsel saklanır, sunulur ve ürüne bağlanabilir", opts, async () => {
+  const owner = new Client(app.base);
+  assert.ok((await owner.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await owner.get("/api/me")).data.stores[0].id;
+
+  const yukleme = await owner.upload(`/api/stores/${storeId}/gorseller`, GECERLI_PNG, "image/png");
+  assert.equal(yukleme.status, 201);
+  assert.match(
+    yukleme.data.imageUrl,
+    /^\/yuklenen\/[0-9a-f]{32}\.png$/,
+    "dosya adı sunucuda üretilir; kullanıcıdan gelen hiçbir şey yola girmez"
+  );
+
+  // Görsel oturum olmadan da açılabilmeli: vitrinde <img src> ile çağrılıyor.
+  const gorsel = await fetch(`${app.base}${yukleme.data.imageUrl}`);
+  assert.equal(gorsel.status, 200);
+  assert.equal(gorsel.headers.get("content-type"), "image/png");
+  assert.equal(gorsel.headers.get("x-content-type-options"), "nosniff");
+
+  const urun = await owner.post(`/api/stores/${storeId}/products`, {
+    name: "Görselli Test Ürünü",
+    description: "Yüklenen görselle oluşturuldu.",
+    price: "1234.50",
+    stock: 3,
+    imageUrl: yukleme.data.imageUrl
+  });
+  assert.equal(urun.status, 201, "yüklenen adres ürün kaydında kabul edilir");
+});
+
+test("görsel yükleme sahte dosyayı ve yabancı mağazayı reddeder", opts, async () => {
+  const owner = new Client(app.base);
+  assert.ok((await owner.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await owner.get("/api/me")).data.stores[0].id;
+
+  // "image/png" diyor ama içerik HTML: sihirli sayı tutmadığı için reddedilir.
+  const sahte = await owner.upload(
+    `/api/stores/${storeId}/gorseller`,
+    Buffer.from("<script>alert(1)</script>", "utf8"),
+    "image/png"
+  );
+  assert.equal(sahte.status, 400, "içerik türü baytlardan doğrulanır, başlıktan değil");
+
+  // İzin verilmeyen tür kapıda durdurulur.
+  const metin = await owner.upload(`/api/stores/${storeId}/gorseller`, Buffer.from("merhaba"), "text/plain");
+  assert.equal(metin.status, 415);
+
+  // Başka mağazanın numarasıyla yükleme yapılamaz.
+  const yabanci = (await anon.get("/api/storefront/stores")).data.items.find((store) => store.id !== storeId);
+  const izinsiz = await owner.upload(`/api/stores/${yabanci.id}/gorseller`, GECERLI_PNG, "image/png");
+  assert.equal(izinsiz.status, 403);
+
+  // Uydurma dosya adı diske hiç gitmez.
+  const yok = await fetch(`${app.base}/yuklenen/..%2F..%2Fetc%2Fpasswd`);
+  assert.equal(yok.status, 404);
 });

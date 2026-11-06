@@ -8,6 +8,9 @@
  * makinede birim testleri yine de çalışır.
  */
 const crypto = require("crypto");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 const { createPool, waitForDatabase } = require("../../src/infrastructure/persistence/postgres/pool");
 const { runMigrations } = require("../../src/infrastructure/persistence/postgres/migrate");
@@ -23,7 +26,7 @@ const { renderEmail } = require("../../src/infrastructure/mail/templates");
 const enabled = Boolean(process.env.TEST_DB_HOST);
 const skip = enabled ? false : "TEST_DB_HOST tanımlı değil";
 
-const ADMIN_EMAIL = "admin@pazar.test";
+const ADMIN_EMAIL = "admin@donanex.test";
 const ADMIN_PASSWORD = "Yonetici-Test-2026";
 const REDIRECT_URI = "http://localhost:8090/auth/callback";
 
@@ -82,6 +85,8 @@ async function startHarness() {
     cookieSecure: false,
     paymentsMode: "simulated",
     seedDemoData: true,
+    // Her koşu kendi geçici klasörüne yazar; testler birbirinin dosyasını görmez.
+    uploadDir: fs.mkdtempSync(path.join(os.tmpdir(), "donanex-yukleme-")),
     db: {
       host: process.env.TEST_DB_HOST,
       port: Number(process.env.TEST_DB_PORT || 5432),
@@ -225,6 +230,33 @@ class Client {
     return { status: response.status, data, headers: response.headers };
   }
 
+  /* Ham ikili gövde — görsel yükleme ucu multipart değil, dosyanın kendisini bekler. */
+  async upload(path, buffer, contentType) {
+    const cookie = Object.entries(this.cookies)
+      .map(([name, value]) => `${name}=${value}`)
+      .join("; ");
+
+    const response = await fetch(`${this.base}${path}`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "Content-Type": contentType,
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {})
+      },
+      body: buffer
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text.slice(0, 200) };
+    }
+    return { status: response.status, data, headers: response.headers };
+  }
+
   get(path, headers) {
     return this.request("GET", path, undefined, headers);
   }
@@ -254,7 +286,7 @@ class Client {
     const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
 
     const authorize = await this.get(
-      `/oauth/authorize?response_type=code&client_id=pazar-web` +
+      `/oauth/authorize?response_type=code&client_id=donanex-web` +
         `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
         `&scope=${encodeURIComponent("openid profile email shop store:manage admin")}` +
         `&state=test-state&code_challenge=${challenge}&code_challenge_method=S256`
@@ -276,7 +308,7 @@ class Client {
       grant_type: "authorization_code",
       code: url.searchParams.get("code"),
       redirect_uri: REDIRECT_URI,
-      client_id: "pazar-web",
+      client_id: "donanex-web",
       code_verifier: verifier
     });
     if (token.status !== 200) return { ok: false, reason: JSON.stringify(token.data) };

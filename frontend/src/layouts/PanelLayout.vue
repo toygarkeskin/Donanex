@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import ThemeToggle from "../components/ThemeToggle.vue";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -44,11 +45,11 @@ async function signOut() {
 <template>
   <div class="flex min-h-screen bg-ink-100">
     <aside
-      class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full border-r border-ink-200 bg-white transition-transform lg:static lg:translate-x-0"
+      class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full border-r border-ink-200 bg-surface transition-transform lg:static lg:translate-x-0"
       :class="{ 'translate-x-0': sidebarOpen }"
     >
       <div class="flex h-16 items-center gap-2 border-b border-ink-200 px-5">
-        <RouterLink :to="{ name: 'home' }" class="text-base font-bold text-ink-900">🛒 Pazar</RouterLink>
+        <RouterLink :to="{ name: 'home' }" class="text-base font-bold text-ink-900">💻 Donanex</RouterLink>
       </div>
 
       <div class="px-5 py-4">
@@ -104,14 +105,15 @@ async function signOut() {
       </div>
     </aside>
 
-    <div v-if="sidebarOpen" class="fixed inset-0 z-30 bg-ink-900/40 lg:hidden" @click="sidebarOpen = false" />
+    <div v-if="sidebarOpen" class="fixed inset-0 z-30 bg-night/40 lg:hidden" @click="sidebarOpen = false" />
 
     <div class="flex min-w-0 flex-1 flex-col">
-      <header class="flex h-16 items-center gap-3 border-b border-ink-200 bg-white px-4">
+      <header class="flex h-16 items-center gap-3 border-b border-ink-200 bg-surface px-4">
         <button type="button" class="btn-ghost lg:hidden" aria-label="Menü" @click="sidebarOpen = true">☰</button>
         <p class="truncate text-sm font-semibold text-ink-800">{{ title }}</p>
         <div class="ml-auto flex items-center gap-2">
           <span class="hidden text-sm text-ink-500 sm:inline">{{ auth.displayName }}</span>
+          <ThemeToggle />
           <button type="button" class="btn-secondary" @click="signOut">Çıkış</button>
         </div>
       </header>

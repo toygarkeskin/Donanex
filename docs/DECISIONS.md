@@ -48,7 +48,7 @@ askıya alma önbelleği **siler** — değişiklik anında geçerli olur.
 
 ## 5. Siparişin iki seviyesi: `orders` → `order_packages`
 
-Çok satıcılı bir pazarda bir sepet birden çok mağazaya düşer. Tek seviyeli bir sipariş modelinde
+Çok satıcılı bir sistemde bir sepet birden çok mağazaya düşer. Tek seviyeli bir sipariş modelinde
 "sipariş kargoya verildi" ifadesi anlamsızdır: mağazalardan biri vermiş, öbürü vermemiş olabilir.
 
 Ödeme ve tutar `orders`'ta, **kargo ve hazırlık durumu paket üzerindedir**. Siparişin genel durumu
@@ -224,3 +224,56 @@ tanımlıdır; ilk yük küçük kalır.
 
 Rotalardaki rol korumaları **kullanım kolaylığı** içindir, güvenlik değildir: asıl denetim
 sunucudadır.
+
+## 25. Koyu tema belirteçle, bileşenle değil
+
+Her bileşene `dark:` varyantı yazmak 39 dosyaya dokunmak ve her yeni ekranda unutulma riski
+demekti. Bunun yerine renkler zaten tek yerdeydi: `@theme` belirteçleri.
+
+Koyu tema `ink` rampasını ters çevirip `surface` belirtecini koyulaştırır — bileşenlerin hiçbiri
+değişmez. Tek şart: bileşen ham renk yazmaz. Bu yüzden şablonlardaki 11 `bg-white` kullanımı
+`bg-surface` ile değiştirildi.
+
+**Tercih tarayıcıda durur**, sunucuda değil: hesaba bağlı bir ayar değil, cihaza ait bir görünüm
+tercihidir. İlk ziyarette işletim sisteminin tercihi (`prefers-color-scheme`) kullanılır.
+
+**Ekran titremesi** (`flash of wrong theme`) için tema, uygulama yüklenmeden önce uygulanmalıdır.
+Katı CSP satır içi script'e izin vermediğinden bu iş ayrı bir dosyadadır (`public/tema.js`).
+CSP'yi gevşetmek yerine dosyayı ayırmak tercih edildi.
+
+## 26. CSV içe aktarma tarayıcıda ayrıştırılır
+
+Sunucu uçtan **JSON satır dizisi** bekler, ham CSV değil. Dosyayı tarayıcı okur, ayrıştırır,
+normalleştirir ve kullanıcıya önizleme gösterir.
+
+Neden: kullanıcı neyi göndereceğini **göndermeden önce** görür; hatalı satır sunucuya hiç gitmez
+ve "500 satırın 3'ü bozuk" durumunda kullanıcı hangi satırın neden bozuk olduğunu tek bakışta
+anlar. Ayrıca sunucuya CSV ayrıştırıcı bağımlılığı girmez.
+
+Ayraç otomatik bulunur (Türkçe Excel `;` yazar) ve fiyat `1.299,90` biçiminden `1299.90`'a
+çevrilir — ama çevrilmiş hali önizlemede gösterilir, sessizce yapılmaz.
+
+İçe aktarılan ürünler **taslak** olarak eklenir: yanlış bir dosya 500 ürünü birden vitrine
+düşürmesin.
+
+## 27. Görsel yükleme multipart değil, ham gövde
+
+Tek dosya için multipart hem fazladan bir ayrıştırıcı bağımlılığı (`multer`) hem de fazladan bir
+saldırı yüzeyi demekti. Tarayıcı `File` nesnesini doğrudan gövdeye koyar, türü `Content-Type` ile
+bildirir; sunucu `express.raw` ile okur.
+
+Güvenlik kararları:
+
+- **Dosya adı kullanıcıdan gelmez.** Ad sunucuda üretilir (16 rastgele bayt + allowlist'ten
+  uzantı). Yol çıkışı, özel karakter ve üzerine yazma saldırılarını *temizleyerek* değil,
+  girdiyi hiç kullanmayarak kapatır.
+- **Tür baytlardan doğrulanır.** `Content-Type` istemcinin iddiasıdır; sihirli sayı gerçeği
+  söyler. "image/png" diye gelen bir HTML dosyası reddedilir.
+- **SVG kabul edilmez.** İçinde script çalışabilir; görsel ihtiyacı için gerekli değil.
+- **Okurken ad yeniden denetlenir.** Yazarken kontrol etmek tek başına yetmez; depodan okuma
+  ayrı bir kapıdır.
+- Sunulan dosyaya `nosniff`, `Content-Disposition: inline` ve kendi `sandbox` CSP'si eklenir:
+  bir şey sızsa bile tarayıcıda çalışmaz.
+
+**Eksik kalan:** silinen ürünün görseli diskte kalır. Periyodik temizlik işi yazılmadı; disk
+kullanımı zamanla artar. [SECURITY.md](SECURITY.md) içinde not edildi.

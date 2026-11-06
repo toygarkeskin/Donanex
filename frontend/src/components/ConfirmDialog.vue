@@ -14,7 +14,7 @@ const emit = defineEmits(["confirm", "cancel"]);
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-40 flex items-center justify-center bg-ink-900/40 p-4"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-night/40 p-4"
       role="dialog"
       aria-modal="true"
       @click.self="emit('cancel')"

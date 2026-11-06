@@ -48,9 +48,9 @@ aynı kodla sınırsız deneme yapabilirdi.
 | Jeton | Biçim | Ömür | Nerede durur |
 |---|---|---|---|
 | Erişim (access) | JWT, **RS256** | 15 dk | Yalnızca tarayıcı belleğinde (Pinia) |
-| Yenileme (refresh) | Opak, 32 bayt | 14 gün | **HttpOnly** çerez (`pzr_rt`, SameSite=Strict) |
+| Yenileme (refresh) | Opak, 32 bayt | 14 gün | **HttpOnly** çerez (`dnx_rt`, SameSite=Strict) |
 | Kimlik (id_token) | JWT, RS256 | 15 dk | İstemcide, `openid` istendiğinde |
-| SSO oturumu | Opak | 14 gün | HttpOnly çerez (`pzr_sso`, SameSite=Lax) |
+| SSO oturumu | Opak | 14 gün | HttpOnly çerez (`dnx_sso`, SameSite=Lax) |
 | Yetkilendirme kodu | Opak | 2 dk | Yalnızca özeti veritabanında |
 
 **Erişim jetonu neden çerezde değil?** Çerezde olsaydı her isteğe kendiliğinden eklenir ve CSRF
@@ -77,7 +77,7 @@ halde geri alma iptali de silerdi.
 {
   "iss": "http://localhost:8090",
   "sub": "<kullanıcı id>",
-  "aud": "pazar-web",
+  "aud": "donanex-web",
   "exp": 1793900000, "iat": 1793899100, "jti": "…",
   "scope": "openid profile email shop store:manage admin",
   "sid": "<oturum id>",

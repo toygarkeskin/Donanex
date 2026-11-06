@@ -1,8 +1,8 @@
 {
-  "name": "pazar-api",
+  "name": "donanex-api",
   "version": "1.0.0",
   "private": true,
-  "description": "Çok satıcılı pazar yeri API'si (Clean Architecture + CQRS, OAuth 2.0 / OIDC)",
+  "description": "Çok satıcılı teknoloji mağazası API'si (Clean Architecture + CQRS, OAuth 2.0 / OIDC)",
   "main": "src/main.js",
   "type": "commonjs",
   "engines": {

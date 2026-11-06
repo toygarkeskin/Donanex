@@ -37,6 +37,9 @@ function loadConfig(env = process.env) {
     cookieSecure: flag(env.COOKIE_SECURE, isProduction),
     paymentsMode: env.PAYMENTS_MODE || "simulated",
     seedDemoData: flag(env.SEED_DEMO_DATA, false),
+    // Yüklenen ürün görsellerinin yeri. Konteynerde kalıcı bir volume;
+    // yerel çalışmada proje altındaki var/ klasörü (git tarafından yok sayılır).
+    uploadDir: env.UPLOAD_DIR || "./var/uploads",
 
     db: Object.freeze({
       host: env.DB_HOST || "127.0.0.1",
@@ -68,11 +71,11 @@ function loadConfig(env = process.env) {
       secure: flag(env.SMTP_SECURE, false),
       user: env.SMTP_USER || "",
       pass: env.SMTP_PASS || "",
-      from: env.SMTP_FROM || "Pazar <bildirim@pazar.test>"
+      from: env.SMTP_FROM || "Donanex <bildirim@donanex.test>"
     }),
 
     bootstrapAdmin: Object.freeze({
-      email: env.BOOTSTRAP_ADMIN_EMAIL || "admin@pazar.test",
+      email: env.BOOTSTRAP_ADMIN_EMAIL || "admin@donanex.test",
       password: env.BOOTSTRAP_ADMIN_PASSWORD || ""
     })
   });

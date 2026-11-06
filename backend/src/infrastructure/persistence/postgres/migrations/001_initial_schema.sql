@@ -1,4 +1,4 @@
--- Pazar — ilk şema.
+-- Donanex — ilk şema.
 --
 -- Kurallar:
 --  * Para her zaman BIGINT kuruş olarak saklanır; NUMERIC yuvarlama sürprizi olmaz.

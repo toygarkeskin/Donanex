@@ -45,8 +45,8 @@ const sections = [
   ["Veritabanı", {
     DB_HOST: "127.0.0.1",
     DB_PORT: "5432",
-    DB_NAME: "pazar",
-    DB_USER: "pazar",
+    DB_NAME: "donanex",
+    DB_USER: "donanex",
     DB_PASSWORD: secret(24)
   }],
   ["Jetonlar (RS256 imza anahtarı ve jeton özeti gizli değeri)", {
@@ -65,7 +65,7 @@ const sections = [
     COOKIE_SECURE: "false"
   }],
   ["Kuyruk", {
-    RABBITMQ_USER: "pazar",
+    RABBITMQ_USER: "donanex",
     RABBITMQ_PASSWORD: secret(24)
   }],
   ["Günlükler", { LOG_LEVEL: "info", SEQ_API_KEY: "" }],
@@ -75,10 +75,10 @@ const sections = [
     SMTP_SECURE: "false",
     SMTP_USER: "",
     SMTP_PASS: "",
-    SMTP_FROM: "Pazar <bildirim@pazar.test>"
+    SMTP_FROM: "Donanex <bildirim@donanex.test>"
   }],
   ["İlk kurulum — parola boşsa rastgele üretilir ve günlüğe yazılır", {
-    BOOTSTRAP_ADMIN_EMAIL: "admin@pazar.test",
+    BOOTSTRAP_ADMIN_EMAIL: "admin@donanex.test",
     BOOTSTRAP_ADMIN_PASSWORD: "",
     SEED_DEMO_DATA: "true"
   }],

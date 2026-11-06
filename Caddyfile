@@ -1,0 +1,40 @@
+# Donanex — TLS sonlandırma.
+#
+# Caddy sertifikayı Let's Encrypt'ten KENDİSİ alır ve süresi dolmadan yeniler.
+# Tek koşul: 80 ve 443 portlarının internete açık olması ve DOMAIN'in bu
+# sunucunun IP'sine çözülmesi. Sertifika dosyası kopyalamak gerekmez.
+#
+# HTTP'den HTTPS'ye yönlendirme Caddy'nin varsayılan davranışıdır; ayrıca
+# yazılmaz. 80 portuna gelen istek 308 ile HTTPS'e taşınır.
+
+{
+	# Sertifika uyarıları buraya gider (süresi dolmak üzere, yenileme hatası).
+	email {$ACME_EMAIL}
+
+	# Üretimde kapalı tutun. Açarsanız Let's Encrypt'in test ortamı kullanılır:
+	# sertifika tarayıcıda geçersiz görünür ama hız sınırına takılmazsınız.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# HSTS: tarayıcı bir yıl boyunca bu siteye yalnızca HTTPS ile gitsin.
+	#
+	# preload YOK — bilinçli. Preload listesine girmek geri dönüşü aylar alan
+	# bir karardır; alt alan adlarınızın tamamı HTTPS olmadan eklemeyin.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Sunucu sürümünü sızdırmayalım.
+		-Server
+	}
+
+	# Statik dosyalar ve API'nin tamamı nginx'e gider; yönlendirme kuralları
+	# orada tanımlı (frontend/nginx/default.conf).
+	reverse_proxy web:8080 {
+		# nginx ve API'nin "istek HTTPS'ti" bilgisine ihtiyacı var: güvenli
+		# çerezler ve PUBLIC_URL denetimi buna bakar.
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+}

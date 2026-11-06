@@ -35,7 +35,7 @@ onMounted(() => {
   // Ödeme ekranı takip kodunu bu sekmede bırakmış olabilir.
   for (let i = 0; i < sessionStorage.length; i++) {
     const key = sessionStorage.key(i);
-    if (!key?.startsWith("pazar.order.")) continue;
+    if (!key?.startsWith("donanex.order.")) continue;
     const saved = JSON.parse(sessionStorage.getItem(key));
     if (!form.orderNumber || saved.orderNumber === form.orderNumber) {
       form.orderNumber = saved.orderNumber;

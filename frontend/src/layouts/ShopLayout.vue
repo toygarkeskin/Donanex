@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { RouterLink, RouterView, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useCartStore } from "../stores/cart";
+import ThemeToggle from "../components/ThemeToggle.vue";
 
 const auth = useAuthStore();
 const cart = useCartStore();
@@ -34,10 +35,10 @@ async function signOut() {
 
 <template>
   <div class="flex min-h-screen flex-col">
-    <header class="sticky top-0 z-30 border-b border-ink-200 bg-white/95 backdrop-blur">
+    <header class="sticky top-0 z-30 border-b border-ink-200 bg-surface/95 backdrop-blur">
       <div class="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4">
         <RouterLink :to="{ name: 'home' }" class="flex items-center gap-2 text-lg font-bold text-ink-900">
-          <span aria-hidden="true">🛒</span> Pazar
+          <span aria-hidden="true">💻</span> Donanex
         </RouterLink>
 
         <nav class="hidden flex-1 items-center gap-1 md:flex" aria-label="Ana menü">
@@ -67,6 +68,8 @@ async function signOut() {
             </span>
           </RouterLink>
 
+          <ThemeToggle />
+
           <div v-if="auth.isSignedIn" class="relative">
             <button type="button" class="btn-secondary" :aria-expanded="accountOpen" @click="accountOpen = !accountOpen">
               <span aria-hidden="true">👤</span>
@@ -75,7 +78,7 @@ async function signOut() {
 
             <div
               v-if="accountOpen"
-              class="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-xl border border-ink-200 bg-white py-1 shadow-lg"
+              class="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-xl border border-ink-200 bg-surface py-1 shadow-lg"
               @click="accountOpen = false"
             >
               <RouterLink :to="{ name: 'account-orders' }" class="block px-4 py-2 text-sm hover:bg-ink-50">
@@ -115,7 +118,7 @@ async function signOut() {
               <hr class="my-1 border-ink-200" />
               <button
                 type="button"
-                class="block w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50"
+                class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-ink-100"
                 @click="signOut"
               >
                 Çıkış yap
@@ -154,11 +157,11 @@ async function signOut() {
       <RouterView />
     </main>
 
-    <footer class="border-t border-ink-200 bg-white">
+    <footer class="border-t border-ink-200 bg-surface">
       <div class="mx-auto grid max-w-7xl gap-8 px-4 py-10 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <p class="text-base font-bold text-ink-900">🛒 Pazar</p>
-          <p class="mt-2 text-ink-500">Çok satıcılı pazar yeri. Onlarca mağaza, tek sepet.</p>
+          <p class="text-base font-bold text-ink-900">💻 Donanex</p>
+          <p class="mt-2 text-ink-500">Çok satıcılı teknoloji mağazası. Onlarca mağaza, tek sepet.</p>
         </div>
         <div>
           <p class="font-semibold text-ink-800">Alışveriş</p>
@@ -185,7 +188,7 @@ async function signOut() {
         </div>
       </div>
       <p class="border-t border-ink-200 px-4 py-4 text-center text-xs text-ink-400">
-        Pazar — demo ortamı. Ödemeler benzetimdir, gerçek para hareketi olmaz.
+        Donanex — demo ortamı. Ödemeler benzetimdir, gerçek para hareketi olmaz.
       </p>
     </footer>
   </div>

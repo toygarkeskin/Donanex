@@ -30,7 +30,7 @@ async function start() {
     process.exit(1);
   }
 
-  const logger = new SeqLogger({ ...config.logging, service: "pazar-worker" });
+  const logger = new SeqLogger({ ...config.logging, service: "donanex-worker" });
   const pool = createPool({ ...config.db, poolSize: 5 });
   const cache = new RedisCache(config.redisUrl, logger);
 

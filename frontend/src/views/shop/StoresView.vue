@@ -31,7 +31,7 @@ onMounted(load);
 
 <template>
   <div>
-    <PageHeader title="Mağazalar" description="Pazar'da satış yapan onaylı mağazalar." />
+    <PageHeader title="Mağazalar" description="Donanex'da satış yapan onaylı mağazalar." />
 
     <div class="mb-6 max-w-md">
       <label for="store-search" class="sr-only">Mağaza ara</label>

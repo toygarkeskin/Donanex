@@ -32,7 +32,7 @@ async function submit() {
   <div>
     <PageHeader
       title="Mağaza aç"
-      description="Pazar'da satış yapmak için başvurun. Yönetici onayından sonra ürün ekleyebilirsiniz."
+      description="Donanex'da satış yapmak için başvurun. Yönetici onayından sonra ürün ekleyebilirsiniz."
     />
 
     <AlertBox v-if="auth.hasStorePanel" tone="success" class="mb-6" title="Mağazanız var">

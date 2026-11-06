@@ -1,0 +1,58 @@
+# Üretim katmanı — HTTPS ile yayın.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Ne değişir:
+#   · Önüne Caddy konur; sertifikayı Let's Encrypt'ten kendisi alır ve yeniler.
+#   · 80 ve 443 dışarı açılır, web konteynerinin kendi portu KAPANIR —
+#     siteye yalnızca TLS üzerinden girilir.
+#   · Gözlem arayüzleri (Seq, Mailpit, RabbitMQ) dışarı hiç açılmaz.
+#
+# Önce .env.production.example dosyasına bakın: DOMAIN, ACME_EMAIL,
+# COOKIE_SECURE=true ve PUBLIC_URL=https://... tanımlı olmalıdır.
+
+services:
+  proxy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      web: {condition: service_started}
+    environment:
+      DOMAIN: ${DOMAIN:?alan adınızı .env içinde tanımlayın}
+      ACME_EMAIL: ${ACME_EMAIL:?sertifika uyarıları için bir e-posta adresi gerekli}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Sertifikalar burada durur. Bu volume silinirse Caddy yeniden sertifika
+      # ister; Let's Encrypt'in haftalık sınırına takılmamak için saklayın.
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    # Site artık doğrudan değil, Caddy üzerinden açılır.
+    ports: !reset []
+
+  # Gözlem arayüzleri yereldeydi; üretimde hiç yayınlanmaz.
+  # Erişmek için sunucuya SSH tüneli açın:
+  #   ssh -L 8092:localhost:8092 kullanici@sunucu
+  logs:
+    ports: !reset []
+  mail:
+    ports: !reset []
+  queue:
+    ports: !reset []
+
+volumes:
+  caddy-data:
+  caddy-config:
