@@ -2,28 +2,47 @@
 
 import { defineContext } from "../shared/registry";
 
+import * as AddToCart from "./commands/AddToCart";
+import * as UpdateCartItem from "./commands/UpdateCartItem";
+import * as RemoveFromCart from "./commands/RemoveFromCart";
+import * as ClearCart from "./commands/ClearCart";
+import * as PlaceOrder from "./commands/PlaceOrder";
+import * as ProcessPayment from "./commands/ProcessPayment";
+import * as CancelOrder from "./commands/CancelOrder";
+import * as UpdatePackageStatus from "./commands/UpdatePackageStatus";
+import * as UpdatePackageShipping from "./commands/UpdatePackageShipping";
+import * as ExpireUnpaidOrders from "./commands/ExpireUnpaidOrders";
+import * as GetCart from "./queries/GetCart";
+import * as ListMyOrders from "./queries/ListMyOrders";
+import * as GetMyOrder from "./queries/GetMyOrder";
+import * as TrackOrder from "./queries/TrackOrder";
+import * as ListStoreOrders from "./queries/ListStoreOrders";
+import * as GetStoreOrder from "./queries/GetStoreOrder";
+import * as ListAdminOrders from "./queries/ListAdminOrders";
+import * as GetAdminOrder from "./queries/GetAdminOrder";
+
 export = defineContext({
   name: "ordering",
   commands: {
-    AddToCart: require("./commands/AddToCart"),
-    UpdateCartItem: require("./commands/UpdateCartItem"),
-    RemoveFromCart: require("./commands/RemoveFromCart"),
-    ClearCart: require("./commands/ClearCart"),
-    PlaceOrder: require("./commands/PlaceOrder"),
-    ProcessPayment: require("./commands/ProcessPayment"),
-    CancelOrder: require("./commands/CancelOrder"),
-    UpdatePackageStatus: require("./commands/UpdatePackageStatus"),
-    UpdatePackageShipping: require("./commands/UpdatePackageShipping"),
-    ExpireUnpaidOrders: require("./commands/ExpireUnpaidOrders")
+    AddToCart,
+    UpdateCartItem,
+    RemoveFromCart,
+    ClearCart,
+    PlaceOrder,
+    ProcessPayment,
+    CancelOrder,
+    UpdatePackageStatus,
+    UpdatePackageShipping,
+    ExpireUnpaidOrders,
   },
   queries: {
-    GetCart: require("./queries/GetCart"),
-    ListMyOrders: require("./queries/ListMyOrders"),
-    GetMyOrder: require("./queries/GetMyOrder"),
-    TrackOrder: require("./queries/TrackOrder"),
-    ListStoreOrders: require("./queries/ListStoreOrders"),
-    GetStoreOrder: require("./queries/GetStoreOrder"),
-    ListAdminOrders: require("./queries/ListAdminOrders"),
-    GetAdminOrder: require("./queries/GetAdminOrder")
+    GetCart,
+    ListMyOrders,
+    GetMyOrder,
+    TrackOrder,
+    ListStoreOrders,
+    GetStoreOrder,
+    ListAdminOrders,
+    GetAdminOrder,
   }
 });

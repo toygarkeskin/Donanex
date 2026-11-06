@@ -2,14 +2,19 @@
 
 import { defineContext } from "../shared/registry";
 
+import * as OpenTicket from "./commands/OpenTicket";
+import * as ReplyToTicket from "./commands/ReplyToTicket";
+import * as ListTickets from "./queries/ListTickets";
+import * as GetTicket from "./queries/GetTicket";
+
 export = defineContext({
   name: "support",
   commands: {
-    OpenTicket: require("./commands/OpenTicket"),
-    ReplyToTicket: require("./commands/ReplyToTicket")
+    OpenTicket,
+    ReplyToTicket,
   },
   queries: {
-    ListTickets: require("./queries/ListTickets"),
-    GetTicket: require("./queries/GetTicket")
+    ListTickets,
+    GetTicket,
   }
 });

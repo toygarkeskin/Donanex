@@ -1,5 +1,16 @@
 "use strict";
 
+import type { Row, Services } from "../application/shared/contracts";
+import type { AppConfig } from "../config/env";
+
+/** Kurulan demo verisinin sayilari. */
+export interface DemoSummary {
+  readonly stores: number;
+  readonly products: number;
+  readonly users: number;
+  readonly orders: number;
+}
+
 /**
  * Demo verisi.
  *
@@ -12,12 +23,27 @@
  * bayrağı zaten reddeder.
  */
 
-const { Product, ProductStatus } = require("../domain/catalog/Product");
-const { Order } = require("../domain/ordering/Order");
-const { StoreStatus } = require("../domain/stores/Store");
-const { PackageStatus, OrderStatus } = require("../domain/ordering/OrderStatus");
-const { RoleCodes } = require("../domain/identity/Role");
-const { slugify } = require("../domain/shared/guards");
+import { Product, ProductStatus } from "../domain/catalog/Product";
+import { Order } from "../domain/ordering/Order";
+import { StoreStatus } from "../domain/stores/Store";
+import { PackageStatus, OrderStatus } from "../domain/ordering/OrderStatus";
+import { RoleCodes } from "../domain/identity/Role";
+import { slugify } from "../domain/shared/guards";
+
+/**
+ * Demo kurulumunda "olmasi gerekir" adimlari icin.
+ *
+ * Bos bir veritabaninda bu cagrilarin hepsi deger dondurur; ama tipleri
+ * null kabul ediyor, cunku normal akista (kayitli e-posta, var olan slug)
+ * null donebilirler. Burada null gecerse sessizce yarim veri kurmak yerine
+ * durup nedenini soyluyoruz.
+ */
+function zorunlu<T>(deger: T | null | undefined, ne: string): T {
+  if (deger === null || deger === undefined) {
+    throw new Error(`Demo verisi kurulamadi: ${ne} olusturulamadi.`);
+  }
+  return deger;
+}
 
 /** Demo hesaplarının ortak parolası. Parola kuralını karşılar. */
 const DEMO_PASSWORD = "Donanex2026Demo";
@@ -34,9 +60,27 @@ const CATEGORIES = [
   "Oyun Kumandası"
 ];
 
-const image = (file) => `/images/urunler/${file}`;
+const image = (file: string) => `/images/urunler/${file}`;
 
-const STORES = [
+/**
+ * Demo urun satiri: [ad, aciklama, fiyatKurus, stok, kategori, gorsel].
+ *
+ * Tuple olarak tiplendi ki sira yanlis yazilirsa derleme dursun; eskiden
+ * karisik bir dizi oldugu icin ornegin kategori ile gorseli yer degistirmek
+ * sessizce kategorisiz urun uretirdi.
+ */
+type DemoProduct = readonly [string, string, number, number, string, string];
+
+interface DemoStore {
+  readonly key: string;
+  readonly name: string;
+  readonly description: string;
+  readonly owner: { readonly email: string; readonly fullName: string };
+  readonly logo: string;
+  readonly products: readonly DemoProduct[];
+}
+
+const STORES: readonly DemoStore[] = [
   {
     key: "teknoloji-deposu",
     name: "Teknoloji Deposu",
@@ -106,9 +150,19 @@ const ADDRESS = {
   postalCode: "34710"
 };
 
-async function seedDemoData({ unitOfWork, passwordHasher, opaqueTokens, ids, clock, config, logger }) {
-  const alreadySeeded = await unitOfWork.run(async ({ stores }) => {
-    const { rows } = await stores.db.query("SELECT COUNT(*)::int AS total FROM stores");
+export async function seedDemoData({
+  unitOfWork,
+  passwordHasher,
+  opaqueTokens,
+  ids,
+  clock,
+  config,
+  logger
+}: Pick<Services, "unitOfWork" | "passwordHasher" | "opaqueTokens" | "ids" | "clock" | "logger"> & {
+  config: AppConfig;
+}): Promise<DemoSummary | null> {
+  const alreadySeeded = await unitOfWork.run(async ({ db }) => {
+    const { rows } = await db.query("SELECT COUNT(*)::int AS total FROM stores");
     return rows[0].total > 0;
   });
 
@@ -121,24 +175,33 @@ async function seedDemoData({ unitOfWork, passwordHasher, opaqueTokens, ids, clo
 
   const summary = await unitOfWork.run(async (repos) => {
     /* ---------- kategoriler ---------- */
-    const categoryIds = new Map();
+    const categoryIds = new Map<string, string>();
     for (const name of CATEGORIES) {
       const created = await repos.categories.create({ id: ids.uuid(), name, slug: slugify(name), parentId: null });
-      const category = created ?? (await repos.categories.findBySlug(slugify(name)));
+      const category = zorunlu(created ?? (await repos.categories.findBySlug(slugify(name))), `kategori ${name}`);
       categoryIds.set(name, category.id);
     }
 
     /** Kullanıcıyı oluşturur ya da var olanı bulur. */
-    const createUser = async ({ email, fullName, phone = null }) => {
+    const createUser = async ({
+      email,
+      fullName,
+      phone = null
+    }: {
+      email: string;
+      fullName: string;
+      phone?: string | null;
+    }): Promise<Row> => {
       const user = await repos.users.createIfEmailFree({ id: ids.uuid(), email, fullName, phone, passwordHash });
-      if (!user) return repos.users.findCredentialsByEmail(email);
+      // E-posta kayitliysa var olan hesap kullanilir.
+      if (!user) return zorunlu(await repos.users.findCredentialsByEmail(email), `kullanici ${email}`);
       await repos.users.markEmailVerified(user.id);
       await repos.roles.assign({ userId: user.id, roleCode: RoleCodes.CUSTOMER, storeId: null });
       return user;
     };
 
     /* ---------- mağazalar, sahipleri ve ürünleri ---------- */
-    const createdStores = [];
+    const createdStores: { store: Row; owner: Row; products: Row[] }[] = [];
     for (const definition of STORES) {
       const owner = await createUser(definition.owner);
 
@@ -153,7 +216,7 @@ async function seedDemoData({ unitOfWork, passwordHasher, opaqueTokens, ids, clo
         status: StoreStatus.ACTIVE,
         ownerUserId: owner.id
       });
-      await repos.stores.db.query("UPDATE stores SET logo_url = $1 WHERE id = $2", [definition.logo, store.id]);
+      await repos.db.query("UPDATE stores SET logo_url = $1 WHERE id = $2", [definition.logo, store.id]);
       await repos.roles.assign({ userId: owner.id, roleCode: RoleCodes.STORE_OWNER, storeId: store.id });
 
       const products = [];
@@ -183,7 +246,7 @@ async function seedDemoData({ unitOfWork, passwordHasher, opaqueTokens, ids, clo
     });
 
     /* ---------- müşteriler ---------- */
-    const customers = [];
+    const customers: Row[] = [];
     for (const definition of CUSTOMERS) {
       const customer = await createUser(definition);
       customers.push(customer);
@@ -212,7 +275,10 @@ async function seedDemoData({ unitOfWork, passwordHasher, opaqueTokens, ids, clo
     for (const demo of demoOrders) {
       const productMap = new Map(
         demo.lines.map(({ product }) => {
-          const store = createdStores.find((entry) => entry.store.id === product.storeId).store;
+          const store = zorunlu(
+            createdStores.find((entry) => entry.store.id === product.storeId),
+            `${product.storeId} magazasi`
+          ).store;
           return [
             product.id,
             {
@@ -305,7 +371,7 @@ async function seedDemoData({ unitOfWork, passwordHasher, opaqueTokens, ids, clo
 }
 
 /** Demo hesaplarını konsola yazar; demoyu gösteren kişi aramak zorunda kalmasın. */
-function printDemoAccounts(config) {
+function printDemoAccounts(config: AppConfig): void {
   const rows = [
     ["Mağaza Sahibi", "teknoloji@donanex.test"],
     ["Mağaza Sahibi", "oyuncu@donanex.test"],
@@ -332,4 +398,4 @@ function printDemoAccounts(config) {
   );
 }
 
-module.exports = { seedDemoData, DEMO_PASSWORD, STORES, CUSTOMERS };
+export { DEMO_PASSWORD, STORES, CUSTOMERS };

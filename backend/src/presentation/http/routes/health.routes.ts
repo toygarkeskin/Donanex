@@ -1,9 +1,12 @@
 "use strict";
 
-const { Router } = require("express");
-const { CheckReadinessQuery } = require("../../../application/system");
+import type { RouteContext } from "../types";
+import type { ReadinessResult } from "../support/results";
 
-function healthRoutes({ queries }) {
+import { Router } from "express";
+import { CheckReadinessQuery } from "../../../application/system";
+
+export function healthRoutes({ queries }: Pick<RouteContext, "queries">): Router {
   const router = Router();
 
   // Canlılık: süreç ayakta mı? (Docker healthcheck bunu kullanır)
@@ -13,11 +16,10 @@ function healthRoutes({ queries }) {
 
   // Hazırlık: bağımlılıklar (veritabanı, önbellek) yanıt veriyor mu?
   router.get("/ready", async (_req, res) => {
-    const result = await queries.ask(new CheckReadinessQuery());
+    const result = await queries.ask<ReadinessResult>(new CheckReadinessQuery());
     res.status(result.ready ? 200 : 503).json(result);
   });
 
   return router;
 }
 
-module.exports = { healthRoutes };

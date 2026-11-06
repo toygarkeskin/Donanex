@@ -1,14 +1,25 @@
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
 
-const { PERMISSIONS } = require("../domain/identity/Permission");
-const { SYSTEM_ROLES, RoleCodes } = require("../domain/identity/Role");
-const { assertPasswordStrength } = require("../domain/identity/User");
+import type { Logger, Services } from "../application/shared/contracts";
+import type { AppConfig } from "../config/env";
+
+import { PERMISSIONS } from "../domain/identity/Permission";
+import { SYSTEM_ROLES, RoleCodes } from "../domain/identity/Role";
+import { assertPasswordStrength } from "../domain/identity/User";
 
 const VAR_DIR = path.resolve(__dirname, "../../var");
+
+/** İlk kurulumda üretilen yönetici bilgileri. */
+export interface AdminCredentials {
+  readonly email: string;
+  readonly password: string;
+  /** true ise parola rastgele üretildi, ayarlardan gelmedi. */
+  readonly generated: boolean;
+}
 
 /**
  * Rol ve izin kataloğunu domain'den veritabanına yansıtır.
@@ -17,9 +28,8 @@ const VAR_DIR = path.resolve(__dirname, "../../var");
  * onun bir kopyasıdır. Yeni bir izin eklendiğinde burada kendiliğinden oluşur,
  * kaldırıldığında rollerden düşer.
  */
-async function syncRolesAndPermissions(unitOfWork, logger) {
-  await unitOfWork.run(async ({ users }) => {
-    const db = users.db;
+export async function syncRolesAndPermissions(unitOfWork: Services["unitOfWork"], logger: Logger): Promise<void> {
+  await unitOfWork.run(async ({ db }) => {
 
     for (const [code, meta] of Object.entries(PERMISSIONS)) {
       await db.query(
@@ -63,7 +73,15 @@ async function syncRolesAndPermissions(unitOfWork, logger) {
  * Yönetici zaten varsa hiçbir şey yapılmaz; bu fonksiyon her açılışta
  * güvenle çağrılabilir.
  */
-async function ensureSystemAdmin({ unitOfWork, passwordHasher, ids, config, logger }) {
+export async function ensureSystemAdmin({
+  unitOfWork,
+  passwordHasher,
+  ids,
+  config,
+  logger
+}: Pick<Services, "unitOfWork" | "passwordHasher" | "ids" | "logger"> & {
+  config: AppConfig;
+}): Promise<AdminCredentials | null> {
   const existing = await unitOfWork.run(({ roles }) => roles.countByCode(RoleCodes.SYSTEM_ADMIN));
   if (existing > 0) {
     logger.info("Sistem yöneticisi mevcut ({Count} adet), yeni hesap oluşturulmadı", { Count: existing });
@@ -91,6 +109,9 @@ async function ensureSystemAdmin({ unitOfWork, passwordHasher, ids, config, logg
     if (!user) {
       // E-posta zaten kayıtlı: o hesaba yönetici rolü ver.
       const found = await repos.users.findCredentialsByEmail(email);
+      // createIfEmailFree null döndü, yani e-posta kayıtlı; o hâlde bulunmalı.
+      // Bulunamazsa sessizce devam etmek yerine duruyoruz.
+      if (!found) throw new Error("Yönetici hesabı ne oluşturulabildi ne de bulunabildi.");
       await repos.roles.assign({ userId: found.id, roleCode: RoleCodes.SYSTEM_ADMIN, storeId: null });
       return { ...found, roleOnly: true };
     }
@@ -111,7 +132,7 @@ async function ensureSystemAdmin({ unitOfWork, passwordHasher, ids, config, logg
 }
 
 /** Parolayı günlüğe ve kalıcı bir dosyaya yazar. */
-function announce({ email, password, generated }, logger) {
+function announce({ email, password, generated }: AdminCredentials, logger: Logger): void {
   const banner = [
     "",
     "=".repeat(68),
@@ -141,8 +162,8 @@ function announce({ email, password, generated }, logger) {
     );
     console.log(`  (Aynı bilgi şu dosyaya da yazıldı: ${file})\n`);
   } catch (error) {
-    logger.warn("Yönetici bilgileri dosyaya yazılamadı: {Reason}", { Reason: error.message });
+    const mesaj = error instanceof Error ? error.message : String(error);
+    logger.warn("Yönetici bilgileri dosyaya yazılamadı: {Reason}", { Reason: mesaj });
   }
 }
 
-module.exports = { syncRolesAndPermissions, ensureSystemAdmin };

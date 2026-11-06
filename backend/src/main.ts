@@ -6,18 +6,18 @@
  * Açılış sırası bilinçlidir: ayarlar doğrulanmadan hiçbir bağlantı kurulmaz,
  * şema hazır olmadan istek kabul edilmez.
  */
-const { loadConfig, validateConfig } = require("./config/env");
-const { createPool, waitForDatabase } = require("./infrastructure/persistence/postgres/pool");
-const { runMigrations } = require("./infrastructure/persistence/postgres/migrate");
-const { RedisCache } = require("./infrastructure/cache/RedisCache");
-const { SeqLogger } = require("./infrastructure/logging/SeqLogger");
-const { buildContainer } = require("./bootstrap/container");
-const { syncRolesAndPermissions, ensureSystemAdmin } = require("./bootstrap/syncAccessControl");
-const { syncOAuthClients } = require("./bootstrap/syncOAuthClients");
-const { seedDemoData } = require("./bootstrap/demoSeed");
-const { createApp } = require("./presentation/http/app");
+import { loadConfig, validateConfig } from "./config/env";
+import { createPool, waitForDatabase } from "./infrastructure/persistence/postgres/pool";
+import { runMigrations } from "./infrastructure/persistence/postgres/migrate";
+import { RedisCache } from "./infrastructure/cache/RedisCache";
+import { SeqLogger } from "./infrastructure/logging/SeqLogger";
+import { buildContainer } from "./bootstrap/container";
+import { syncRolesAndPermissions, ensureSystemAdmin } from "./bootstrap/syncAccessControl";
+import { syncOAuthClients } from "./bootstrap/syncOAuthClients";
+import { seedDemoData } from "./bootstrap/demoSeed";
+import { createApp } from "./presentation/http/app";
 
-async function start() {
+async function start(): Promise<void> {
   const config = loadConfig();
 
   const problems = validateConfig(config);
@@ -30,30 +30,40 @@ async function start() {
   const pool = createPool(config.db);
   const cache = new RedisCache(config.redisUrl, logger);
 
-  await waitForDatabase(pool, { log: (message) => logger.info(message) });
-  await runMigrations(pool, (message) => logger.info(message));
+  await waitForDatabase(pool, { log: (message: string) => logger.info(message) });
+  await runMigrations(pool, (message: string) => logger.info(message));
 
   if (config.redisUrl) {
     try {
       await cache.connect();
       logger.info("Redis bağlantısı kuruldu");
     } catch (error) {
-      logger.warn("Redis'e bağlanılamadı, önbellek devre dışı: {Reason}", { Reason: error.message });
+      const mesaj = error instanceof Error ? error.message : String(error);
+      logger.warn("Redis'e bağlanılamadı, önbellek devre dışı: {Reason}", { Reason: mesaj });
     }
   }
 
   const { commands, queries, services } = buildContainer({ pool, cache, logger, config });
-  services.redisClient = cache.available ? cache.client : null;
 
   // Görsel klasörü ilk yüklemede değil, açılışta hazırlanır.
-  await services.fileStorage.init();
+  await services.fileStorage.init?.();
 
   await syncRolesAndPermissions(services.unitOfWork, logger);
   await syncOAuthClients({ ...services, config, logger });
   await ensureSystemAdmin({ ...services, config, logger });
   if (config.seedDemoData) await seedDemoData({ ...services, config, logger });
 
-  const app = createApp({ commands, queries, services, config });
+  const app = createApp({
+    commands,
+    queries,
+    services,
+    config,
+    // İstek sınırı sayaçları Redis'te tutulur. Ham istemci BURADAN geçirilir:
+    // eskiden container'ın ürettiği servis torbasına sonradan ekleniyordu, ama
+    // redisClient bir port değil — yalnızca HTTP katmanının sınırlayıcısı
+    // kullanır. Bağlantı yoksa sayaçlar sürecin içinde tutulur.
+    redisClient: cache.available ? cache.client : null
+  });
 
   const server = app.listen(config.port, () => {
     logger.info("API hazır: {Url}", { Url: `http://localhost:${config.port}/api`, PublicUrl: config.publicUrl });
@@ -65,20 +75,22 @@ async function start() {
     }
   });
 
-  const shutdown = async (signal) => {
+  const shutdown = async (signal: string): Promise<void> => {
     logger.info("{Signal} alındı, kapatılıyor", { Signal: signal });
     server.close(async () => {
       await Promise.allSettled([pool.end(), cache.close(), logger.close()]);
       process.exit(0);
     });
+    // Açık bağlantılar kapanmazsa süreç sonsuza dek beklemesin.
     setTimeout(() => process.exit(1), 10_000).unref();
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-start().catch((error) => {
-  console.error("Sunucu başlatılamadı:", error.message);
-  console.error(error.stack);
+start().catch((error: unknown) => {
+  const hata = error instanceof Error ? error : new Error(String(error));
+  console.error("Sunucu başlatılamadı:", hata.message);
+  console.error(hata.stack);
   process.exit(1);
 });

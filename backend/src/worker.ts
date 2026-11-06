@@ -11,17 +11,17 @@
  * API'den ayrı bir süreçtir: yavaş bir SMTP sunucusu ya da dolu bir kuyruk
  * müşterinin isteğini bekletmez.
  */
-const { loadConfig, validateConfig } = require("./config/env");
-const { createPool, waitForDatabase } = require("./infrastructure/persistence/postgres/pool");
-const { RedisCache } = require("./infrastructure/cache/RedisCache");
-const { SeqLogger } = require("./infrastructure/logging/SeqLogger");
-const { RabbitMqBroker } = require("./infrastructure/messaging/RabbitMqBroker");
-const { OutboxRelay } = require("./infrastructure/messaging/OutboxRelay");
-const { buildContainer } = require("./bootstrap/container");
-const { startScheduler } = require("./bootstrap/scheduler");
-const { startEmailConsumer } = require("./bootstrap/emailConsumer");
+import { loadConfig, validateConfig } from "./config/env";
+import { createPool, waitForDatabase } from "./infrastructure/persistence/postgres/pool";
+import { RedisCache } from "./infrastructure/cache/RedisCache";
+import { SeqLogger } from "./infrastructure/logging/SeqLogger";
+import { RabbitMqBroker } from "./infrastructure/messaging/RabbitMqBroker";
+import { OutboxRelay } from "./infrastructure/messaging/OutboxRelay";
+import { buildContainer } from "./bootstrap/container";
+import { startScheduler } from "./bootstrap/scheduler";
+import { startEmailConsumer } from "./bootstrap/emailConsumer";
 
-async function start() {
+async function start(): Promise<void> {
   const config = loadConfig();
 
   const problems = validateConfig(config);
@@ -34,7 +34,7 @@ async function start() {
   const pool = createPool({ ...config.db, poolSize: 5 });
   const cache = new RedisCache(config.redisUrl, logger);
 
-  await waitForDatabase(pool, { log: (message) => logger.info(message) });
+  await waitForDatabase(pool, { log: (message: string) => logger.info(message) });
   if (config.redisUrl) await cache.connect().catch(() => {});
 
   const { commands, services } = buildContainer({ pool, cache, logger, config });
@@ -51,7 +51,7 @@ async function start() {
   const stopScheduler = startScheduler({ commands, unitOfWork: services.unitOfWork, logger });
   logger.info("Worker hazır: outbox aktarımı, e-posta tüketicisi ve bakım işleri çalışıyor");
 
-  const shutdown = async (signal) => {
+  const shutdown = async (signal: string): Promise<void> => {
     logger.info("{Signal} alındı, kapatılıyor", { Signal: signal });
     relay.stop();
     stopScheduler();
@@ -62,8 +62,9 @@ async function start() {
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-start().catch((error) => {
-  console.error("Worker başlatılamadı:", error.message);
-  console.error(error.stack);
+start().catch((error: unknown) => {
+  const hata = error instanceof Error ? error : new Error(String(error));
+  console.error("Worker başlatılamadı:", hata.message);
+  console.error(hata.stack);
   process.exit(1);
 });

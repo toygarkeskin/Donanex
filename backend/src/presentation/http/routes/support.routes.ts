@@ -1,14 +1,17 @@
 "use strict";
 
-const { Router } = require("express");
-const { OpenTicketCommand } = require("../../../application/support");
+import type { RouteContext } from "../types";
+import type { TicketResult } from "../support/results";
+
+import { Router } from "express";
+import { OpenTicketCommand } from "../../../application/support";
 
 /** Destek talebi açma. Kayıtsız kullanıcı da kullanabilir. */
-function supportRoutes({ commands, limiters }) {
+export function supportRoutes({ commands, limiters }: Pick<RouteContext, "commands" | "limiters">): Router {
   const router = Router();
 
   router.post("/support/tickets", limiters.support, async (req, res) => {
-    const ticket = await commands.execute(
+    const ticket = await commands.execute<TicketResult>(
       new OpenTicketCommand({ userId: req.auth?.userId ?? null, data: req.body }),
       req.context()
     );
@@ -22,4 +25,3 @@ function supportRoutes({ commands, limiters }) {
   return router;
 }
 
-module.exports = { supportRoutes };

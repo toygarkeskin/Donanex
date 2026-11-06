@@ -1,28 +1,51 @@
 "use strict";
 
-const express = require("express");
-const helmet = require("helmet");
+import express, { type Express } from "express";
+import helmet from "helmet";
 
-const { requestContext, accessLog } = require("./middleware/requestContext");
-const { authenticate } = require("./middleware/authenticate");
-const { cartSession } = require("./middleware/cartSession");
-const { originGuard } = require("./middleware/originGuard");
-const { createRateLimiters } = require("./middleware/rateLimiters");
-const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
+import { requestContext, accessLog, type ChildLogger } from "./middleware/requestContext";
+import { authenticate } from "./middleware/authenticate";
+import { cartSession } from "./middleware/cartSession";
+import { originGuard } from "./middleware/originGuard";
+import { createRateLimiters, type RateLimitRedisClient } from "./middleware/rateLimiters";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
-const { healthRoutes } = require("./routes/health.routes");
-const { oauthRoutes } = require("./routes/oauth.routes");
-const { authRoutes } = require("./routes/auth.routes");
-const { catalogRoutes } = require("./routes/catalog.routes");
-const { cartRoutes } = require("./routes/cart.routes");
-const { orderRoutes } = require("./routes/orders.routes");
-const { accountRoutes } = require("./routes/account.routes");
-const { storePanelRoutes } = require("./routes/store.routes");
-const { adminRoutes } = require("./routes/admin.routes");
-const { supportRoutes } = require("./routes/support.routes");
-const { uploadRoutes } = require("./routes/uploads.routes");
+import { healthRoutes } from "./routes/health.routes";
+import { oauthRoutes } from "./routes/oauth.routes";
+import { authRoutes } from "./routes/auth.routes";
+import { catalogRoutes } from "./routes/catalog.routes";
+import { cartRoutes } from "./routes/cart.routes";
+import { orderRoutes } from "./routes/orders.routes";
+import { accountRoutes } from "./routes/account.routes";
+import { storePanelRoutes } from "./routes/store.routes";
+import { adminRoutes } from "./routes/admin.routes";
+import { supportRoutes } from "./routes/support.routes";
+import { uploadRoutes } from "./routes/uploads.routes";
+
+import type { RouteContext } from "./types";
+import type { Services } from "../../application/shared/contracts";
+import type { CommandBus, QueryBus } from "../../application/shared/cqrs/bus";
+import type { UseCaseContext } from "../../application/shared/authorize";
+import type { AppConfig } from "../../config/env";
 
 const BULK_IMPORT = /\/products\/bulk$/;
+
+export interface CreateAppOptions {
+  readonly commands: CommandBus<UseCaseContext>;
+  readonly queries: QueryBus<UseCaseContext>;
+  readonly services: Services;
+  readonly config: AppConfig;
+  /**
+   * İstek sınırı sayaçları için ham Redis istemcisi.
+   *
+   * Bir PORT DEĞİL: yalnızca bu katmanın sınırlayıcısı kullanır, uygulama
+   * katmanı bilmez. Bu yüzden servis torbasına eklenmez, buradan geçirilir.
+   * Verilmezse sayaçlar sürecin içinde tutulur.
+   */
+  readonly redisClient?: RateLimitRedisClient | null;
+  /** Testler sınırları kapatır; açık bırakılırsa testler birbirini sınıra takar. */
+  readonly rateLimits?: boolean;
+}
 
 /**
  * JSON API. Statik dosyaları web (nginx) konteyneri sunar ve /api ile /oauth
@@ -31,9 +54,16 @@ const BULK_IMPORT = /\/products\/bulk$/;
  * Express 5 kullanılıyor: async rota fonksiyonlarındaki hatalar kendiliğinden
  * errorHandler'a iletilir, her rotayı try/catch ile sarmak gerekmez.
  */
-function createApp({ commands, queries, services, config, rateLimits = true }) {
+export function createApp({
+  commands,
+  queries,
+  services,
+  config,
+  redisClient = null,
+  rateLimits = true
+}: CreateAppOptions): Express {
   const app = express();
-  const logger = services.logger;
+  const logger = services.logger as ChildLogger;
 
   app.disable("x-powered-by");
   if (config.trustProxy) app.set("trust proxy", config.trustProxy);
@@ -57,12 +87,12 @@ function createApp({ commands, queries, services, config, rateLimits = true }) {
 
   app.use(accessLog());
 
-  const limiters = createRateLimiters({ enabled: rateLimits, redisClient: services.redisClient });
+  const limiters = createRateLimiters({ enabled: rateLimits, redisClient });
   const json = express.json({ limit: "64kb" });
   const largeJson = express.json({ limit: "1mb" }); // yalnızca CSV ile toplu ürün
   const form = express.urlencoded({ extended: false, limit: "16kb" }); // OAuth jeton ucu
 
-  const context = { commands, queries, services, config, limiters };
+  const context: RouteContext = { commands, queries, services, config, limiters };
 
   /* ---------- OAuth 2.1 / OIDC ---------- */
   // Keşif belgesi ve JWKS kök altında durur (RFC 8414).
@@ -105,5 +135,3 @@ function createApp({ commands, queries, services, config, rateLimits = true }) {
 
   return app;
 }
-
-module.exports = { createApp };

@@ -1,19 +1,22 @@
 "use strict";
 
-const { Router } = require("express");
-const {
+import type { RouteContext } from "../types";
+
+import { yol } from "../support/params";
+import { Router } from "express";
+import {
   ListProductsQuery,
   GetProductQuery,
   ListCategoriesQuery
-} = require("../../../application/catalog");
-const { ListStoresQuery, GetStoreQuery } = require("../../../application/stores");
+} from "../../../application/catalog";
+import { ListStoresQuery, GetStoreQuery } from "../../../application/stores";
 
 /**
  * Vitrin. Tamamı herkese açıktır: kayıtsız kullanıcı ürünleri görür,
  * arar ve filtreler. Giriş yalnızca sipariş geçmişi gibi kişisel
  * bilgiler için gerekir.
  */
-function catalogRoutes({ queries }) {
+export function catalogRoutes({ queries }: Pick<RouteContext, "queries">): Router {
   const router = Router();
 
   router.get("/products", async (req, res) => {
@@ -23,7 +26,7 @@ function catalogRoutes({ queries }) {
   router.get("/products/:storeSlug/:productSlug", async (req, res) => {
     res.json(
       await queries.ask(
-        new GetProductQuery({ storeSlug: req.params.storeSlug, productSlug: req.params.productSlug })
+        new GetProductQuery({ storeSlug: yol(req, "storeSlug"), productSlug: yol(req, "productSlug") })
       )
     );
   });
@@ -37,10 +40,9 @@ function catalogRoutes({ queries }) {
   });
 
   router.get("/storefront/stores/:slug", async (req, res) => {
-    res.json(await queries.ask(new GetStoreQuery({ slug: req.params.slug })));
+    res.json(await queries.ask(new GetStoreQuery({ slug: yol(req, "slug") })));
   });
 
   return router;
 }
 
-module.exports = { catalogRoutes };

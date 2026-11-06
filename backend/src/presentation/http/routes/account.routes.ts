@@ -1,45 +1,49 @@
 "use strict";
 
-const { Router } = require("express");
-const {
+import type { RouteContext } from "../types";
+import type { ChangePasswordResult, Sonuc } from "../support/results";
+
+import { kullanici, yol } from "../support/params";
+import { Router } from "express";
+import {
   GetCurrentUserQuery,
   UpdateProfileCommand,
   ChangePasswordCommand,
   SaveAddressCommand,
   DeleteAddressCommand,
   ListAddressesQuery
-} = require("../../../application/identity");
-const {
+} from "../../../application/identity";
+import {
   ListMyOrdersQuery,
   GetMyOrderQuery,
   CancelOrderCommand
-} = require("../../../application/ordering");
-const { ApplyForStoreCommand } = require("../../../application/stores");
-const { ListTicketsQuery, GetTicketQuery } = require("../../../application/support");
-const { requireAuth } = require("../middleware/authenticate");
-const { COOKIES, buildCookie, appendCookie } = require("../support/cookies");
+} from "../../../application/ordering";
+import { ApplyForStoreCommand } from "../../../application/stores";
+import { ListTicketsQuery, GetTicketQuery } from "../../../application/support";
+import { requireAuth } from "../middleware/authenticate";
+import { COOKIES, buildCookie, appendCookie } from "../support/cookies";
 
 /** Kullanıcının kendi hesabı. Tüm uçlar yalnızca kendi verisine erişir. */
-function accountRoutes({ commands, queries, config, limiters }) {
+export function accountRoutes({ commands, queries, config, limiters }: Pick<RouteContext, "commands" | "queries" | "config" | "limiters">): Router {
   const router = Router();
   router.use(requireAuth);
 
   router.get("/", async (req, res) => {
-    res.json(await queries.ask(new GetCurrentUserQuery({ userId: req.auth.userId }), req.context()));
+    res.json(await queries.ask(new GetCurrentUserQuery({ userId: kullanici(req) }), req.context()));
   });
 
   router.put("/profile", async (req, res) => {
-    const profile = await commands.execute(
-      new UpdateProfileCommand({ userId: req.auth.userId, data: req.body }),
+    const profile = await commands.execute<Sonuc>(
+      new UpdateProfileCommand({ userId: kullanici(req), data: req.body }),
       req.context()
     );
     res.json({ ...profile, message: "Bilgileriniz güncellendi." });
   });
 
   router.put("/password", limiters.passwordChange, async (req, res) => {
-    const { session } = await commands.execute(
+    const { session } = await commands.execute<ChangePasswordResult>(
       new ChangePasswordCommand({
-        userId: req.auth.userId,
+        userId: kullanici(req),
         currentPassword: req.body?.currentPassword,
         newPassword: req.body?.newPassword
       }),
@@ -63,12 +67,12 @@ function accountRoutes({ commands, queries, config, limiters }) {
   /* ----- adresler ----- */
 
   router.get("/addresses", async (req, res) => {
-    res.json({ items: await queries.ask(new ListAddressesQuery({ userId: req.auth.userId })) });
+    res.json({ items: await queries.ask(new ListAddressesQuery({ userId: kullanici(req) })) });
   });
 
   router.post("/addresses", async (req, res) => {
     const address = await commands.execute(
-      new SaveAddressCommand({ userId: req.auth.userId, data: req.body }),
+      new SaveAddressCommand({ userId: kullanici(req), data: req.body }),
       req.context()
     );
     res.status(201).json(address);
@@ -76,7 +80,7 @@ function accountRoutes({ commands, queries, config, limiters }) {
 
   router.put("/addresses/:addressId", async (req, res) => {
     const address = await commands.execute(
-      new SaveAddressCommand({ userId: req.auth.userId, addressId: req.params.addressId, data: req.body }),
+      new SaveAddressCommand({ userId: kullanici(req), addressId: yol(req, "addressId"), data: req.body }),
       req.context()
     );
     res.json(address);
@@ -84,7 +88,7 @@ function accountRoutes({ commands, queries, config, limiters }) {
 
   router.delete("/addresses/:addressId", async (req, res) => {
     await commands.execute(
-      new DeleteAddressCommand({ userId: req.auth.userId, addressId: req.params.addressId }),
+      new DeleteAddressCommand({ userId: kullanici(req), addressId: yol(req, "addressId") }),
       req.context()
     );
     res.status(204).end();
@@ -93,16 +97,16 @@ function accountRoutes({ commands, queries, config, limiters }) {
   /* ----- siparişler ----- */
 
   router.get("/orders", async (req, res) => {
-    res.json(await queries.ask(new ListMyOrdersQuery({ userId: req.auth.userId, filters: req.query })));
+    res.json(await queries.ask(new ListMyOrdersQuery({ userId: kullanici(req), filters: req.query })));
   });
 
   router.get("/orders/:orderId", async (req, res) => {
-    res.json(await queries.ask(new GetMyOrderQuery({ userId: req.auth.userId, orderId: req.params.orderId })));
+    res.json(await queries.ask(new GetMyOrderQuery({ userId: kullanici(req), orderId: yol(req, "orderId") })));
   });
 
   router.post("/orders/:orderId/cancel", async (req, res) => {
-    const result = await commands.execute(
-      new CancelOrderCommand({ userId: req.auth.userId, orderId: req.params.orderId }),
+    const result = await commands.execute<Sonuc>(
+      new CancelOrderCommand({ userId: kullanici(req), orderId: yol(req, "orderId") }),
       req.context()
     );
     res.json({ ...result, message: "Siparişiniz iptal edildi." });
@@ -113,7 +117,7 @@ function accountRoutes({ commands, queries, config, limiters }) {
   router.get("/tickets", async (req, res) => {
     res.json(
       await queries.ask(
-        new ListTicketsQuery({ scope: "mine", userId: req.auth.userId, filters: req.query }),
+        new ListTicketsQuery({ scope: "mine", userId: kullanici(req), filters: req.query }),
         req.context()
       )
     );
@@ -122,7 +126,7 @@ function accountRoutes({ commands, queries, config, limiters }) {
   router.get("/tickets/:ticketId", async (req, res) => {
     res.json(
       await queries.ask(
-        new GetTicketQuery({ scope: "mine", userId: req.auth.userId, ticketId: req.params.ticketId }),
+        new GetTicketQuery({ scope: "mine", userId: kullanici(req), ticketId: yol(req, "ticketId") }),
         req.context()
       )
     );
@@ -132,7 +136,7 @@ function accountRoutes({ commands, queries, config, limiters }) {
 
   router.post("/store-application", limiters.storeApplication, async (req, res) => {
     const store = await commands.execute(
-      new ApplyForStoreCommand({ userId: req.auth.userId, data: req.body }),
+      new ApplyForStoreCommand({ userId: kullanici(req), data: req.body }),
       req.context()
     );
     res.status(201).json({
@@ -144,4 +148,3 @@ function accountRoutes({ commands, queries, config, limiters }) {
   return router;
 }
 
-module.exports = { accountRoutes };

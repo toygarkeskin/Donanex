@@ -122,8 +122,6 @@ export interface StoreRepository {
   hasPendingApplication(userId: string): Promise<boolean>;
   update(id: string, data: Row): Promise<Row | null>;
   setStatus(id: string, status: string): Promise<Row | null>;
-  /** Demo tohumlaması doğrudan sorgu çalıştırmak için kullanır. */
-  readonly db?: unknown;
 }
 
 export interface ProductRepository {
@@ -219,8 +217,31 @@ export interface AuditRepository {
   }): Promise<void>;
 }
 
+/**
+ * Transaction'ın ham bağlantısı.
+ *
+ * Yalnızca toplu SQL çalıştırmaya yeter; pg tipleri burada geçmez, böylece
+ * application katmanı hangi veritabanını kullandığımızı bilmemeye devam eder.
+ */
+export interface TransactionClient {
+  query(sql: string, params?: readonly unknown[]): Promise<{ rows: Row[]; rowCount: number | null }>;
+}
+
 /** Tek transaction içinde verilen repository seti. */
 export interface Repositories {
+  /**
+   * Açık transaction'ın bağlantısı — KURULUM İŞLERİ İÇİN kaçış kapısı.
+   *
+   * Rol/izin kataloğunu domain'den veritabanına yansıtmak ya da demo veri
+   * kurmak gibi tek seferlik toplu SQL'ler için var; her biri için repository
+   * metodu açmak sözleşmeyi şişirirdi.
+   *
+   * Daha önce bu erişim `users.db` / `stores.db` üzerinden alınıyordu: hangi
+   * repository'nin alanını açtığı tesadüfe kalmış, gizli bir bağımlılıktı.
+   * Burada adı konuldu ki kullanımı görünür olsun — uygulama katmanının
+   * komut ve sorgu handler'ları bunu KULLANMAZ.
+   */
+  readonly db: TransactionClient;
   readonly users: UserRepository;
   readonly roles: RoleRepository;
   readonly authSessions: AuthSessionRepository;
@@ -395,3 +416,54 @@ export interface IdGenerator {
 }
 
 export type { Logger } from "./cqrs/logging";
+
+import type { Logger as LoggerPort } from "./cqrs/logging";
+
+/* ---------------------------------------------------------------- */
+/* Composition root'un ürettiği servis torbası                        */
+/* ---------------------------------------------------------------- */
+
+/**
+ * Handler'lara verilen bağlı portlar.
+ *
+ * ports.ts'teki PORTS listesinin derleme zamanı karşılığıdır: orası açılışta
+ * "bu metot var mı" diye bakar, burası daha önce — kodu yazarken — bakar.
+ * İkisi birlikte tutulmalı; bir port eklenirse hem PORTS'a hem buraya girer.
+ *
+ * Somut sınıfların hiçbiri burada adı geçmez: application katmanı hangi
+ * veritabanını ya da kuyruğu kullandığımızı bilmemeye devam eder.
+ */
+export interface Services {
+  /* yazma tarafı */
+  readonly unitOfWork: UnitOfWork;
+
+  /* okuma tarafı */
+  readonly catalogReadModel: CatalogReadModel;
+  readonly storeReadModel: StoreReadModel;
+  readonly cartReadModel: CartReadModel;
+  readonly orderReadModel: OrderReadModel;
+  readonly userReadModel: UserReadModel;
+  readonly supportReadModel: SupportReadModel;
+  readonly dashboardReadModel: DashboardReadModel;
+  readonly healthReadModel: HealthReadModel;
+
+  /* güvenlik */
+  readonly tokenIssuer: TokenIssuer;
+  readonly opaqueTokens: OpaqueTokens;
+  readonly passwordHasher: PasswordHasher;
+  readonly pkce: Pkce;
+  /** Sabit süreli karşılaştırma; jeton eşlemede kullanılır. */
+  readonly safeEqual: (a: unknown, b: unknown) => boolean;
+
+  /* altyapı */
+  readonly cache: Cache;
+  readonly mailer: Mailer;
+  readonly fileStorage: FileStorage;
+  readonly clock: Clock;
+  readonly ids: IdGenerator;
+  readonly logger: LoggerPort;
+
+  /* handler'ların ihtiyaç duyduğu ayarlar */
+  readonly publicUrl: string;
+  readonly paymentsMode: string;
+}

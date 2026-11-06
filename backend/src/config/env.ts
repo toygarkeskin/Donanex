@@ -1,7 +1,11 @@
 "use strict";
 
-const path = require("path");
-const dotenv = require("dotenv");
+import path from "node:path";
+import dotenv from "dotenv";
+
+import type { DbConfig } from "../infrastructure/persistence/postgres/pool";
+import type { LogLevel } from "../infrastructure/logging/SeqLogger";
+import type { SmtpConfig } from "../infrastructure/mail/NodemailerMailer";
 
 // Önce backend/.env, sonra proje kökündeki .env okunur (ilk bulunan geçerli).
 // Docker'da değerler compose tarafından verilir; .env dosyası imaja girmez.
@@ -13,15 +17,40 @@ dotenv.config({
 const MIN_SECRET_LENGTH = 32;
 const PLACEHOLDER = /^(guclu-bir|change-?me|password|parola|secret|admin|test|123)/i;
 
-function flag(value, fallback) {
+function flag(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value === "") return fallback;
   return String(value).toLowerCase() === "true";
 }
 
 /** .env tek satırda tuttuğu için PEM'deki \n'ler geri açılır. */
-const pem = (value) => (value ? String(value).replace(/\\n/g, "\n").trim() : "");
+const pem = (value: string | undefined): string => (value ? String(value).replace(/\\n/g, "\n").trim() : "");
 
-function loadConfig(env = process.env) {
+/** Çalışma zamanı ayarları. Tamamı dondurulmuştur: açılıştan sonra değişmez. */
+export interface AppConfig {
+  readonly role: string;
+  readonly port: number;
+  readonly isProduction: boolean;
+  readonly isTest: boolean;
+  readonly publicUrl: string;
+  /** Jetonların "iss" alanı. Doğrulayan taraf bu değeri bekler. */
+  readonly issuer: string;
+  /** Express'in "trust proxy" ayarı: atlanacak vekil sayısı ya da false. */
+  readonly trustProxy: number | string | false;
+  readonly cookieSecure: boolean;
+  readonly paymentsMode: string;
+  readonly seedDemoData: boolean;
+  readonly uploadDir: string;
+  readonly db: DbConfig;
+  readonly redisUrl: string;
+  readonly rabbitUrl: string;
+  readonly jwt: { readonly privateKey: string; readonly publicKey: string };
+  readonly tokenPepper: string;
+  readonly logging: { readonly url: string; readonly apiKey: string; readonly level: LogLevel };
+  readonly smtp: SmtpConfig;
+  readonly bootstrapAdmin: { readonly email: string; readonly password: string };
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const isProduction = env.NODE_ENV === "production";
   const publicUrl = String(env.PUBLIC_URL || "http://localhost:8090").replace(/\/+$/, "");
 
@@ -44,9 +73,9 @@ function loadConfig(env = process.env) {
     db: Object.freeze({
       host: env.DB_HOST || "127.0.0.1",
       port: Number(env.DB_PORT || 5432),
-      database: env.DB_NAME,
-      user: env.DB_USER,
-      password: env.DB_PASSWORD,
+      database: env.DB_NAME!,
+      user: env.DB_USER!,
+      password: env.DB_PASSWORD!,
       poolSize: Number(env.DB_POOL_SIZE || 10)
     }),
 
@@ -62,7 +91,7 @@ function loadConfig(env = process.env) {
     logging: Object.freeze({
       url: env.SEQ_URL || "",
       apiKey: env.SEQ_API_KEY || "",
-      level: env.LOG_LEVEL || "info"
+      level: (env.LOG_LEVEL || "info") as LogLevel
     }),
 
     smtp: Object.freeze({
@@ -85,9 +114,12 @@ function loadConfig(env = process.env) {
  * Eksik ya da zayıf ayarları listeler. Sunucu bu listeyle BAŞLAMAZ:
  * yanlış yapılandırılmış bir sistemin sessizce ayağa kalkıp güvensiz
  * çalışmasındansa, açılışta durup nedeni söylemesi yeğdir.
+ *
+ * db.database/user/password tipte string yazılıdır ama ortam değişkeni
+ * verilmemiş olabilir; bu yüzden burada gerçekten var mı diye bakılır.
  */
-function validateConfig(config) {
-  const problems = [];
+export function validateConfig(config: AppConfig): string[] {
+  const problems: string[] = [];
 
   if (!config.db.database || !config.db.user || !config.db.password) {
     problems.push("DB_NAME, DB_USER ve DB_PASSWORD zorunludur.");
@@ -122,5 +154,3 @@ function validateConfig(config) {
 
   return problems;
 }
-
-module.exports = { loadConfig, validateConfig };

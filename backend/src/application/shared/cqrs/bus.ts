@@ -80,8 +80,15 @@ export class CommandBus<TContext = unknown> extends MessageBus<TContext> {
     super("command", Command);
   }
 
-  execute(command: object, context?: TContext): Promise<unknown> {
-    return this.dispatch(command, context);
+  /**
+   * TResult'ı çağıran beyan eder (varsayılan: unknown).
+   *
+   * Bus kayıt tablosuna dayandığı için mesajdan sonucu kendisi çıkaramaz;
+   * tipi burada açıkça yazmak, dönen değeri hiç tiplememekten iyidir —
+   * hiç olmazsa beklenti kodda görünür ve yanlış alan okunursa derleme durur.
+   */
+  execute<TResult = unknown>(command: object, context?: TContext): Promise<TResult> {
+    return this.dispatch(command, context) as Promise<TResult>;
   }
 }
 
@@ -90,7 +97,8 @@ export class QueryBus<TContext = unknown> extends MessageBus<TContext> {
     super("query", Query);
   }
 
-  ask(query: object, context?: TContext): Promise<unknown> {
-    return this.dispatch(query, context);
+  /** Bkz. CommandBus.execute: sonucun tipini çağıran beyan eder. */
+  ask<TResult = unknown>(query: object, context?: TContext): Promise<TResult> {
+    return this.dispatch(query, context) as Promise<TResult>;
   }
 }

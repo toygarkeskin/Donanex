@@ -1,19 +1,23 @@
 "use strict";
 
-const { Router } = require("express");
-const {
+import type { RouteContext } from "../types";
+import type { AuthorizeResult, CurrentUserResult, TokenResult } from "../support/results";
+
+import { kullanici, yol } from "../support/params";
+import { Router, type Request, type Response } from "express";
+import {
   AuthorizeCommand,
   ExchangeTokenCommand,
   RevokeTokenCommand,
   GetAuthorizationRequestQuery
-} = require("../../../application/identity");
-const { SUPPORTED_SCOPES, GrantTypes } = require("../../../domain/identity/OAuthClient");
-const { GetCurrentUserQuery } = require("../../../application/identity");
-const { COOKIES, buildCookie, appendCookie } = require("../support/cookies");
-const { authPolicy } = require("../../../application/identity");
+} from "../../../application/identity";
+import { SUPPORTED_SCOPES, GrantTypes } from "../../../domain/identity/OAuthClient";
+import { GetCurrentUserQuery } from "../../../application/identity";
+import { COOKIES, buildCookie, appendCookie } from "../support/cookies";
+import { authPolicy } from "../../../application/identity";
 
 const { REFRESH_TOKEN_TTL_MS } = authPolicy;
-const { requireAuth } = require("../middleware/authenticate");
+import { requireAuth } from "../middleware/authenticate";
 
 /**
  * OAuth 2.1 / OpenID Connect uçları.
@@ -24,11 +28,11 @@ const { requireAuth } = require("../middleware/authenticate");
  */
 
 /** OAuth hataları RFC 6749'un istediği biçimde döner. */
-function oauthError(res, status, error, description) {
+function oauthError(res: Response, status: number, error: string, description: string) {
   return res.status(status).json({ error, error_description: description });
 }
 
-function discovery({ config, services }) {
+function discovery({ config, services }: Pick<RouteContext, "config" | "services">): Router {
   const router = Router();
   const base = config.publicUrl;
 
@@ -57,7 +61,7 @@ function discovery({ config, services }) {
   return router;
 }
 
-function endpoints({ commands, queries, services, config, limiters }) {
+function endpoints({ commands, queries, services, config, limiters }: RouteContext): Router {
   const router = Router();
 
   router.get("/jwks", (_req, res) => {
@@ -70,7 +74,7 @@ function endpoints({ commands, queries, services, config, limiters }) {
    * saklanır ve kullanıcı arayüzün giriş sayfasına yönlendirilir.
    */
   router.get("/authorize", async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<AuthorizeResult>(
       new AuthorizeCommand({ params: req.query, ssoToken: req.cookies[COOKIES.SSO] || null })
     );
     res.redirect(302, result.redirectTo);
@@ -78,7 +82,7 @@ function endpoints({ commands, queries, services, config, limiters }) {
 
   /** Giriş sayfasının bekleyen isteği tanıması için. */
   router.get("/authorize/request/:id", async (req, res) => {
-    res.json(await queries.ask(new GetAuthorizationRequestQuery({ authRequestId: req.params.id })));
+    res.json(await queries.ask(new GetAuthorizationRequestQuery({ authRequestId: yol(req, "id") })));
   });
 
   /**
@@ -92,7 +96,7 @@ function endpoints({ commands, queries, services, config, limiters }) {
     }
 
     try {
-      const tokens = await commands.execute(
+      const tokens = await commands.execute<TokenResult>(
         new ExchangeTokenCommand({ params, clientCredentials: readBasicAuth(req) }),
         { ip: req.ip, userAgent: req.get("user-agent") }
       );
@@ -111,10 +115,12 @@ function endpoints({ commands, queries, services, config, limiters }) {
       }
       res.json(tokens);
     } catch (error) {
+      // Hata nesnesi unknown gelir; alan okumadan önce daraltılıyor.
+      const hata = error instanceof Error ? error : new Error(String(error));
       // OAuth uçları hata biçimini spesifikasyona göre döndürür.
-      if (error.name === "ValidationError") return oauthError(res, 400, "invalid_request", error.message);
-      if (error.name === "UnauthorizedError") return oauthError(res, 401, "invalid_grant", error.message);
-      if (error.name === "ForbiddenError") return oauthError(res, 403, "access_denied", error.message);
+      if (hata.name === "ValidationError") return oauthError(res, 400, "invalid_request", hata.message);
+      if (hata.name === "UnauthorizedError") return oauthError(res, 401, "invalid_grant", hata.message);
+      if (hata.name === "ForbiddenError") return oauthError(res, 403, "access_denied", hata.message);
       return next(error);
     }
   });
@@ -128,12 +134,14 @@ function endpoints({ commands, queries, services, config, limiters }) {
 
   /** OIDC kullanıcı bilgisi ucu. */
   router.get("/userinfo", requireAuth, async (req, res) => {
-    const user = await queries.ask(
-      new GetCurrentUserQuery({ userId: req.auth.userId }),
-      { policy: req.auth.policy }
+    const user = await queries.ask<CurrentUserResult>(
+      new GetCurrentUserQuery({ userId: kullanici(req) }),
+      // requireAuth önde durduğu için policy burada dolu; yine de null kabul
+      // ediliyor ki sıralama bozulursa yetki sessizce genişlemesin.
+      { policy: req.auth?.policy ?? null }
     );
     res.json({
-      sub: req.auth.userId,
+      sub: kullanici(req),
       name: user?.fullName,
       email: user?.email,
       email_verified: user?.emailVerified
@@ -144,7 +152,7 @@ function endpoints({ commands, queries, services, config, limiters }) {
 }
 
 /** Authorization: Basic <base64(clientId:secret)> */
-function readBasicAuth(req) {
+function readBasicAuth(req: Request): { clientId: string; clientSecret: string } | null {
   const header = req.get("authorization");
   if (!header || !header.startsWith("Basic ")) return null;
   try {
@@ -160,4 +168,5 @@ function readBasicAuth(req) {
   }
 }
 
-module.exports = { oauthRoutes: { discovery, endpoints } };
+/** app.ts ikisini ayrı bağlar: keşif belgesi kökte, uçlar /oauth altında. */
+export const oauthRoutes = { discovery, endpoints };

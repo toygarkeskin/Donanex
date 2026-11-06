@@ -1,12 +1,16 @@
 "use strict";
 
-const { Router } = require("express");
-const {
+import type { RouteContext } from "../types";
+import type { Sonuc } from "../support/results";
+
+import { yol } from "../support/params";
+import { Router } from "express";
+import {
   PlaceOrderCommand,
   ProcessPaymentCommand,
   TrackOrderQuery
-} = require("../../../application/ordering");
-const { COOKIES, clearCookie, appendCookie } = require("../support/cookies");
+} from "../../../application/ordering";
+import { COOKIES, clearCookie, appendCookie } from "../support/cookies";
 
 /**
  * Sipariş verme ve ödeme.
@@ -14,11 +18,11 @@ const { COOKIES, clearCookie, appendCookie } = require("../support/cookies");
  * KAYIT ZORUNLU DEĞİLDİR: misafir de sipariş verebilir ve takip kodu alır.
  * Yanıtta kullanıcıya kayıt olabileceği hatırlatılır.
  */
-function orderRoutes({ commands, queries, config, limiters }) {
+export function orderRoutes({ commands, queries, config, limiters }: Pick<RouteContext, "commands" | "queries" | "config" | "limiters">): Router {
   const router = Router();
 
   router.post("/orders", limiters.checkout, async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<Sonuc>(
       new PlaceOrderCommand({
         userId: req.auth?.userId ?? null,
         guestCartId: req.guestCartId,
@@ -47,7 +51,7 @@ function orderRoutes({ commands, queries, config, limiters }) {
   router.post("/orders/:orderId/payment", limiters.checkout, async (req, res) => {
     const result = await commands.execute(
       new ProcessPaymentCommand({
-        orderId: req.params.orderId,
+        orderId: yol(req, "orderId"),
         trackingCode: req.body?.trackingCode ?? null,
         userId: req.auth?.userId ?? null,
         outcome: req.body?.outcome
@@ -68,4 +72,3 @@ function orderRoutes({ commands, queries, config, limiters }) {
   return router;
 }
 
-module.exports = { orderRoutes };

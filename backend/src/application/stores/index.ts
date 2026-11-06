@@ -2,19 +2,29 @@
 
 import { defineContext } from "../shared/registry";
 
+import * as ApplyForStore from "./commands/ApplyForStore";
+import * as SetStoreStatus from "./commands/SetStoreStatus";
+import * as UpdateStore from "./commands/UpdateStore";
+import * as ManageStoreMember from "./commands/ManageStoreMember";
+import * as GetStore from "./queries/GetStore";
+import * as ListStores from "./queries/ListStores";
+import * as ListStoresForAdmin from "./queries/ListStoresForAdmin";
+import * as GetStoreForMember from "./queries/GetStoreForMember";
+import * as ListStoreMembers from "./queries/ListStoreMembers";
+
 export = defineContext({
   name: "stores",
   commands: {
-    ApplyForStore: require("./commands/ApplyForStore"),
-    SetStoreStatus: require("./commands/SetStoreStatus"),
-    UpdateStore: require("./commands/UpdateStore"),
-    ManageStoreMember: require("./commands/ManageStoreMember")
+    ApplyForStore,
+    SetStoreStatus,
+    UpdateStore,
+    ManageStoreMember,
   },
   queries: {
-    GetStore: require("./queries/GetStore"),
-    ListStores: require("./queries/ListStores"),
-    ListStoresForAdmin: require("./queries/ListStoresForAdmin"),
-    GetStoreForMember: require("./queries/GetStoreForMember"),
-    ListStoreMembers: require("./queries/ListStoreMembers")
+    GetStore,
+    ListStores,
+    ListStoresForAdmin,
+    GetStoreForMember,
+    ListStoreMembers,
   }
 });

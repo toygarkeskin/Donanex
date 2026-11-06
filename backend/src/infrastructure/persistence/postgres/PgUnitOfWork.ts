@@ -44,6 +44,8 @@ export class PgUnitOfWork implements UnitOfWork {
 
   buildRepositories(client: PoolClient): Repositories {
     return {
+      // Kurulum işlerinin toplu SQL için kullandığı kaçış kapısı.
+      db: client,
       users: new PgUserRepository(client),
       roles: new PgRoleRepository(client),
       authSessions: new PgAuthSessionRepository(client),

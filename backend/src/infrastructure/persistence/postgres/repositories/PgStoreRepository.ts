@@ -9,7 +9,7 @@ const COLUMNS = `
   owner_user_id AS "ownerUserId", created_at AS "createdAt"`;
 
 export class PgStoreRepository implements StoreRepository {
-  readonly db: Db;
+  private readonly db: Db;
 
   constructor(client: Db) {
     this.db = client;

@@ -1,13 +1,17 @@
 "use strict";
 
-const { Router } = require("express");
-const {
+import type { RouteContext } from "../types";
+import type { CartMutationResult } from "../support/results";
+
+import { yol } from "../support/params";
+import { Router, type Request, type Response } from "express";
+import {
   GetCartQuery,
   AddToCartCommand,
   UpdateCartItemCommand,
   RemoveFromCartCommand,
   ClearCartCommand
-} = require("../../../application/ordering");
+} from "../../../application/ordering";
 
 /**
  * Sepet. GİRİŞ GEREKTİRMEZ.
@@ -16,13 +20,14 @@ const {
  * sepet kimliği (HttpOnly çerez) bulunur. Kullanıcı sonradan giriş yaparsa
  * ya da kayıt olursa sepet kendi hesabına taşınır ve hiçbir ürün kaybolmaz.
  */
-function cartRoutes({ commands, queries }) {
+export function cartRoutes({ commands, queries }: Pick<RouteContext, "commands" | "queries">): Router {
   const router = Router();
 
-  const identity = (req) => ({ userId: req.auth?.userId ?? null, guestCartId: req.guestCartId });
+  /** Giriş yapılmışsa kullanıcı, değilse çerezdeki misafir sepeti. */
+  const identity = (req: Request) => ({ userId: req.auth?.userId ?? null, guestCartId: req.guestCartId });
 
   /** Sepeti döndürür; değişiklikten sonra ortak yanıt biçimi. */
-  const respondWithCart = async (req, res, status = 200) => {
+  const respondWithCart = async (req: Request, res: Response, status = 200) => {
     const cart = await queries.ask(new GetCartQuery(identity(req)));
     res.status(status).json(cart);
   };
@@ -32,7 +37,7 @@ function cartRoutes({ commands, queries }) {
   });
 
   router.post("/items", async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<CartMutationResult>(
       new AddToCartCommand({ ...identity(req), productId: req.body?.productId, quantity: req.body?.quantity ?? 1 }),
       req.context()
     );
@@ -44,7 +49,7 @@ function cartRoutes({ commands, queries }) {
 
   router.put("/items/:productId", async (req, res) => {
     await commands.execute(
-      new UpdateCartItemCommand({ ...identity(req), productId: req.params.productId, quantity: req.body?.quantity }),
+      new UpdateCartItemCommand({ ...identity(req), productId: yol(req, "productId"), quantity: req.body?.quantity }),
       req.context()
     );
     await respondWithCart(req, res);
@@ -52,7 +57,7 @@ function cartRoutes({ commands, queries }) {
 
   router.delete("/items/:productId", async (req, res) => {
     await commands.execute(
-      new RemoveFromCartCommand({ ...identity(req), productId: req.params.productId }),
+      new RemoveFromCartCommand({ ...identity(req), productId: yol(req, "productId") }),
       req.context()
     );
     await respondWithCart(req, res);
@@ -66,4 +71,3 @@ function cartRoutes({ commands, queries }) {
   return router;
 }
 
-module.exports = { cartRoutes };

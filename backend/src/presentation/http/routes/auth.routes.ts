@@ -1,7 +1,10 @@
 "use strict";
 
-const { Router } = require("express");
-const {
+import type { RouteContext } from "../types";
+import type { CompleteAuthorizationResult, SignInResult } from "../support/results";
+
+import { Router, type Request, type Response } from "express";
+import {
   RegisterUserCommand,
   SignInCommand,
   SignOutCommand,
@@ -9,8 +12,8 @@ const {
   RequestPasswordResetCommand,
   ResetPasswordCommand,
   VerifyEmailCommand
-} = require("../../../application/identity");
-const { COOKIES, buildCookie, clearCookie, appendCookie } = require("../support/cookies");
+} from "../../../application/identity";
+import { COOKIES, buildCookie, clearCookie, appendCookie } from "../support/cookies";
 
 /**
  * Arayüzün kimlik uçları.
@@ -20,10 +23,10 @@ const { COOKIES, buildCookie, clearCookie, appendCookie } = require("../support/
  * akışıdır. Giriş başarılı olunca bekleyen /oauth/authorize isteği
  * tamamlanır ve istemciye dönülecek adres verilir.
  */
-function authRoutes({ commands, config, limiters }) {
+export function authRoutes({ commands, config, limiters }: Pick<RouteContext, "commands" | "config" | "limiters">): Router {
   const router = Router();
 
-  const setSsoCookie = (res, session) =>
+  const setSsoCookie = (res: Response, session: { token: string; maxAgeSeconds: number }) =>
     appendCookie(
       res,
       buildCookie(COOKIES.SSO, session.token, {
@@ -34,14 +37,14 @@ function authRoutes({ commands, config, limiters }) {
     );
 
   /** Giriş ya da kayıt sonrası ortak adım: oturumu kur, akışı tamamla. */
-  async function completeSignIn(req, res, result, status = 200) {
+  async function completeSignIn(req: Request, res: Response, result: SignInResult, status = 200) {
     setSsoCookie(res, result.session);
     // Misafir sepeti kullanıcıya taşındı; artık misafir çerezi gereksiz.
     appendCookie(res, clearCookie(COOKIES.CART, { secure: config.cookieSecure, sameSite: "Lax" }));
 
     let redirectTo = null;
     if (req.body?.authRequestId) {
-      const completion = await commands.execute(
+      const completion = await commands.execute<CompleteAuthorizationResult>(
         new CompleteAuthorizationCommand({
           authRequestId: req.body.authRequestId,
           userId: result.user.id,
@@ -59,7 +62,7 @@ function authRoutes({ commands, config, limiters }) {
   }
 
   router.post("/register", limiters.register, async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<SignInResult>(
       new RegisterUserCommand({ data: req.body, guestCartId: req.guestCartId }),
       req.context()
     );
@@ -67,7 +70,7 @@ function authRoutes({ commands, config, limiters }) {
   });
 
   router.post("/sign-in", limiters.signIn, async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<SignInResult>(
       new SignInCommand({
         email: req.body?.email,
         password: req.body?.password,
@@ -115,4 +118,3 @@ function authRoutes({ commands, config, limiters }) {
   return router;
 }
 
-module.exports = { authRoutes };

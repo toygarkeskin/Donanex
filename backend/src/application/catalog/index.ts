@@ -2,6 +2,18 @@
 
 import { defineContext } from "../shared/registry";
 
+import * as CreateProduct from "./commands/CreateProduct";
+import * as UpdateProduct from "./commands/UpdateProduct";
+import * as SetProductStatus from "./commands/SetProductStatus";
+import * as DeleteProduct from "./commands/DeleteProduct";
+import * as ImportProducts from "./commands/ImportProducts";
+import * as UploadProductImage from "./commands/UploadProductImage";
+import * as CreateCategory from "./commands/CreateCategory";
+import * as ListProducts from "./queries/ListProducts";
+import * as GetProduct from "./queries/GetProduct";
+import * as ListCategories from "./queries/ListCategories";
+import * as ListStoreProducts from "./queries/ListStoreProducts";
+
 /*
  * Katalog bağlamı. Yeni bir kullanım senaryosu buraya eklenir; container.js
  * değişmez. Dışa açılan tek şey bu index'tir — presentation katmanı bağlamın
@@ -10,18 +22,18 @@ import { defineContext } from "../shared/registry";
 export = defineContext({
   name: "catalog",
   commands: {
-    CreateProduct: require("./commands/CreateProduct"),
-    UpdateProduct: require("./commands/UpdateProduct"),
-    SetProductStatus: require("./commands/SetProductStatus"),
-    DeleteProduct: require("./commands/DeleteProduct"),
-    ImportProducts: require("./commands/ImportProducts"),
-    UploadProductImage: require("./commands/UploadProductImage"),
-    CreateCategory: require("./commands/CreateCategory")
+    CreateProduct,
+    UpdateProduct,
+    SetProductStatus,
+    DeleteProduct,
+    ImportProducts,
+    UploadProductImage,
+    CreateCategory,
   },
   queries: {
-    ListProducts: require("./queries/ListProducts"),
-    GetProduct: require("./queries/GetProduct"),
-    ListCategories: require("./queries/ListCategories"),
-    ListStoreProducts: require("./queries/ListStoreProducts")
+    ListProducts,
+    GetProduct,
+    ListCategories,
+    ListStoreProducts,
   }
 });

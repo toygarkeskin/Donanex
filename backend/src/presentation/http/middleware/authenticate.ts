@@ -1,8 +1,11 @@
 "use strict";
 
-const { UnauthorizedError, ForbiddenError } = require("../../../domain/shared/errors");
-const { ResolveAccessPolicyQuery } = require("../../../application/identity");
-const { AccessPolicy } = require("../../../domain/identity/AccessPolicy");
+import type { Request, RequestHandler } from "express";
+
+import { UnauthorizedError, ForbiddenError } from "../../../domain/shared/errors";
+import { ResolveAccessPolicyQuery } from "../../../application/identity";
+import { AccessPolicy, type AccessContext } from "../../../domain/identity/AccessPolicy";
+import type { QueryBus } from "../../../application/shared/cqrs/bus";
 
 /**
  * Bearer erişim jetonunu çözer. Jeton yoksa istek "misafir" olarak devam eder;
@@ -16,7 +19,14 @@ const { AccessPolicy } = require("../../../domain/identity/AccessPolicy");
  * İzinlerin jetona gömülmemesinin bedeli bu küçük denetimdir; karşılığında
  * yetki değişiklikleri jeton süresini beklemeden geçerli olur.
  */
-function authenticate({ tokenIssuer, queries }) {
+export interface AuthenticateDeps {
+  readonly tokenIssuer: {
+    verifyAccessToken(token: unknown, options?: { audience?: string | null }): Promise<Record<string, any> | null>;
+  };
+  readonly queries: Pick<QueryBus, "ask">;
+}
+
+export function authenticate({ tokenIssuer, queries }: AuthenticateDeps): RequestHandler {
   return async (req, _res, next) => {
     req.auth = null;
 
@@ -38,7 +48,11 @@ function authenticate({ tokenIssuer, queries }) {
       return next();
     }
 
-    const { policy, sessionVersion } = await queries.ask(new ResolveAccessPolicyQuery({ userId: payload.sub }));
+    const { policy, sessionVersion } = await queries.ask<{
+      policy: AccessPolicy;
+      /** Hesap kullanılamaz durumdaysa null. */
+      sessionVersion: number | null;
+    }>(new ResolveAccessPolicyQuery({ userId: payload.sub }));
     if (sessionVersion === null) {
       return next(new ForbiddenError("Hesabınız kullanılamıyor."));
     }
@@ -59,16 +73,19 @@ function authenticate({ tokenIssuer, queries }) {
 }
 
 /** Giriş yapılmış olmasını ister. */
-function requireAuth(req, _res, next) {
+export const requireAuth: RequestHandler = (req, _res, next) => {
   if (!req.auth?.userId) return next(new UnauthorizedError("Bu işlem için giriş yapmalısınız."));
   next();
-}
+};
 
 /**
  * İzin denetimi. scopeFrom, isteğe bakıp hangi mağaza kapsamında
  * sorulacağını söyler (ör. (req) => ({ storeId: req.params.storeId })).
  */
-function requirePermission(permission, scopeFrom = () => ({})) {
+export function requirePermission(
+  permission: string,
+  scopeFrom: (req: Request) => AccessContext = () => ({})
+): RequestHandler {
   return (req, _res, next) => {
     if (!req.auth?.userId) return next(new UnauthorizedError("Bu işlem için giriş yapmalısınız."));
     if (!req.auth.policy.can(permission, scopeFrom(req))) {
@@ -79,7 +96,7 @@ function requirePermission(permission, scopeFrom = () => ({})) {
 }
 
 /** Jetonun istenen izin alanını (scope) taşıdığını denetler. */
-function requireScope(scope) {
+export function requireScope(scope: string): RequestHandler {
   return (req, _res, next) => {
     if (!req.auth?.scope?.includes(scope)) {
       return next(new ForbiddenError(`Bu uç "${scope}" izin alanını gerektirir.`));
@@ -87,5 +104,3 @@ function requireScope(scope) {
     next();
   };
 }
-
-module.exports = { authenticate, requireAuth, requirePermission, requireScope };

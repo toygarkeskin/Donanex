@@ -57,13 +57,23 @@ export const PORTS = {
 /** Bağlanması gereken port adları. */
 export type PortName = keyof typeof PORTS;
 
-/** Composition root'un ürettiği servis torbası. */
-export type Services = Record<string, unknown>;
+/**
+ * Composition root'un ürettiği servis torbası.
+ *
+ * Şeklin kendisi contracts.ts'te tanımlı; burada yalnızca yeniden dışa
+ * açılıyor ki port adlarını arayan okuyucu iki dosya arasında kaybolmasın.
+ */
+export type { Services } from "./contracts";
 
-export function assertPorts(services: Services): void {
+import type { Services as BoundServices } from "./contracts";
+
+export function assertPorts(services: BoundServices): void {
   const missing: string[] = [];
+  // Ad ile erişim gerekiyor: PORTS listesi üzerinde dönüyoruz, tek tek
+  // alan yazmıyoruz. Tipli arayüzü dizine çevirmek bunun bedeli.
+  const bag = services as unknown as Record<string, unknown>;
   for (const [port, methods] of Object.entries(PORTS) as [PortName, readonly string[] | null][]) {
-    const adapter = services[port];
+    const adapter = bag[port];
     if (adapter === undefined || adapter === null) {
       missing.push(`${port}: bağlanmamış`);
       continue;

@@ -1,6 +1,9 @@
 "use strict";
 
-const { Router } = require("express");
+import type { RouteContext } from "../types";
+
+import { yol } from "../support/params";
+import { Router } from "express";
 
 /**
  * Panelden yüklenen ürün görsellerini sunar.
@@ -13,12 +16,12 @@ const { Router } = require("express");
  * uymayan hiçbir adı açmaz. Yanıt başlıkları tarayıcıyı, içeriği başka bir
  * şey sanıp çalıştırmaktan alıkoyar.
  */
-function uploadRoutes({ services }) {
+export function uploadRoutes({ services }: Pick<RouteContext, "services">): Router {
   const router = Router();
 
   router.get("/:fileName", async (req, res, next) => {
     try {
-      const { content, contentType } = await services.fileStorage.read(req.params.fileName);
+      const { content, contentType } = await services.fileStorage.read(yol(req, "fileName"));
 
       res.set({
         "Content-Type": contentType,
@@ -41,4 +44,3 @@ function uploadRoutes({ services }) {
   return router;
 }
 
-module.exports = { uploadRoutes };

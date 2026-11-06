@@ -1,6 +1,9 @@
 "use strict";
 
-const { GrantTypes } = require("../domain/identity/OAuthClient");
+import type { Services } from "../application/shared/contracts";
+import type { AppConfig } from "../config/env";
+
+import { GrantTypes } from "../domain/identity/OAuthClient";
 
 /**
  * Sistemin kendi OAuth istemcilerini tanımlar.
@@ -10,7 +13,11 @@ const { GrantTypes } = require("../domain/identity/OAuthClient");
  *  donanex-ops  — makineden makineye entegrasyon örneği. GİZLİ istemcidir;
  *               parolası yalnızca ilk oluşturmada gösterilir.
  */
-async function syncOAuthClients({ unitOfWork, passwordHasher, config, logger }) {
+export async function syncOAuthClients({
+  unitOfWork,
+  logger,
+  config
+}: Pick<Services, "unitOfWork" | "logger"> & { config: AppConfig }) {
   const base = config.publicUrl;
 
   const web = {
@@ -34,4 +41,3 @@ async function syncOAuthClients({ unitOfWork, passwordHasher, config, logger }) 
   return { web };
 }
 
-module.exports = { syncOAuthClients };

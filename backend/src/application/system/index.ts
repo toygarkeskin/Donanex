@@ -2,11 +2,14 @@
 
 import { defineContext } from "../shared/registry";
 
+import * as CheckReadiness from "./queries/CheckReadiness";
+import * as GetDashboard from "./queries/GetDashboard";
+
 export = defineContext({
   name: "system",
   commands: {},
   queries: {
-    CheckReadiness: require("./queries/CheckReadiness"),
-    GetDashboard: require("./queries/GetDashboard")
+    CheckReadiness,
+    GetDashboard,
   }
 });

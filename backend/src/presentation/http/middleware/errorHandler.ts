@@ -1,15 +1,19 @@
 "use strict";
 
-const {
+import type { ErrorRequestHandler, Request, RequestHandler, Response } from "express";
+
+import {
   ValidationError,
   NotFoundError,
   ConflictError,
   UnauthorizedError,
   ForbiddenError,
   ConfigurationError
-} = require("../../../domain/shared/errors");
+} from "../../../domain/shared/errors";
 
-const STATUS_BY_ERROR = [
+type ErrorClass = new (...args: any[]) => Error;
+
+const STATUS_BY_ERROR: readonly (readonly [ErrorClass, number, string])[] = [
   [ValidationError, 400, "validation_error"],
   [UnauthorizedError, 401, "unauthorized"],
   [ForbiddenError, 403, "forbidden"],
@@ -18,11 +22,21 @@ const STATUS_BY_ERROR = [
   [ConfigurationError, 503, "service_unavailable"]
 ];
 
-function classify(error) {
+function classify(error: unknown): { status: number; code: string } | null {
   for (const [ErrorClass, status, code] of STATUS_BY_ERROR) {
     if (error instanceof ErrorClass) return { status, code };
   }
   return null;
+}
+
+/**
+ * Express'in hata nesnesi: kendi domain hatalarımızın yanında gövde ayrıştırma
+ * hataları da buraya düşer, onların alanları farklıdır.
+ */
+interface HttpishError extends Error {
+  readonly type?: string;
+  readonly status?: number;
+  readonly details?: unknown;
 }
 
 /**
@@ -32,7 +46,7 @@ function classify(error) {
  * hatalarda ayrıntı GİZLENİR (yığın izi, SQL metni, dosya yolu sızmaz) ve
  * olay istek numarasıyla günlüğe yazılır.
  */
-function errorHandler(error, req, res, _next) {
+export const errorHandler: ErrorRequestHandler = (error: HttpishError, req: Request, res: Response, _next) => {
   if (error.type === "entity.parse.failed") {
     return res.status(400).json({ error: "invalid_body", message: "Geçersiz istek gövdesi." });
   }
@@ -49,8 +63,8 @@ function errorHandler(error, req, res, _next) {
     });
   }
 
-  if (Number.isInteger(error.status) && error.status >= 400 && error.status < 500) {
-    return res.status(error.status).json({ error: "bad_request", message: "Geçersiz istek." });
+  if (Number.isInteger(error.status) && error.status! >= 400 && error.status! < 500) {
+    return res.status(error.status!).json({ error: "bad_request", message: "Geçersiz istek." });
   }
 
   req.log?.error("İşlenmeyen hata: {Reason}", {
@@ -60,15 +74,14 @@ function errorHandler(error, req, res, _next) {
     Stack: error.stack
   });
 
+  // Yığın izi ve hata metni İSTEMCİYE GİTMEZ; yalnızca istek numarası verilir.
   return res.status(500).json({
     error: "internal_error",
     message: "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
     requestId: req.id
   });
-}
+};
 
-function notFoundHandler(_req, res) {
+export const notFoundHandler: RequestHandler = (_req, res) => {
   res.status(404).json({ error: "not_found", message: "Bulunamadı." });
-}
-
-module.exports = { errorHandler, notFoundHandler };
+};

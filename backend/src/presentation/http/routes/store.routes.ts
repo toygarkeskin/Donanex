@@ -1,7 +1,11 @@
 "use strict";
 
-const { Router, raw } = require("express");
-const {
+import type { RouteContext } from "../types";
+import type { ProductDeleteResult, ProductImportResult, Sonuc, StoreMemberResult } from "../support/results";
+
+import { yol } from "../support/params";
+import { Router, raw, type Request } from "express";
+import {
   CreateProductCommand,
   UpdateProductCommand,
   SetProductStatusCommand,
@@ -9,49 +13,50 @@ const {
   ImportProductsCommand,
   UploadProductImageCommand,
   ListStoreProductsQuery
-} = require("../../../application/catalog");
-const {
+} from "../../../application/catalog";
+import {
   ListStoreOrdersQuery,
   GetStoreOrderQuery,
   UpdatePackageStatusCommand,
   UpdatePackageShippingCommand
-} = require("../../../application/ordering");
-const {
+} from "../../../application/ordering";
+import {
   GetStoreForMemberQuery,
   UpdateStoreCommand,
   ListStoreMembersQuery,
   ManageStoreMemberCommand
-} = require("../../../application/stores");
-const { ListTicketsQuery, GetTicketQuery, ReplyToTicketCommand } = require("../../../application/support");
-const { GetDashboardQuery } = require("../../../application/system");
-const { requireAuth, requirePermission } = require("../middleware/authenticate");
+} from "../../../application/stores";
+import { ListTicketsQuery, GetTicketQuery, ReplyToTicketCommand } from "../../../application/support";
+import { GetDashboardQuery } from "../../../application/system";
+import { requireAuth, requirePermission } from "../middleware/authenticate";
 
 /**
  * Mağaza paneli. Her uç mağazaya göre kapsamlıdır: yetki denetimi
  * "bu kişi BU mağazada şunu yapabilir mi?" sorusunu sorar, böylece bir mağaza
  * sahibi başka bir mağazanın verisine hiçbir yoldan erişemez.
  */
-function storePanelRoutes({ commands, queries }) {
+export function storePanelRoutes({ commands, queries }: Pick<RouteContext, "commands" | "queries">): Router {
   const router = Router();
-  const inStore = (req) => ({ storeId: req.params.storeId });
-  const may = (permission) => requirePermission(permission, inStore);
+  /** Yetki hep MAĞAZA kapsamında sorulur: başka mağazanın verisine yol yok. */
+  const inStore = (req: Request) => ({ storeId: yol(req, "storeId") });
+  const may = (permission: string) => requirePermission(permission, inStore);
 
   router.use(requireAuth);
 
   router.get("/:storeId", may("store:read"), async (req, res) => {
-    res.json(await queries.ask(new GetStoreForMemberQuery({ storeId: req.params.storeId }), req.context()));
+    res.json(await queries.ask(new GetStoreForMemberQuery({ storeId: yol(req, "storeId") }), req.context()));
   });
 
   router.put("/:storeId", may("store:write"), async (req, res) => {
-    const store = await commands.execute(
-      new UpdateStoreCommand({ storeId: req.params.storeId, data: req.body }),
+    const store = await commands.execute<Sonuc>(
+      new UpdateStoreCommand({ storeId: yol(req, "storeId"), data: req.body }),
       req.context()
     );
     res.json({ ...store, message: "Mağaza bilgileri güncellendi." });
   });
 
   router.get("/:storeId/dashboard", may("order:read"), async (req, res) => {
-    res.json(await queries.ask(new GetDashboardQuery({ scope: "store", storeId: req.params.storeId }), req.context()));
+    res.json(await queries.ask(new GetDashboardQuery({ scope: "store", storeId: yol(req, "storeId") }), req.context()));
   });
 
   /* ----- ürünler ----- */
@@ -59,23 +64,23 @@ function storePanelRoutes({ commands, queries }) {
   router.get("/:storeId/products", may("catalog:product:read"), async (req, res) => {
     res.json(
       await queries.ask(
-        new ListStoreProductsQuery({ storeId: req.params.storeId, filters: req.query }),
+        new ListStoreProductsQuery({ storeId: yol(req, "storeId"), filters: req.query }),
         req.context()
       )
     );
   });
 
   router.post("/:storeId/products", may("catalog:product:write"), async (req, res) => {
-    const product = await commands.execute(
-      new CreateProductCommand({ storeId: req.params.storeId, data: req.body }),
+    const product = await commands.execute<Sonuc>(
+      new CreateProductCommand({ storeId: yol(req, "storeId"), data: req.body }),
       req.context()
     );
     res.status(201).json({ ...product, message: "Ürün eklendi." });
   });
 
   router.post("/:storeId/products/bulk", may("catalog:product:write"), async (req, res) => {
-    const result = await commands.execute(
-      new ImportProductsCommand({ storeId: req.params.storeId, rows: req.body?.products }),
+    const result = await commands.execute<ProductImportResult>(
+      new ImportProductsCommand({ storeId: yol(req, "storeId"), rows: req.body?.products }),
       req.context()
     );
     res.status(201).json({
@@ -106,7 +111,7 @@ function storePanelRoutes({ commands, queries }) {
         });
       }
       const result = await commands.execute(
-        new UploadProductImageCommand({ storeId: req.params.storeId, content: req.body }),
+        new UploadProductImageCommand({ storeId: yol(req, "storeId"), content: req.body }),
         req.context()
       );
       res.status(201).json(result);
@@ -114,10 +119,10 @@ function storePanelRoutes({ commands, queries }) {
   );
 
   router.put("/:storeId/products/:productId", may("catalog:product:write"), async (req, res) => {
-    const product = await commands.execute(
+    const product = await commands.execute<Sonuc>(
       new UpdateProductCommand({
-        storeId: req.params.storeId,
-        productId: req.params.productId,
+        storeId: yol(req, "storeId"),
+        productId: yol(req, "productId"),
         data: req.body
       }),
       req.context()
@@ -128,8 +133,8 @@ function storePanelRoutes({ commands, queries }) {
   router.patch("/:storeId/products/:productId/status", may("catalog:product:write"), async (req, res) => {
     const product = await commands.execute(
       new SetProductStatusCommand({
-        storeId: req.params.storeId,
-        productId: req.params.productId,
+        storeId: yol(req, "storeId"),
+        productId: yol(req, "productId"),
         status: req.body?.status
       }),
       req.context()
@@ -138,8 +143,8 @@ function storePanelRoutes({ commands, queries }) {
   });
 
   router.delete("/:storeId/products/:productId", may("catalog:product:delete"), async (req, res) => {
-    const result = await commands.execute(
-      new DeleteProductCommand({ storeId: req.params.storeId, productId: req.params.productId }),
+    const result = await commands.execute<ProductDeleteResult>(
+      new DeleteProductCommand({ storeId: yol(req, "storeId"), productId: yol(req, "productId") }),
       req.context()
     );
     res.json({
@@ -155,7 +160,7 @@ function storePanelRoutes({ commands, queries }) {
   router.get("/:storeId/orders", may("order:read"), async (req, res) => {
     res.json(
       await queries.ask(
-        new ListStoreOrdersQuery({ storeId: req.params.storeId, filters: req.query }),
+        new ListStoreOrdersQuery({ storeId: yol(req, "storeId"), filters: req.query }),
         req.context()
       )
     );
@@ -164,17 +169,17 @@ function storePanelRoutes({ commands, queries }) {
   router.get("/:storeId/orders/:packageId", may("order:read"), async (req, res) => {
     res.json(
       await queries.ask(
-        new GetStoreOrderQuery({ storeId: req.params.storeId, packageId: req.params.packageId }),
+        new GetStoreOrderQuery({ storeId: yol(req, "storeId"), packageId: yol(req, "packageId") }),
         req.context()
       )
     );
   });
 
   router.patch("/:storeId/orders/:packageId/status", may("order:fulfil"), async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<Sonuc>(
       new UpdatePackageStatusCommand({
-        storeId: req.params.storeId,
-        packageId: req.params.packageId,
+        storeId: yol(req, "storeId"),
+        packageId: yol(req, "packageId"),
         status: req.body?.status
       }),
       req.context()
@@ -183,10 +188,10 @@ function storePanelRoutes({ commands, queries }) {
   });
 
   router.patch("/:storeId/orders/:packageId/shipping", may("order:fulfil"), async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<Sonuc>(
       new UpdatePackageShippingCommand({
-        storeId: req.params.storeId,
-        packageId: req.params.packageId,
+        storeId: yol(req, "storeId"),
+        packageId: yol(req, "packageId"),
         data: req.body
       }),
       req.context()
@@ -198,14 +203,14 @@ function storePanelRoutes({ commands, queries }) {
 
   router.get("/:storeId/members", may("store:member:manage"), async (req, res) => {
     res.json({
-      items: await queries.ask(new ListStoreMembersQuery({ storeId: req.params.storeId }), req.context())
+      items: await queries.ask(new ListStoreMembersQuery({ storeId: yol(req, "storeId") }), req.context())
     });
   });
 
   router.post("/:storeId/members", may("store:member:manage"), async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<StoreMemberResult>(
       new ManageStoreMemberCommand({
-        storeId: req.params.storeId,
+        storeId: yol(req, "storeId"),
         email: req.body?.email,
         roleCode: req.body?.roleCode,
         remove: req.body?.remove === true
@@ -220,7 +225,7 @@ function storePanelRoutes({ commands, queries }) {
   router.get("/:storeId/tickets", may("support:read"), async (req, res) => {
     res.json(
       await queries.ask(
-        new ListTicketsQuery({ scope: "store", storeId: req.params.storeId, filters: req.query }),
+        new ListTicketsQuery({ scope: "store", storeId: yol(req, "storeId"), filters: req.query }),
         req.context()
       )
     );
@@ -229,17 +234,17 @@ function storePanelRoutes({ commands, queries }) {
   router.get("/:storeId/tickets/:ticketId", may("support:read"), async (req, res) => {
     res.json(
       await queries.ask(
-        new GetTicketQuery({ scope: "store", storeId: req.params.storeId, ticketId: req.params.ticketId }),
+        new GetTicketQuery({ scope: "store", storeId: yol(req, "storeId"), ticketId: yol(req, "ticketId") }),
         req.context()
       )
     );
   });
 
   router.put("/:storeId/tickets/:ticketId", may("support:respond"), async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<Sonuc>(
       new ReplyToTicketCommand({
-        ticketId: req.params.ticketId,
-        storeId: req.params.storeId,
+        ticketId: yol(req, "ticketId"),
+        storeId: yol(req, "storeId"),
         data: req.body
       }),
       req.context()

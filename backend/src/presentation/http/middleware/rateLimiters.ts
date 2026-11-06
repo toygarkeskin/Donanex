@@ -1,10 +1,40 @@
 "use strict";
 
-const rateLimit = require("express-rate-limit");
-const { RedisStore } = require("rate-limit-redis");
+import rateLimit, { type Options } from "express-rate-limit";
+import { RedisStore, type RedisReply } from "rate-limit-redis";
+import type { RequestHandler } from "express";
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
-const passThrough = (_req, _res, next) => next();
+const passThrough: RequestHandler = (_req, _res, next) => next();
+
+/**
+ * Sayaçları Redis'te tutmak için gereken en küçük arayüz.
+ *
+ * Tüm redis istemcisi değil yalnızca bu tek metot istenir: sınırlayıcı
+ * başka bir şeye dokunmasın ve testte yerine küçük bir sahte konabilsin.
+ */
+export interface RateLimitRedisClient {
+  sendCommand(args: string[]): Promise<RedisReply>;
+}
+
+export interface RateLimiterOptions {
+  readonly enabled?: boolean;
+  readonly redisClient?: RateLimitRedisClient | null;
+}
+
+/** Uygulamanın kullandığı sınırlayıcılar; adları rotalarda geçer. */
+export interface RateLimiters {
+  readonly api: RequestHandler;
+  readonly signIn: RequestHandler;
+  readonly register: RequestHandler;
+  readonly token: RequestHandler;
+  readonly passwordReset: RequestHandler;
+  readonly passwordChange: RequestHandler;
+  readonly checkout: RequestHandler;
+  readonly tracking: RequestHandler;
+  readonly support: RequestHandler;
+  readonly storeApplication: RequestHandler;
+}
 
 /**
  * İstek sınırları.
@@ -15,21 +45,21 @@ const passThrough = (_req, _res, next) => next();
  * Giriş ve parola uçlarında yalnızca BAŞARISIZ denemeler sayılır; doğru
  * parolayla çalışan kullanıcı sınıra takılmaz.
  */
-function createRateLimiters({ enabled = true, redisClient = null } = {}) {
+export function createRateLimiters({ enabled = true, redisClient = null }: RateLimiterOptions = {}): RateLimiters {
   /**
    * Her limitin KENDİ Redis öneki olmalıdır. Ortak önek kullanılırsa bütün
    * limitler tek bir sayacı paylaşır ve en dar limit (ör. kayıt) tüm siteyi
    * kilitler — sessiz ama yıkıcı bir hata.
    */
-  const storeFor = (name) =>
+  const storeFor = (name: string) =>
     redisClient
       ? new RedisStore({
           prefix: `rl:${name}:`,
-          sendCommand: (...args) => redisClient.sendCommand(args)
+          sendCommand: (...args: string[]) => redisClient.sendCommand(args)
         })
       : undefined;
 
-  const limiter = (name, limit, message, options = {}) =>
+  const limiter = (name: string, limit: number, message: string, options: Partial<Options> = {}): RequestHandler =>
     enabled
       ? rateLimit({
           windowMs: FIFTEEN_MINUTES,
@@ -43,7 +73,7 @@ function createRateLimiters({ enabled = true, redisClient = null } = {}) {
       : passThrough;
 
   const LATER = "Lütfen daha sonra tekrar deneyin.";
-  const failedOnly = { skipSuccessfulRequests: true };
+  const failedOnly: Partial<Options> = { skipSuccessfulRequests: true };
 
   return {
     api: limiter("api", 900, `Çok fazla istek gönderildi. ${LATER}`),
@@ -59,5 +89,3 @@ function createRateLimiters({ enabled = true, redisClient = null } = {}) {
     storeApplication: limiter("storeapp", 3, `Çok fazla mağaza başvurusu. ${LATER}`)
   };
 }
-
-module.exports = { createRateLimiters };

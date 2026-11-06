@@ -1,5 +1,7 @@
 "use strict";
 
+import type { Request, Response } from "express";
+
 /**
  * Çerez adları ve üretimi tek yerde.
  *
@@ -13,14 +15,16 @@
  * Erişim jetonu ÇEREZDE TUTULMAZ: arayüz onu bellekte tutar, böylece
  * CSRF yüzeyi daralır ve jeton sekme kapanınca kaybolur.
  */
-const COOKIES = Object.freeze({
+export const COOKIES = Object.freeze({
   SSO: "dnx_sso",
   REFRESH: "dnx_rt",
   CART: "dnx_cart"
 });
 
-function parseCookies(req) {
-  const result = Object.create(null);
+export function parseCookies(req: Request): Record<string, string> {
+  // Object.create(null): "constructor" ya da "__proto__" adlı bir çerez
+  // prototipe dokunamaz.
+  const result: Record<string, string> = Object.create(null);
   for (const part of (req.headers.cookie || "").split(";")) {
     const index = part.indexOf("=");
     if (index < 0) continue;
@@ -34,26 +38,32 @@ function parseCookies(req) {
   return result;
 }
 
-/** maxAgeSeconds null ise tarayıcı kapanınca silinen oturum çerezi olur. */
-function buildCookie(name, value, { maxAgeSeconds = null, secure, sameSite = "Strict", path = "/" } = {}) {
-  const parts = [
-    `${name}=${encodeURIComponent(value)}`,
-    "HttpOnly",
-    `SameSite=${sameSite}`,
-    `Path=${path}`
-  ];
+export interface CookieOptions {
+  /** null ise tarayıcı kapanınca silinen oturum çerezi olur. */
+  readonly maxAgeSeconds?: number | null;
+  readonly secure?: boolean;
+  readonly sameSite?: "Strict" | "Lax" | "None";
+  readonly path?: string;
+}
+
+/** HttpOnly her zaman açık: çerezleri sayfadaki JavaScript okuyamaz. */
+export function buildCookie(
+  name: string,
+  value: string,
+  { maxAgeSeconds = null, secure, sameSite = "Strict", path = "/" }: CookieOptions = {}
+): string {
+  const parts = [`${name}=${encodeURIComponent(value)}`, "HttpOnly", `SameSite=${sameSite}`, `Path=${path}`];
   if (maxAgeSeconds !== null) parts.push(`Max-Age=${Math.floor(maxAgeSeconds)}`);
   if (secure) parts.push("Secure");
   return parts.join("; ");
 }
 
-const clearCookie = (name, options) => buildCookie(name, "", { ...options, maxAgeSeconds: 0 });
+export const clearCookie = (name: string, options?: CookieOptions): string =>
+  buildCookie(name, "", { ...options, maxAgeSeconds: 0 });
 
 /** Aynı yanıtta birden çok çerez gönderebilmek için. */
-function appendCookie(res, cookie) {
+export function appendCookie(res: Response, cookie: string): void {
   const existing = res.getHeader("Set-Cookie");
   if (!existing) res.setHeader("Set-Cookie", [cookie]);
-  else res.setHeader("Set-Cookie", [...(Array.isArray(existing) ? existing : [existing]), cookie]);
+  else res.setHeader("Set-Cookie", [...(Array.isArray(existing) ? existing : [String(existing)]), cookie]);
 }
-
-module.exports = { COOKIES, parseCookies, buildCookie, clearCookie, appendCookie };

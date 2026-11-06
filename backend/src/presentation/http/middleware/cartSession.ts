@@ -1,7 +1,9 @@
 "use strict";
 
-const { COOKIES, buildCookie, appendCookie } = require("../support/cookies");
-const { authPolicy } = require("../../../application/identity");
+import type { RequestHandler } from "express";
+
+import { COOKIES, buildCookie, appendCookie } from "../support/cookies";
+import { authPolicy } from "../../../application/identity";
 
 const { GUEST_CART_TTL_MS } = authPolicy;
 
@@ -13,7 +15,7 @@ const { GUEST_CART_TTL_MS } = authPolicy;
  * kimlik SignIn/RegisterUser komutlarına verilir ve sepet kullanıcının
  * sepetiyle birleştirilir — hiçbir ürün kaybolmaz.
  */
-function cartSession({ cookieSecure }) {
+export function cartSession({ cookieSecure }: { cookieSecure: boolean }): RequestHandler {
   return (req, res, next) => {
     req.guestCartId = req.auth?.userId ? null : req.cookies[COOKIES.CART] || null;
 
@@ -32,5 +34,3 @@ function cartSession({ cookieSecure }) {
     next();
   };
 }
-
-module.exports = { cartSession };

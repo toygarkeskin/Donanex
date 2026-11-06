@@ -1,23 +1,27 @@
 "use strict";
 
-const { Router } = require("express");
-const {
+import type { RouteContext } from "../types";
+import type { RoleAssignmentResult, Sonuc } from "../support/results";
+
+import { yol } from "../support/params";
+import { Router } from "express";
+import {
   ListUsersQuery,
   AssignRoleCommand,
   SetUserStatusCommand
-} = require("../../../application/identity");
-const {
+} from "../../../application/identity";
+import {
   ListStoresForAdminQuery,
   SetStoreStatusCommand
-} = require("../../../application/stores");
-const { CreateCategoryCommand } = require("../../../application/catalog");
-const { ListAdminOrdersQuery, GetAdminOrderQuery } = require("../../../application/ordering");
-const { ListTicketsQuery, GetTicketQuery, ReplyToTicketCommand } = require("../../../application/support");
-const { GetDashboardQuery } = require("../../../application/system");
-const { requireAuth, requirePermission } = require("../middleware/authenticate");
+} from "../../../application/stores";
+import { CreateCategoryCommand } from "../../../application/catalog";
+import { ListAdminOrdersQuery, GetAdminOrderQuery } from "../../../application/ordering";
+import { ListTicketsQuery, GetTicketQuery, ReplyToTicketCommand } from "../../../application/support";
+import { GetDashboardQuery } from "../../../application/system";
+import { requireAuth, requirePermission } from "../middleware/authenticate";
 
 /** Sistem yöneticisi paneli. Her uç ayrı ayrı izin ister. */
-function adminRoutes({ commands, queries }) {
+export function adminRoutes({ commands, queries }: Pick<RouteContext, "commands" | "queries">): Router {
   const router = Router();
   router.use(requireAuth);
 
@@ -32,9 +36,9 @@ function adminRoutes({ commands, queries }) {
   });
 
   router.post("/users/:userId/roles", requirePermission("role:assign"), async (req, res) => {
-    const result = await commands.execute(
+    const result = await commands.execute<RoleAssignmentResult>(
       new AssignRoleCommand({
-        userId: req.params.userId,
+        userId: yol(req, "userId"),
         roleCode: req.body?.roleCode,
         storeId: req.body?.storeId ?? null,
         revoke: req.body?.revoke === true
@@ -45,8 +49,8 @@ function adminRoutes({ commands, queries }) {
   });
 
   router.patch("/users/:userId/status", requirePermission("user:write"), async (req, res) => {
-    const result = await commands.execute(
-      new SetUserStatusCommand({ userId: req.params.userId, status: req.body?.status }),
+    const result = await commands.execute<Sonuc>(
+      new SetUserStatusCommand({ userId: yol(req, "userId"), status: req.body?.status }),
       req.context()
     );
     res.json({ ...result, message: "Hesap durumu güncellendi." });
@@ -59,8 +63,8 @@ function adminRoutes({ commands, queries }) {
   });
 
   router.patch("/stores/:storeId/status", requirePermission("store:approve"), async (req, res) => {
-    const result = await commands.execute(
-      new SetStoreStatusCommand({ storeId: req.params.storeId, status: req.body?.status }),
+    const result = await commands.execute<Sonuc>(
+      new SetStoreStatusCommand({ storeId: yol(req, "storeId"), status: req.body?.status }),
       req.context()
     );
     res.json({ ...result, message: "Mağaza durumu güncellendi." });
@@ -80,7 +84,7 @@ function adminRoutes({ commands, queries }) {
   });
 
   router.get("/orders/:orderId", requirePermission("order:read"), async (req, res) => {
-    res.json(await queries.ask(new GetAdminOrderQuery({ orderId: req.params.orderId }), req.context()));
+    res.json(await queries.ask(new GetAdminOrderQuery({ orderId: yol(req, "orderId") }), req.context()));
   });
 
   /* ----- destek ----- */
@@ -91,13 +95,13 @@ function adminRoutes({ commands, queries }) {
 
   router.get("/tickets/:ticketId", requirePermission("support:read"), async (req, res) => {
     res.json(
-      await queries.ask(new GetTicketQuery({ scope: "admin", ticketId: req.params.ticketId }), req.context())
+      await queries.ask(new GetTicketQuery({ scope: "admin", ticketId: yol(req, "ticketId") }), req.context())
     );
   });
 
   router.put("/tickets/:ticketId", requirePermission("support:respond"), async (req, res) => {
-    const result = await commands.execute(
-      new ReplyToTicketCommand({ ticketId: req.params.ticketId, data: req.body }),
+    const result = await commands.execute<Sonuc>(
+      new ReplyToTicketCommand({ ticketId: yol(req, "ticketId"), data: req.body }),
       req.context()
     );
     res.json({ ...result, message: "Talep güncellendi." });
@@ -106,4 +110,3 @@ function adminRoutes({ commands, queries }) {
   return router;
 }
 
-module.exports = { adminRoutes };

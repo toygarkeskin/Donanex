@@ -13,9 +13,13 @@ import type { Cache, Logger } from "../../application/shared/contracts";
  */
 export class RedisCache implements Cache {
   private readonly logger: Partial<Logger>;
-  private readonly client: RedisClientType;
+  /**
+   * Ham istemci. İstek sınırlayıcı sayaçlarını doğrudan Redis komutlarıyla
+   * tuttuğu için dışarı açıldı; önbellek okuma/yazması için kullanılmaz.
+   */
+  readonly client: RedisClientType;
   /** Bağlantı kopmuşsa önbelleğe hiç gidilmez, doğrudan kaynağa düşülür. */
-  private available = false;
+  available = false;
 
   constructor(url: string, logger: Partial<Logger> = console) {
     this.logger = logger;

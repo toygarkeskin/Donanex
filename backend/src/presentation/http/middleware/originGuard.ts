@@ -1,5 +1,7 @@
 "use strict";
 
+import type { RequestHandler } from "express";
+
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
@@ -10,7 +12,7 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
  * Tarayıcı Origin'i taklit edilemez; başka bir siteden gönderilen istek
  * çerezleri taşısa bile burada durur.
  */
-function originGuard(req, res, next) {
+export const originGuard: RequestHandler = (req, res, next) => {
   if (SAFE_METHODS.has(req.method)) return next();
 
   const reject = () =>
@@ -18,7 +20,7 @@ function originGuard(req, res, next) {
 
   const origin = req.get("origin");
   if (origin) {
-    let host = null;
+    let host: string | null = null;
     try {
       host = new URL(origin).host;
     } catch {
@@ -29,6 +31,4 @@ function originGuard(req, res, next) {
 
   if (req.get("sec-fetch-site") === "cross-site") return reject();
   return next();
-}
-
-module.exports = { originGuard };
+};
