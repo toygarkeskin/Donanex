@@ -1,6 +1,16 @@
 "use strict";
 
-const { Command, Query } = require("./Message");
+import { Command, Query, type Handler } from "./Message";
+
+/** Bus'a kaydedilebilen mesaj sınıfı. */
+export type MessageClass<T = unknown> = abstract new (...args: never[]) => T;
+
+/** Kesişen işler (günlükleme, ölçüm) için zincir halkası. */
+export type Middleware<TContext = unknown> = (
+  message: object,
+  context: TContext,
+  next: (message: object, context: TContext) => Promise<unknown>
+) => Promise<unknown>;
 
 /**
  * Bağımlılıksız CQRS veri yolları.
@@ -11,21 +21,24 @@ const { Command, Query } = require("./Message");
  * Middleware desteği açık/kapalı prensibi içindir: günlükleme, ölçüm ve
  * yeniden deneme gibi kesişen işler handler'lara dokunmadan eklenir.
  */
-class MessageBus {
-  constructor(kind, BaseClass) {
+export class MessageBus<TContext = unknown> {
+  readonly kind: string;
+  private readonly BaseClass: Function;
+  private readonly handlers = new Map<Function, Handler<never, unknown, TContext>>();
+  private readonly middlewares: Middleware<TContext>[] = [];
+
+  constructor(kind: string, BaseClass: Function) {
     this.kind = kind;
     this.BaseClass = BaseClass;
-    this.handlers = new Map();
-    this.middlewares = [];
   }
 
-  use(middleware) {
+  use(middleware: Middleware<TContext>): this {
     if (typeof middleware !== "function") throw new TypeError("Middleware bir fonksiyon olmalı.");
     this.middlewares.push(middleware);
     return this;
   }
 
-  register(MessageClass, handler) {
+  register(MessageClass: Function, handler: Handler<never, unknown, TContext>): this {
     if (typeof MessageClass !== "function") {
       throw new TypeError(`${this.kind} sınıfı bekleniyordu.`);
     }
@@ -42,44 +55,42 @@ class MessageBus {
     return this;
   }
 
-  get registeredCount() {
+  get registeredCount(): number {
     return this.handlers.size;
   }
 
-  async dispatch(message, context = {}) {
-    const handler = message && this.handlers.get(message.constructor);
+  async dispatch(message: object, context: TContext = {} as TContext): Promise<unknown> {
+    const handler = message ? this.handlers.get(message.constructor) : undefined;
     if (!handler) {
-      const name = message?.constructor?.name || typeof message;
+      const name = (message as { constructor?: { name?: string } })?.constructor?.name ?? typeof message;
       throw new Error(`${name} için kayıtlı ${this.kind} handler'ı yok.`);
     }
 
     // Middleware zinciri: son halka gerçek handler'dır.
-    const run = this.middlewares.reduceRight(
+    const run = this.middlewares.reduceRight<(msg: object, ctx: TContext) => Promise<unknown>>(
       (next, middleware) => (msg, ctx) => middleware(msg, ctx, next),
-      (msg, ctx) => handler.handle(msg, ctx)
+      async (msg, ctx) => (handler.handle as (m: object, c: TContext) => unknown)(msg, ctx)
     );
     return run(message, context);
   }
 }
 
-class CommandBus extends MessageBus {
+export class CommandBus<TContext = unknown> extends MessageBus<TContext> {
   constructor() {
     super("command", Command);
   }
 
-  execute(command, context) {
+  execute(command: object, context?: TContext): Promise<unknown> {
     return this.dispatch(command, context);
   }
 }
 
-class QueryBus extends MessageBus {
+export class QueryBus<TContext = unknown> extends MessageBus<TContext> {
   constructor() {
     super("query", Query);
   }
 
-  ask(query, context) {
+  ask(query: object, context?: TContext): Promise<unknown> {
     return this.dispatch(query, context);
   }
 }
-
-module.exports = { CommandBus, QueryBus };

@@ -1,21 +1,29 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
-const { ValidationError, ConflictError, NotFoundError } = require("../../../domain/shared/errors");
-const { requireUuid } = require("../../../domain/shared/guards");
-const { Product } = require("../../../domain/catalog/Product");
-const { StoreStatus } = require("../../../domain/stores/Store");
-const { assertCan } = require("../../shared/authorize");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import { ValidationError, ConflictError, NotFoundError } from "../../../domain/shared/errors";
+import { requireUuid } from "../../../domain/shared/guards";
+import { Product, type ImportRow } from "../../../domain/catalog/Product";
+import { StoreStatus } from "../../../domain/stores/Store";
+import { assertCan, type UseCaseContext } from "../../shared/authorize";
+import type { Cache, IdGenerator, Row, UnitOfWork } from "../../shared/contracts";
 
-const MAX_IMPORT = 500;
+export const MAX_IMPORT = 500;
 const DEFAULT_IMAGE = "/images/urunler/laptopcard.png";
 
-class ImportProductsCommand extends Command {
-  constructor(input) {
+export class ImportProductsCommand extends Command {
+  readonly storeId: string;
+  readonly rows: readonly ImportRow[] | undefined;
+
+  constructor(input?: { storeId?: string; rows?: readonly ImportRow[] }) {
     super();
-    this.storeId = input?.storeId;
+    this.storeId = input?.storeId as string;
     this.rows = input?.rows;
   }
+}
+
+export interface ImportProductsResult {
+  readonly count: number;
 }
 
 /**
@@ -23,14 +31,18 @@ class ImportProductsCommand extends Command {
  * transaction geri alınır ve mağaza yarım bir katalogla kalmaz.
  * İçe aktarılan ürünler taslak olarak gelir, mağaza gözden geçirip yayınlar.
  */
-class ImportProductsHandler {
-  constructor({ unitOfWork, cache, ids }) {
+export class ImportProductsHandler implements Handler<ImportProductsCommand, ImportProductsResult, UseCaseContext> {
+  private readonly unitOfWork: UnitOfWork;
+  private readonly cache: Cache;
+  private readonly ids: IdGenerator;
+
+  constructor({ unitOfWork, cache, ids }: { unitOfWork: UnitOfWork; cache: Cache; ids: IdGenerator }) {
     this.unitOfWork = unitOfWork;
     this.cache = cache;
     this.ids = ids;
   }
 
-  async handle({ storeId, rows }, context = {}) {
+  async handle({ storeId, rows }: ImportProductsCommand, context: UseCaseContext = {}): Promise<ImportProductsResult> {
     requireUuid(storeId, "Mağaza numarası");
     assertCan(context, "catalog:product:write", { storeId });
 
@@ -53,7 +65,7 @@ class ImportProductsHandler {
         throw new ConflictError("Mağaza onaylanmadan ürün eklenemez.");
       }
 
-      const prepared = [];
+      const prepared: Row[] = [];
       for (const product of products) {
         prepared.push({
           ...product,
@@ -68,5 +80,3 @@ class ImportProductsHandler {
     return { count };
   }
 }
-
-module.exports = { ImportProductsCommand, ImportProductsHandler, MAX_IMPORT };

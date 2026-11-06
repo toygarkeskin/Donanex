@@ -1,8 +1,13 @@
 "use strict";
 
-const { defineContext } = require("../shared/registry");
+import { defineContext } from "../shared/registry";
 
-module.exports = defineContext({
+/*
+ * Katalog bağlamı. Yeni bir kullanım senaryosu buraya eklenir; container.js
+ * değişmez. Dışa açılan tek şey bu index'tir — presentation katmanı bağlamın
+ * iç dosyalarına erişemez (mimari testi bunu zorlar).
+ */
+export = defineContext({
   name: "catalog",
   commands: {
     CreateProduct: require("./commands/CreateProduct"),

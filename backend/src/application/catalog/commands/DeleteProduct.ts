@@ -1,30 +1,45 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
-const { NotFoundError } = require("../../../domain/shared/errors");
-const { requireUuid } = require("../../../domain/shared/guards");
-const { ProductStatus } = require("../../../domain/catalog/Product");
-const { assertCan } = require("../../shared/authorize");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import { NotFoundError } from "../../../domain/shared/errors";
+import { requireUuid } from "../../../domain/shared/guards";
+import { ProductStatus } from "../../../domain/catalog/Product";
+import { assertCan, type UseCaseContext } from "../../shared/authorize";
+import type { Cache, UnitOfWork } from "../../shared/contracts";
 
-class DeleteProductCommand extends Command {
-  constructor(input) {
+export class DeleteProductCommand extends Command {
+  readonly storeId: string;
+  readonly productId: string;
+
+  constructor(input?: { storeId?: string; productId?: string }) {
     super();
-    this.storeId = input?.storeId;
-    this.productId = input?.productId;
+    this.storeId = input?.storeId as string;
+    this.productId = input?.productId as string;
   }
+}
+
+/** Silindi mi, yoksa arşivlendi mi? */
+export interface DeleteProductResult {
+  readonly archived: boolean;
 }
 
 /**
  * Hiç satılmamış ürünü siler. Siparişlerde geçen ürün silinmez, arşivlenir;
  * böylece eski siparişlerin ürün bağlantısı kopmaz.
  */
-class DeleteProductHandler {
-  constructor({ unitOfWork, cache }) {
+export class DeleteProductHandler implements Handler<DeleteProductCommand, DeleteProductResult, UseCaseContext> {
+  private readonly unitOfWork: UnitOfWork;
+  private readonly cache: Cache;
+
+  constructor({ unitOfWork, cache }: { unitOfWork: UnitOfWork; cache: Cache }) {
     this.unitOfWork = unitOfWork;
     this.cache = cache;
   }
 
-  async handle({ storeId, productId }, context = {}) {
+  async handle(
+    { storeId, productId }: DeleteProductCommand,
+    context: UseCaseContext = {}
+  ): Promise<DeleteProductResult> {
     requireUuid(storeId, "Mağaza numarası");
     requireUuid(productId, "Ürün numarası");
     assertCan(context, "catalog:product:delete", { storeId });
@@ -51,5 +66,3 @@ class DeleteProductHandler {
     return result;
   }
 }
-
-module.exports = { DeleteProductCommand, DeleteProductHandler };
