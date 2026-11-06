@@ -8,19 +8,21 @@ import LoadingBlock from "../../components/LoadingBlock.vue";
 
 const auth = useAuthStore();
 const products = ref([]);
-const categories = ref([]);
 const stores = ref([]);
 const loading = ref(true);
 
+/*
+ * Kategoriler artık burada çekilmiyor: başlıktaki şerit onları her sayfada
+ * gösteriyor, aynı listeyi ikinci kez istemenin ve ekranın üstünde yer
+ * kaplamanın anlamı yok.
+ */
 onMounted(async () => {
   try {
-    const [latest, categoryList, storeList] = await Promise.all([
-      api.get("/products?pageSize=8"),
-      api.get("/categories"),
+    const [latest, storeList] = await Promise.all([
+      api.get("/products?pageSize=12"),
       api.get("/storefront/stores?pageSize=4")
     ]);
     products.value = latest.items;
-    categories.value = categoryList.items.filter((category) => category.productCount > 0);
     stores.value = storeList.items.slice(0, 4);
   } finally {
     loading.value = false;
@@ -29,18 +31,23 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-12">
-    <section class="overflow-hidden rounded-2xl bg-night px-6 py-14 text-white sm:px-12">
-      <div class="max-w-2xl">
-        <p class="text-sm font-medium text-night-accent">Çok satıcılı teknoloji mağazası</p>
-        <h1 class="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-          Onlarca mağaza, tek sepet, tek ödeme.
-        </h1>
-        <p class="mt-4 text-night-muted">
-          Ürünleri gezmek ve sepete eklemek için üye olmanıza gerek yok. İsterseniz kayıt olmadan da
-          sipariş verebilirsiniz.
-        </p>
-        <div class="mt-7 flex flex-wrap gap-3">
+  <div class="space-y-8">
+    <!--
+      Tanıtım şeridi bilinçli olarak alçak tutuluyor: ekranın üst yarısını
+      metin değil ÜRÜNLER doldurmalı. Önceden bu blok tek başına ~380px
+      kaplıyor ve ilk ürün satırı katlamanın altında kalıyordu.
+    -->
+    <section class="overflow-hidden rounded-2xl bg-night px-6 py-7 text-white sm:px-10">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="max-w-xl">
+          <h1 class="text-xl font-bold tracking-tight sm:text-2xl">
+            Onlarca mağaza, tek sepet, tek ödeme.
+          </h1>
+          <p class="mt-1.5 text-sm text-night-muted">
+            Gezmek ve sepete eklemek için üye olmanıza gerek yok; kayıt olmadan da sipariş verebilirsiniz.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
           <RouterLink :to="{ name: 'products' }" class="btn bg-white px-5 py-2.5 text-night hover:bg-white/90">
             Ürünleri keşfet
           </RouterLink>
@@ -62,21 +69,6 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section v-if="categories.length">
-      <h2 class="mb-4 text-lg font-bold text-ink-900">Kategoriler</h2>
-      <div class="flex flex-wrap gap-2">
-        <RouterLink
-          v-for="category in categories"
-          :key="category.id"
-          :to="{ name: 'products', query: { kategori: category.slug } }"
-          class="card px-4 py-2 text-sm font-medium text-ink-700 transition hover:border-brand-500 hover:text-brand-700"
-        >
-          {{ category.name }}
-          <span class="ml-1 text-ink-400">{{ category.productCount }}</span>
-        </RouterLink>
-      </div>
-    </section>
-
     <section>
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-bold text-ink-900">Yeni eklenenler</h2>
@@ -86,7 +78,7 @@ onMounted(async () => {
       </div>
 
       <LoadingBlock v-if="loading" :rows="2" />
-      <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <ProductCard v-for="product in products" :key="product.id" :product="product" />
       </div>
     </section>

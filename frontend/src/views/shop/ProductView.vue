@@ -8,6 +8,7 @@ import { useToastStore } from "../../stores/toast";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import AlertBox from "../../components/AlertBox.vue";
+import ProductCard from "../../components/ProductCard.vue";
 
 const route = useRoute();
 const cart = useCartStore();
@@ -18,6 +19,25 @@ const loading = ref(true);
 const notFound = ref(false);
 const quantity = ref(1);
 const adding = ref(false);
+const benzerler = ref([]);
+
+/**
+ * Aynı kategorideki diğer ürünler.
+ *
+ * Ürünün kendisi listeden çıkarılır ve en fazla dört tane gösterilir.
+ * Bulunamazsa bölüm hiç çizilmez — boş bir "Benzer ürünler" başlığı
+ * göstermek, öneri varmış gibi durup olmamasından daha kötü.
+ */
+async function benzerleriYukle() {
+  benzerler.value = [];
+  if (!product.value?.categorySlug) return;
+  try {
+    const sonuc = await api.get(`/products?category=${encodeURIComponent(product.value.categorySlug)}&pageSize=8`);
+    benzerler.value = (sonuc.items ?? []).filter((aday) => aday.id !== product.value.id).slice(0, 4);
+  } catch {
+    /* öneri getirilemezse sayfa olduğu gibi çalışır */
+  }
+}
 
 async function load() {
   loading.value = true;
@@ -25,6 +45,7 @@ async function load() {
   try {
     product.value = await api.get(`/products/${route.params.storeSlug}/${route.params.productSlug}`);
     quantity.value = 1;
+    benzerleriYukle();
   } catch {
     notFound.value = true;
   } finally {
@@ -124,6 +145,46 @@ watch(() => route.fullPath, load);
         <dt class="text-ink-500">Stok kodu:</dt>
         <dd class="font-medium text-ink-800">{{ product.sku }}</dd>
       </dl>
+
+      <!--
+        Teslimat ve satıcı bilgisi. Burada yalnızca sistemin GERÇEKTEN
+        bildiği şeyler yazıyor: kargo ücretsiz (sepet de böyle hesaplıyor),
+        gönderim satıcıdan yapılıyor ve sipariş takip edilebiliyor.
+        Tahmini teslim tarihi YOK — öyle bir veri tutulmuyor, uydurmak
+        müşteriye yanlış söz vermek olurdu.
+      -->
+      <div class="mt-8 space-y-3">
+        <div class="card flex items-start gap-3 p-4">
+          <span class="text-lg" aria-hidden="true">🚚</span>
+          <div class="text-sm">
+            <p class="font-semibold text-ink-800">Kargo ücretsiz</p>
+            <p class="mt-0.5 text-ink-500">
+              Ürün <strong class="font-medium text-ink-700">{{ product.storeName }}</strong> tarafından gönderilir.
+              Siparişinizi kargoya verildikten sonra takip edebilirsiniz.
+            </p>
+          </div>
+        </div>
+
+        <div class="card flex items-center justify-between gap-3 p-4">
+          <div class="min-w-0 text-sm">
+            <p class="text-ink-500">Satıcı</p>
+            <p class="truncate font-semibold text-ink-800">{{ product.storeName }}</p>
+          </div>
+          <RouterLink
+            :to="{ name: 'store', params: { slug: product.storeSlug } }"
+            class="btn-secondary shrink-0 py-1.5 text-sm"
+          >
+            Mağazaya git
+          </RouterLink>
+        </div>
+      </div>
     </div>
+
+    <section v-if="benzerler.length" class="lg:col-span-2">
+      <h2 class="mb-4 text-lg font-bold text-ink-900">Benzer ürünler</h2>
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <ProductCard v-for="benzer in benzerler" :key="benzer.id" :product="benzer" />
+      </div>
+    </section>
   </div>
 </template>

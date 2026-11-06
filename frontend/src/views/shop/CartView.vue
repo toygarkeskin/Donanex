@@ -93,6 +93,7 @@ onMounted(() => cart.load().catch(() => {}));
             v-if="item.imageUrl"
             :src="item.imageUrl"
             :alt="item.name"
+            loading="lazy"
             class="h-20 w-20 shrink-0 rounded-lg bg-ink-100 object-contain p-1"
           />
           <div v-else class="h-20 w-20 shrink-0 rounded-lg bg-ink-100" />

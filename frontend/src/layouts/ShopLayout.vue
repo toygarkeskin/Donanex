@@ -3,17 +3,42 @@ import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useCartStore } from "../stores/cart";
+import { useCatalogStore } from "../stores/catalog";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import BrandLogo from "../components/BrandLogo.vue";
 
 const auth = useAuthStore();
 const cart = useCartStore();
+const catalog = useCatalogStore();
 const router = useRouter();
 const route = useRoute();
 
 const menuOpen = ref(false);
 const accountOpen = ref(false);
 const hesapKutusu = ref(null);
+
+/*
+ * Arama her sayfada başlıkta durur.
+ *
+ * Önceden arama yalnızca ürün listesinin kenar çubuğundaydı: ana sayfadaki
+ * bir kullanıcının arama yapması için önce "Ürünler"e gitmesi gerekiyordu.
+ * Kutu, aramayı ürün listesine taşıyarak çalışır — filtreler adres çubuğunda
+ * yaşadığı için sonuç sayfası paylaşılabilir ve geri tuşu çalışmayı sürdürür.
+ */
+const aramaMetni = ref(route.query.ara ?? "");
+
+function aramayiGonder() {
+  const terim = aramaMetni.value.trim();
+  router.push({ name: "products", query: terim ? { ara: terim } : {} });
+}
+
+// Kullanıcı ürün listesinde filtreyi değiştirirse kutu da onu göstersin.
+watch(
+  () => route.query.ara,
+  (yeni) => {
+    aramaMetni.value = yeni ?? "";
+  }
+);
 
 // "Destek" buradan kaldırıldı: hesap menüsüne ve alt bilgiye taşındı.
 const nav = [
@@ -45,6 +70,8 @@ function tusaBasildi(olay) {
 onMounted(() => {
   // Sepet kayıtsız kullanıcı için de yüklenir.
   if (!cart.loaded) cart.load().catch(() => {});
+  // Kategori şeridi; hata yutulur, şerit boş kalsa da sayfa çalışır.
+  catalog.load();
   document.addEventListener("click", disaridaTiklandi);
   document.addEventListener("keydown", tusaBasildi);
 });
@@ -75,12 +102,17 @@ async function signOut() {
 <template>
   <div class="flex min-h-screen flex-col">
     <header class="sticky top-0 z-30 border-b border-ink-200 bg-surface/95 backdrop-blur">
-      <div class="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4">
+      <!--
+        Dar ekranda arama KENDİ SATIRINA iner (order-last + w-full). Tek
+        satırda tutulduğunda logo, sepet, tema ve hesap düğmeleriyle birlikte
+        375px'e sığmıyor ve kutu okunamayacak kadar eziliyordu.
+      -->
+      <div class="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 md:flex-nowrap md:py-0">
         <RouterLink :to="{ name: 'home' }" class="shrink-0" aria-label="Donanex ana sayfa">
           <BrandLogo />
         </RouterLink>
 
-        <nav class="hidden flex-1 items-center gap-1 md:flex" aria-label="Ana menü">
+        <nav class="hidden items-center gap-1 lg:flex" aria-label="Ana menü">
           <RouterLink
             v-for="item in nav"
             :key="item.label"
@@ -92,7 +124,28 @@ async function signOut() {
           </RouterLink>
         </nav>
 
-        <div class="ml-auto flex items-center gap-2">
+        <form
+          class="order-last flex w-full min-w-0 items-center md:order-none md:w-auto md:flex-1"
+          role="search"
+          @submit.prevent="aramayiGonder"
+        >
+          <label for="site-arama" class="sr-only">Ürün ara</label>
+          <div class="relative w-full">
+            <input
+              id="site-arama"
+              v-model="aramaMetni"
+              type="search"
+              name="ara"
+              placeholder="Ürün, marka veya mağaza ara"
+              class="w-full rounded-lg border border-ink-200 bg-ink-50 py-2 pl-9 pr-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+            />
+            <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm" aria-hidden="true">
+              🔍
+            </span>
+          </div>
+        </form>
+
+        <div class="ml-auto flex shrink-0 items-center gap-2">
           <RouterLink
             :to="{ name: 'cart' }"
             class="relative rounded-lg px-3 py-2 text-sm font-medium text-ink-600 hover:bg-ink-100"
@@ -184,7 +237,7 @@ async function signOut() {
         </div>
       </div>
 
-      <nav v-if="menuOpen" class="border-t border-ink-200 px-4 py-2 md:hidden" aria-label="Mobil menü">
+      <nav v-if="menuOpen" class="border-t border-ink-200 px-4 py-2 lg:hidden" aria-label="Mobil menü">
         <RouterLink
           v-for="item in nav"
           :key="item.label"
@@ -194,6 +247,30 @@ async function signOut() {
         >
           {{ item.label }}
         </RouterLink>
+      </nav>
+
+      <!--
+        Kategori şeridi: her sayfadan tek tıkla kategoriye geçilir. Daha önce
+        kategoriler yalnızca ana sayfadaydı; bir ürün sayfasındayken başka
+        kategoriye bakmak için önce ana sayfaya dönmek gerekiyordu.
+        Dar ekranda yatay kayar, satır sarmaz — başlık yüksekliği sabit kalır.
+      -->
+      <nav
+        v-if="catalog.categories.length"
+        class="border-t border-ink-200 bg-surface"
+        aria-label="Kategoriler"
+      >
+        <div class="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <RouterLink
+            v-for="kategori in catalog.categories"
+            :key="kategori.id"
+            :to="{ name: 'products', query: { kategori: kategori.slug } }"
+            class="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+            :class="route.query.kategori === kategori.slug ? 'bg-ink-100 text-ink-900' : ''"
+          >
+            {{ kategori.name }}
+          </RouterLink>
+        </div>
       </nav>
     </header>
 

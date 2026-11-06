@@ -19,3 +19,6 @@ docs/ekranlar/
 # TypeScript derleme çıktısı
 backend/dist/
 backend/.build/
+
+# Yerel editör/araç yapılandırması (depoya girmez)
+.claude/

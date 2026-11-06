@@ -181,7 +181,7 @@ onMounted(async () => {
           <button type="button" class="btn-secondary" @click="reset">Filtreleri temizle</button>
         </EmptyState>
 
-        <div v-else class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <ProductCard v-for="product in result.items" :key="product.id" :product="product" />
         </div>
 
