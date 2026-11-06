@@ -73,13 +73,20 @@ const chart = computed(() => {
         <p class="text-sm text-ink-500">Günlük sipariş sayısı</p>
 
         <div class="mt-6 flex h-40 items-end gap-2">
-          <div v-for="day in chart" :key="day.date" class="flex min-w-0 flex-1 flex-col items-center gap-2">
+          <div v-for="day in chart" :key="day.date" class="flex h-full min-w-0 flex-1 flex-col items-center gap-2">
             <span class="text-xs font-medium text-ink-600">{{ day.orders || "" }}</span>
-            <div
-              class="w-full rounded-t bg-brand-500 transition-all"
-              :style="{ height: `${Math.max(day.height, day.orders ? 6 : 2)}%` }"
-              :title="`${day.label}: ${day.orders} sipariş`"
-            />
+            <!--
+              Çubuğun yüzde yüksekliği, ancak saran kutunun yüksekliği BELİRLİ
+              olduğunda çözülür. Bu aradaki "flex-1" kutu o yüksekliği verir;
+              olmadığında yüzde otomatik yüksekliğe çözülüp çubuk kayboluyordu.
+            -->
+            <div class="flex w-full flex-1 items-end">
+              <div
+                class="w-full rounded-t bg-brand-500 transition-all"
+                :style="{ height: `${Math.max(day.height, day.orders ? 6 : 2)}%` }"
+                :title="`${day.label}: ${day.orders} sipariş`"
+              />
+            </div>
             <span class="truncate text-[10px] text-ink-400">{{ day.label }}</span>
           </div>
         </div>

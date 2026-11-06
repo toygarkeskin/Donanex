@@ -12,3 +12,6 @@ backend/var/
 
 # Önceki sürümlerden kalan yerel yedekler
 _eski/
+
+# 4K ekran görüntüleri: yerelde tutulur, depoya girmez (8 MB)
+docs/ekranlar/
