@@ -115,8 +115,12 @@ export interface ProductRepository {
   remove(storeId: string, productId: string): Promise<boolean>;
   isReferencedByOrders(productId: string): Promise<boolean>;
   findPurchasable(productId: string): Promise<Row | null>;
-  /** SELECT … FOR UPDATE: eş zamanlı siparişlerde fazla satışı engeller. */
-  lockForOrder(productIds: readonly string[]): Promise<Row[]>;
+  /**
+   * SELECT … FOR UPDATE: eş zamanlı siparişlerde fazla satışı engeller.
+   * Dizi değil MAP döndürür (ürün numarası -> satır); Order.place doğrudan
+   * .get() ile arar.
+   */
+  lockForOrder(productIds: readonly string[]): Promise<Map<string, Row>>;
   decreaseStock(productId: string, quantity: number): Promise<Row | null>;
   increaseStock(productId: string, quantity: number): Promise<Row | null>;
 }
@@ -242,8 +246,19 @@ export interface StoreReadModel {
 }
 
 export interface CartReadModel {
-  getLines(cartId: string): Promise<Row[]>;
-  findCartId(input: Row): Promise<string | null>;
+  /** Satırlar ve güncel ürün bilgisi birlikte döner; dizi değil nesne. */
+  getLines(cartId: string): Promise<{ lines: CartLineRow[]; products: CartProductRow[] }>;
+  findCartId(input: { userId?: string | null; guestCartId?: string | null }): Promise<string | null>;
+}
+
+export interface CartLineRow {
+  readonly productId: string;
+  readonly quantity: number;
+}
+
+export interface CartProductRow extends Row {
+  readonly id: string;
+  readonly priceCents: number;
 }
 
 export interface OrderReadModel {
@@ -251,7 +266,8 @@ export interface OrderReadModel {
   getForUser(orderId: string, userId: string): Promise<Row | null>;
   getByTrackingCode(orderNumber: string, trackingCodeHash: string): Promise<Row | null>;
   listForStore(storeId: string, filters: Row): Promise<Row>;
-  getForStore(storeId: string, packageId: string): Promise<Row | null>;
+  /** Sıra: önce PAKET, sonra mağaza. */
+  getForStore(packageId: string, storeId: string): Promise<Row | null>;
   listForAdmin(filters: Row): Promise<Row>;
   getForAdmin(orderId: string): Promise<Row | null>;
 }
