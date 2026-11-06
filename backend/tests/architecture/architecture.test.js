@@ -25,6 +25,12 @@ function walk(dir) {
 
 const rel = (file) => path.relative(SRC, file).split(path.sep).join("/");
 
+/*
+ * Yorumlar elenir: bir AÇIKLAMADA "unitOfWork" ya da "SELECT ... FOR UPDATE"
+ * geçmesi kural ihlali değildir. Kural kodu bağlar, açıklama metnini değil.
+ */
+const withoutComments = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
 /** Dosyanın require ettiği hedefleri, göreli olanları SRC köküne çevirerek verir. */
 function requiresOf(file) {
   const source = fs.readFileSync(file, "utf8");
@@ -98,7 +104,7 @@ test("presentation yalnızca bağlamların public index'ini kullanır", () => {
 test("CQRS: komut handler'ı read model, sorgu handler'ı unit of work kullanamaz", () => {
   for (const file of inLayer("application")) {
     const name = rel(file);
-    const source = fs.readFileSync(file, "utf8");
+    const source = withoutComments(fs.readFileSync(file, "utf8"));
 
     if (name.includes("/commands/")) {
       assert.ok(!/ReadModel/.test(source), `${name}: komut tarafı read model kullanıyor`);
@@ -167,10 +173,6 @@ test("Port sözleşmesi eksik adaptörü açılışta yakalar", () => {
 
 test("SQL yalnızca repository ve read model dosyalarında bulunur", () => {
   const sqlPattern = /\b(SELECT|INSERT INTO|UPDATE\s+\w+\s+SET|DELETE FROM)\b/;
-  // Yorumlar elenir: bir açıklamada "SELECT ... FOR UPDATE" geçmesi kural ihlali değildir.
-  const withoutComments = (source) =>
-    source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-
   for (const file of files) {
     const name = rel(file);
     if (/^infrastructure\/persistence\//.test(name) || name.startsWith("bootstrap/")) continue;

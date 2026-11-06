@@ -1,30 +1,59 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
-const { ConflictError } = require("../../../domain/shared/errors");
-const { validateRegistration } = require("../../../domain/identity/User");
-const { RoleCodes } = require("../../../domain/identity/Role");
-const { AccessPolicy } = require("../../../domain/identity/AccessPolicy");
-const { EventTypes, domainEvent } = require("../../../domain/shared/DomainEvent");
-const { EMAIL_VERIFICATION_TTL_MS } = require("../authPolicy");
-const { mergeGuestCart } = require("../services/mergeGuestCart");
-const { issueSsoSession } = require("../services/issueSession");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import { ConflictError } from "../../../domain/shared/errors";
+import { validateRegistration, type RegistrationInput } from "../../../domain/identity/User";
+import { RoleCodes } from "../../../domain/identity/Role";
+import { AccessPolicy, type RoleClaim } from "../../../domain/identity/AccessPolicy";
+import { EventTypes, domainEvent } from "../../../domain/shared/DomainEvent";
+import { EMAIL_VERIFICATION_TTL_MS } from "../authPolicy";
+import { mergeGuestCart } from "../services/mergeGuestCart";
+import { issueSsoSession, type IssuedSsoSession } from "../services/issueSession";
+import type { UseCaseContext } from "../../shared/authorize";
+import type { Clock, IdGenerator, OpaqueTokens, PasswordHasher, UnitOfWork } from "../../shared/contracts";
 
-class RegisterUserCommand extends Command {
-  /** @param {{data:object, guestCartId?:string|null}} input */
-  constructor(input) {
+export class RegisterUserCommand extends Command {
+  readonly data: RegistrationInput | undefined;
+  readonly guestCartId: string | null;
+
+  constructor(input?: { data?: RegistrationInput; guestCartId?: string | null }) {
     super();
     this.data = input?.data;
     this.guestCartId = input?.guestCartId ?? null;
   }
 }
 
+export interface RegisteredUser {
+  readonly user: { id: string; email: string; fullName: string };
+  readonly session: IssuedSsoSession;
+  readonly policy: readonly RoleClaim[];
+  readonly mergedCartItems: number;
+}
+
 /**
  * Yeni müşteri kaydı. Kayıt biter bitmez oturum açılır ve misafir sepeti taşınır;
  * kullanıcı "kayıt olarak devam et" dediğinde alışverişini kaldığı yerden sürdürür.
  */
-class RegisterUserHandler {
-  constructor({ unitOfWork, passwordHasher, opaqueTokens, clock, ids }) {
+export class RegisterUserHandler implements Handler<RegisterUserCommand, RegisteredUser, UseCaseContext> {
+  private readonly unitOfWork: UnitOfWork;
+  private readonly passwordHasher: PasswordHasher;
+  private readonly opaqueTokens: OpaqueTokens;
+  private readonly clock: Clock;
+  private readonly ids: IdGenerator;
+
+  constructor({
+    unitOfWork,
+    passwordHasher,
+    opaqueTokens,
+    clock,
+    ids
+  }: {
+    unitOfWork: UnitOfWork;
+    passwordHasher: PasswordHasher;
+    opaqueTokens: OpaqueTokens;
+    clock: Clock;
+    ids: IdGenerator;
+  }) {
     this.unitOfWork = unitOfWork;
     this.passwordHasher = passwordHasher;
     this.opaqueTokens = opaqueTokens;
@@ -32,7 +61,7 @@ class RegisterUserHandler {
     this.ids = ids;
   }
 
-  async handle({ data, guestCartId }, context = {}) {
+  async handle({ data, guestCartId }: RegisterUserCommand, context: UseCaseContext = {}): Promise<RegisteredUser> {
     const registration = validateRegistration(data);
     const passwordHash = await this.passwordHasher.hash(registration.password);
     const verificationToken = this.opaqueTokens.generate();
@@ -66,6 +95,7 @@ class RegisterUserHandler {
         context
       });
 
+      // Olay kendi kendine yeterli: e-posta tüketicisi alıcıyı buradan bulur.
       await repos.outbox.add(
         domainEvent(EventTypes.USER_REGISTERED, "user", user.id, {
           email: user.email,
@@ -90,5 +120,3 @@ class RegisterUserHandler {
     });
   }
 }
-
-module.exports = { RegisterUserCommand, RegisterUserHandler };

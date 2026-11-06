@@ -1,15 +1,51 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
-const { ValidationError } = require("../../../domain/shared/errors");
-const { GrantTypes, assertRedirectUri, assertGrantAllowed, resolveScope } = require("../../../domain/identity/OAuthClient");
-const { AUTHORIZATION_CODE_TTL_MS } = require("../authPolicy");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import { ValidationError } from "../../../domain/shared/errors";
+import {
+  GrantTypes,
+  assertRedirectUri,
+  assertGrantAllowed,
+  resolveScope,
+  type OAuthClient
+} from "../../../domain/identity/OAuthClient";
+import { AUTHORIZATION_CODE_TTL_MS } from "../authPolicy";
+import type { Cache, Clock, IdGenerator, OpaqueTokens, Row, UnitOfWork } from "../../shared/contracts";
 
-class AuthorizeCommand extends Command {
-  /** @param {{params:object, ssoToken:string|null}} input */
-  constructor(input) {
+/** /oauth/authorize sorgu parametreleri — tarayıcıdan gelir, hiçbirine güvenilmez. */
+export interface AuthorizeParams {
+  client_id?: unknown;
+  redirect_uri?: unknown;
+  response_type?: unknown;
+  scope?: unknown;
+  state?: unknown;
+  nonce?: unknown;
+  code_challenge?: unknown;
+  code_challenge_method?: unknown;
+}
+
+/** Giriş beklerken önbellekte saklanan istek. */
+export interface PendingAuthRequest {
+  readonly clientId: string;
+  readonly clientName: string;
+  readonly redirectUri: string;
+  readonly scope: string;
+  readonly state: string | null;
+  readonly nonce: string | null;
+  readonly codeChallenge: string;
+}
+
+export type AuthorizeResult =
+  | { outcome: "code"; redirectTo: string }
+  | { outcome: "login_required"; authRequestId: string; redirectTo: string };
+
+export class AuthorizeCommand extends Command {
+  readonly params: AuthorizeParams;
+  readonly ssoToken: string | null;
+
+  constructor(input?: { params?: AuthorizeParams; ssoToken?: string | null }) {
     super();
-    this.params = input?.params || {};
+    this.params = input?.params ?? {};
     this.ssoToken = input?.ssoToken ?? null;
   }
 }
@@ -25,8 +61,29 @@ class AuthorizeCommand extends Command {
  * Yoksa istek saklanır ve kullanıcı arayüzün giriş sayfasına yönlendirilir;
  * giriş bitince SignIn aynı isteği tamamlar.
  */
-class AuthorizeHandler {
-  constructor({ unitOfWork, opaqueTokens, cache, clock, ids, publicUrl }) {
+export class AuthorizeHandler implements Handler<AuthorizeCommand, AuthorizeResult> {
+  private readonly unitOfWork: UnitOfWork;
+  private readonly opaqueTokens: OpaqueTokens;
+  private readonly cache: Cache;
+  private readonly clock: Clock;
+  private readonly ids: IdGenerator;
+  private readonly publicUrl: string;
+
+  constructor({
+    unitOfWork,
+    opaqueTokens,
+    cache,
+    clock,
+    ids,
+    publicUrl
+  }: {
+    unitOfWork: UnitOfWork;
+    opaqueTokens: OpaqueTokens;
+    cache: Cache;
+    clock: Clock;
+    ids: IdGenerator;
+    publicUrl: string;
+  }) {
     this.unitOfWork = unitOfWork;
     this.opaqueTokens = opaqueTokens;
     this.cache = cache;
@@ -35,8 +92,10 @@ class AuthorizeHandler {
     this.publicUrl = publicUrl;
   }
 
-  async handle({ params, ssoToken }) {
-    const client = await this.unitOfWork.run(({ oauth }) => oauth.findClient(params.client_id));
+  async handle({ params, ssoToken }: AuthorizeCommand): Promise<AuthorizeResult> {
+    const client = (await this.unitOfWork.run(({ oauth }) =>
+      oauth.findClient(params.client_id as string)
+    )) as OAuthClient | null;
     if (!client) throw new ValidationError("client_id tanınmıyor.");
 
     // redirect_uri doğrulanmadan ASLA o adrese yönlendirme yapılmaz.
@@ -44,21 +103,21 @@ class AuthorizeHandler {
     assertGrantAllowed(client, GrantTypes.AUTHORIZATION_CODE);
 
     if (params.response_type !== "code") {
-      throw new ValidationError("response_type yalnızca \"code\" olabilir.");
+      throw new ValidationError('response_type yalnızca "code" olabilir.');
     }
     if (params.code_challenge_method !== "S256") {
-      throw new ValidationError("code_challenge_method \"S256\" olmalıdır.");
+      throw new ValidationError('code_challenge_method "S256" olmalıdır.');
     }
     if (typeof params.code_challenge !== "string" || params.code_challenge.length < 43) {
       throw new ValidationError("code_challenge zorunludur.");
     }
 
     const scope = resolveScope(client, params.scope);
-    const request = {
+    const request: PendingAuthRequest = {
       clientId: client.clientId,
       // İstemci adı burada saklanır: giriş sayfası bunu göstermek için
       // veritabanına gitmek zorunda kalmaz (sorgu tarafı yazma tarafına dokunmaz).
-      clientName: client.name,
+      clientName: (client as Row).name,
       redirectUri,
       scope,
       state: typeof params.state === "string" ? params.state.slice(0, 500) : null,
@@ -82,14 +141,14 @@ class AuthorizeHandler {
     };
   }
 
-  async resolveSession(ssoToken) {
+  async resolveSession(ssoToken: string | null): Promise<Row | null> {
     if (!ssoToken || !this.opaqueTokens.isWellFormed(ssoToken)) return null;
     return this.unitOfWork.run(({ authSessions }) =>
       authSessions.findActiveByTokenHash(this.opaqueTokens.hash(ssoToken), this.clock.now())
     );
   }
 
-  async issueCode(request, session) {
+  async issueCode(request: PendingAuthRequest, session: Row): Promise<string> {
     const code = this.opaqueTokens.generate();
     await this.unitOfWork.run(({ oauth }) =>
       oauth.saveAuthorizationCode({
@@ -107,7 +166,7 @@ class AuthorizeHandler {
     return code;
   }
 
-  buildRedirect(redirectUri, params) {
+  buildRedirect(redirectUri: string, params: Record<string, string | null | undefined>): string {
     const url = new URL(redirectUri);
     for (const [key, value] of Object.entries(params)) {
       if (value !== null && value !== undefined) url.searchParams.set(key, value);
@@ -115,5 +174,3 @@ class AuthorizeHandler {
     return url.toString();
   }
 }
-
-module.exports = { AuthorizeCommand, AuthorizeHandler };

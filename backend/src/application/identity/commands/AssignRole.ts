@@ -1,18 +1,32 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
-const { ValidationError, NotFoundError, ConflictError } = require("../../../domain/shared/errors");
-const { requireUuid } = require("../../../domain/shared/guards");
-const { RoleCodes } = require("../../../domain/identity/Role");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import { ValidationError, NotFoundError, ConflictError } from "../../../domain/shared/errors";
+import { requireUuid } from "../../../domain/shared/guards";
+import { RoleCodes } from "../../../domain/identity/Role";
+import type { UseCaseContext } from "../../shared/authorize";
+import type { Cache, UnitOfWork } from "../../shared/contracts";
 
-class AssignRoleCommand extends Command {
-  constructor(input) {
+export class AssignRoleCommand extends Command {
+  readonly userId: string;
+  readonly roleCode: string;
+  readonly storeId: string | null;
+  readonly revoke: boolean;
+
+  constructor(input?: { userId?: string; roleCode?: string; storeId?: string | null; revoke?: unknown }) {
     super();
-    this.userId = input?.userId;
-    this.roleCode = input?.roleCode;
+    this.userId = input?.userId as string;
+    this.roleCode = input?.roleCode as string;
     this.storeId = input?.storeId ?? null;
     this.revoke = input?.revoke === true;
   }
+}
+
+export interface RoleAssignmentResult {
+  readonly userId: string;
+  readonly roleCode: string;
+  readonly storeId: string | null;
+  readonly revoked: boolean;
 }
 
 /**
@@ -22,13 +36,19 @@ class AssignRoleCommand extends Command {
  * Mağazaya bağlı roller mağaza kimliği olmadan, sistem genelindeki roller
  * mağaza kimliğiyle atanamaz.
  */
-class AssignRoleHandler {
-  constructor({ unitOfWork, cache }) {
+export class AssignRoleHandler implements Handler<AssignRoleCommand, RoleAssignmentResult, UseCaseContext> {
+  private readonly unitOfWork: UnitOfWork;
+  private readonly cache: Cache;
+
+  constructor({ unitOfWork, cache }: { unitOfWork: UnitOfWork; cache: Cache }) {
     this.unitOfWork = unitOfWork;
     this.cache = cache;
   }
 
-  async handle({ userId, roleCode, storeId, revoke }, context = {}) {
+  async handle(
+    { userId, roleCode, storeId, revoke }: AssignRoleCommand,
+    context: UseCaseContext = {}
+  ): Promise<RoleAssignmentResult> {
     requireUuid(userId, "Kullanıcı numarası");
 
     const result = await this.unitOfWork.run(async (repos) => {
@@ -64,9 +84,8 @@ class AssignRoleHandler {
       return { userId, roleCode, storeId, revoked: revoke };
     });
 
+    // Yetki değişimi anında geçerli olmalı: önbellekteki eski kayıt silinir.
     await this.cache.delete(`policy:${userId}`);
     return result;
   }
 }
-
-module.exports = { AssignRoleCommand, AssignRoleHandler };

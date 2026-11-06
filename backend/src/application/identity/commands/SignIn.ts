@@ -1,19 +1,31 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
-const { UnauthorizedError, ForbiddenError } = require("../../../domain/shared/errors");
-const { UserStatus } = require("../../../domain/identity/User");
-const { requireEmail } = require("../../../domain/shared/guards");
-const { mergeGuestCart } = require("../services/mergeGuestCart");
-const { issueSsoSession } = require("../services/issueSession");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import { UnauthorizedError, ForbiddenError } from "../../../domain/shared/errors";
+import { UserStatus } from "../../../domain/identity/User";
+import { requireEmail } from "../../../domain/shared/guards";
+import { mergeGuestCart } from "../services/mergeGuestCart";
+import { issueSsoSession, type IssuedSsoSession } from "../services/issueSession";
+import type { UseCaseContext } from "../../shared/authorize";
+import type { Clock, OpaqueTokens, PasswordHasher, UnitOfWork } from "../../shared/contracts";
 
-class SignInCommand extends Command {
-  constructor(input) {
+export class SignInCommand extends Command {
+  readonly email: unknown;
+  readonly password: unknown;
+  readonly guestCartId: string | null;
+
+  constructor(input?: { email?: unknown; password?: unknown; guestCartId?: string | null }) {
     super();
     this.email = input?.email;
     this.password = input?.password;
     this.guestCartId = input?.guestCartId ?? null;
   }
+}
+
+export interface SignedIn {
+  readonly user: { id: string; email: string; fullName: string };
+  readonly session: IssuedSsoSession;
+  readonly mergedCartItems: number;
 }
 
 /**
@@ -25,18 +37,33 @@ class SignInCommand extends Command {
  *  - Hatalı e-posta ve hatalı parola AYNI mesajı döndürür.
  *  - Parola eski bir biçimde saklanıyorsa sessizce güncel biçime yükseltilir.
  */
-class SignInHandler {
-  constructor({ unitOfWork, passwordHasher, opaqueTokens, clock }) {
+export class SignInHandler implements Handler<SignInCommand, SignedIn, UseCaseContext> {
+  private readonly unitOfWork: UnitOfWork;
+  private readonly passwordHasher: PasswordHasher;
+  private readonly opaqueTokens: OpaqueTokens;
+  private readonly clock: Clock;
+
+  constructor({
+    unitOfWork,
+    passwordHasher,
+    opaqueTokens,
+    clock
+  }: {
+    unitOfWork: UnitOfWork;
+    passwordHasher: PasswordHasher;
+    opaqueTokens: OpaqueTokens;
+    clock: Clock;
+  }) {
     this.unitOfWork = unitOfWork;
     this.passwordHasher = passwordHasher;
     this.opaqueTokens = opaqueTokens;
     this.clock = clock;
   }
 
-  async handle({ email, password, guestCartId }, context = {}) {
+  async handle({ email, password, guestCartId }: SignInCommand, context: UseCaseContext = {}): Promise<SignedIn> {
     const invalid = () => new UnauthorizedError("E-posta veya parola hatalı.");
 
-    let normalizedEmail;
+    let normalizedEmail: string;
     try {
       normalizedEmail = requireEmail(email);
     } catch {
@@ -50,9 +77,7 @@ class SignInHandler {
 
     const user = await this.unitOfWork.run(({ users }) => users.findCredentialsByEmail(normalizedEmail));
 
-    const ok = user
-      ? await this.passwordHasher.verify(password, user.passwordHash)
-      : await this.passwordHasher.verifyDummy(password);
+    const ok = user ? await this.passwordHasher.verify(password, user.passwordHash) : await this.passwordHasher.verifyDummy(password);
     if (!user || !ok) throw invalid();
 
     if (user.status === UserStatus.SUSPENDED) {
@@ -88,5 +113,3 @@ class SignInHandler {
     });
   }
 }
-
-module.exports = { SignInCommand, SignInHandler };

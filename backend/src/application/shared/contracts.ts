@@ -15,7 +15,7 @@
  * somut tiplerle daraltılacaktır.
  */
 
-import type { AccessPolicy } from "../../domain/identity/AccessPolicy";
+import type { RoleAssignment as RoleAssignmentRow } from "../../domain/identity/AccessPolicy";
 import type { DomainEventShape } from "../../domain/shared/DomainEvent";
 
 /** Veritabanı satırı. İnfrastructure göçünde somut tiplerle değişecek. */
@@ -50,7 +50,8 @@ export interface RoleRepository {
   findByCode(code: string): Promise<Row | null>;
   assign(input: { userId: string; roleCode: string; storeId?: string | null }): Promise<Row>;
   revoke(input: { userId: string; roleCode: string; storeId?: string | null }): Promise<boolean>;
-  listForUser(userId: string): Promise<Row[]>;
+  /** roleCode + storeId + permissions döndürür; AccessPolicy doğrudan bunu alır. */
+  listForUser(userId: string): Promise<RoleAssignmentRow[]>;
   countByCode(roleCode: string): Promise<number>;
   hasRole(userId: string, roleCode: string): Promise<boolean>;
 }
@@ -236,7 +237,8 @@ export interface StoreReadModel {
   listForAdmin(filters: Row): Promise<Row>;
   getForMember(storeId: string): Promise<Row | null>;
   listMembers(storeId: string): Promise<Row[]>;
-  listForMember(userId: string): Promise<Row[]>;
+  /** Mağaza KİMLİKLERİ alır (kullanıcı değil): panel menüsü için. */
+  listForMember(storeIds: readonly string[]): Promise<Row[]>;
 }
 
 export interface CartReadModel {
@@ -257,7 +259,8 @@ export interface OrderReadModel {
 export interface UserReadModel {
   getProfile(userId: string): Promise<Row | null>;
   listForAdmin(filters: Row): Promise<Row>;
-  getAccessPolicy(userId: string): Promise<AccessPolicy>;
+  /** Ham rol atamalarını döndürür; AccessPolicy nesnesini çağıran kurar. */
+  getAccessPolicy(userId: string): Promise<RoleAssignmentRow[]>;
   getSessionVersion(userId: string): Promise<number | null>;
   listAddresses(userId: string): Promise<Row[]>;
 }
@@ -298,13 +301,18 @@ export interface OpaqueTokens {
 export interface PasswordHasher {
   hash(password: string): Promise<string>;
   verify(password: string, stored: string): Promise<boolean>;
-  /** Kullanıcı yokken de aynı süreyi harcar: zamanlama sızıntısını kapatır. */
-  verifyDummy(): Promise<unknown>;
+  /**
+   * Kullanıcı yokken de aynı süreyi harcar: zamanlama sızıntısını kapatır.
+   * Her zaman false döner; verilen parolayı da özetler ki süre eşleşsin.
+   */
+  verifyDummy(password?: unknown): Promise<false>;
   needsRehash(stored: string): boolean;
 }
 
 export interface Pkce {
-  verify(challenge: string, verifier: unknown, method: string): boolean;
+  /** Sıra önemli: önce doğrulayıcı, sonra saklanan meydan okuma. */
+  verify(verifier: unknown, challenge: unknown): boolean;
+  challengeFor(verifier: string): string;
 }
 
 export interface Cache {

@@ -1,15 +1,22 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
-const { isEmail } = require("../../../domain/shared/guards");
-const { EventTypes, domainEvent } = require("../../../domain/shared/DomainEvent");
-const { PASSWORD_RESET_TTL_MS } = require("../authPolicy");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import { isEmail } from "../../../domain/shared/guards";
+import { EventTypes, domainEvent } from "../../../domain/shared/DomainEvent";
+import { PASSWORD_RESET_TTL_MS } from "../authPolicy";
+import type { Clock, OpaqueTokens, UnitOfWork } from "../../shared/contracts";
 
-class RequestPasswordResetCommand extends Command {
-  constructor(input) {
+export class RequestPasswordResetCommand extends Command {
+  readonly email: unknown;
+
+  constructor(input?: { email?: unknown }) {
     super();
     this.email = input?.email;
   }
+}
+
+export interface ResetRequested {
+  readonly accepted: true;
 }
 
 /**
@@ -20,16 +27,28 @@ class RequestPasswordResetCommand extends Command {
  * veritabanında yalnızca özeti durur ve jeton adresin "#" kısmında taşınır,
  * böylece sunucu günlüklerine ve Referer başlığına düşmez.
  */
-class RequestPasswordResetHandler {
-  constructor({ unitOfWork, opaqueTokens, clock }) {
+export class RequestPasswordResetHandler implements Handler<RequestPasswordResetCommand, ResetRequested> {
+  private readonly unitOfWork: UnitOfWork;
+  private readonly opaqueTokens: OpaqueTokens;
+  private readonly clock: Clock;
+
+  constructor({
+    unitOfWork,
+    opaqueTokens,
+    clock
+  }: {
+    unitOfWork: UnitOfWork;
+    opaqueTokens: OpaqueTokens;
+    clock: Clock;
+  }) {
     this.unitOfWork = unitOfWork;
     this.opaqueTokens = opaqueTokens;
     this.clock = clock;
   }
 
-  async handle({ email }) {
+  async handle({ email }: RequestPasswordResetCommand): Promise<ResetRequested> {
     if (!isEmail(email)) return { accepted: true };
-    const normalized = String(email).trim().toLowerCase();
+    const normalized = email.trim().toLowerCase();
     const token = this.opaqueTokens.generate();
 
     await this.unitOfWork.run(async (repos) => {
@@ -55,5 +74,3 @@ class RequestPasswordResetHandler {
     return { accepted: true };
   }
 }
-
-module.exports = { RequestPasswordResetCommand, RequestPasswordResetHandler };

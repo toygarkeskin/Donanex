@@ -1,20 +1,33 @@
 "use strict";
 
-const { Query } = require("../../shared/cqrs/Message");
+import { Query, type Handler } from "../../shared/cqrs/Message";
+import type { Row, UserReadModel } from "../../shared/contracts";
 
-class ListUsersQuery extends Query {
-  constructor(filters = {}) {
+export interface UserFilters {
+  q?: unknown;
+  role?: unknown;
+  status?: unknown;
+  page?: unknown;
+  pageSize?: unknown;
+}
+
+export class ListUsersQuery extends Query {
+  readonly filters: UserFilters;
+
+  constructor(filters: UserFilters = {}) {
     super();
     this.filters = filters;
   }
 }
 
-class ListUsersHandler {
-  constructor({ userReadModel }) {
+export class ListUsersHandler implements Handler<ListUsersQuery, Row> {
+  private readonly readModel: UserReadModel;
+
+  constructor({ userReadModel }: { userReadModel: UserReadModel }) {
     this.readModel = userReadModel;
   }
 
-  handle({ filters }) {
+  handle({ filters }: ListUsersQuery): Promise<Row> {
     const page = Number.isInteger(Number(filters.page)) && Number(filters.page) > 0 ? Number(filters.page) : 1;
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize) || 20));
     return this.readModel.listForAdmin({
@@ -28,5 +41,3 @@ class ListUsersHandler {
     });
   }
 }
-
-module.exports = { ListUsersQuery, ListUsersHandler };

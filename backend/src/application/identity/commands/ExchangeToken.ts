@@ -1,18 +1,55 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
-const { ValidationError, UnauthorizedError, ForbiddenError } = require("../../../domain/shared/errors");
-const { AccessPolicy } = require("../../../domain/identity/AccessPolicy");
-const { UserStatus } = require("../../../domain/identity/User");
-const { GrantTypes, assertGrantAllowed } = require("../../../domain/identity/OAuthClient");
-const { ACCESS_TOKEN_TTL_MS } = require("../authPolicy");
-const { issueTokenSet } = require("../services/issueTokens");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import { ValidationError, UnauthorizedError, ForbiddenError } from "../../../domain/shared/errors";
+import { AccessPolicy } from "../../../domain/identity/AccessPolicy";
+import { UserStatus } from "../../../domain/identity/User";
+import { GrantTypes, assertGrantAllowed, type OAuthClient } from "../../../domain/identity/OAuthClient";
+import { ACCESS_TOKEN_TTL_MS } from "../authPolicy";
+import { issueTokenSet, type TokenServices, type TokenSet } from "../services/issueTokens";
+import type { UseCaseContext } from "../../shared/authorize";
+import type {
+  Clock,
+  OpaqueTokens,
+  PasswordHasher,
+  Pkce,
+  Repositories,
+  Row,
+  TokenIssuer,
+  UnitOfWork
+} from "../../shared/contracts";
 
-class ExchangeTokenCommand extends Command {
-  /** @param {{params:object, clientCredentials:{clientId,clientSecret}|null}} input */
-  constructor(input) {
+/** /oauth/token gövdesi — form olarak gelir, hiçbir alanına güvenilmez. */
+export interface TokenParams {
+  grant_type?: unknown;
+  client_id?: unknown;
+  client_secret?: unknown;
+  code?: unknown;
+  code_verifier?: unknown;
+  redirect_uri?: unknown;
+  refresh_token?: unknown;
+  scope?: unknown;
+}
+
+export interface ClientCredentials {
+  clientId?: string;
+  clientSecret?: string;
+}
+
+/** Jeton üretimi için gereken tüm servisler. */
+export type ExchangeTokenServices = TokenServices & {
+  unitOfWork: UnitOfWork;
+  pkce: Pkce;
+  passwordHasher: PasswordHasher;
+};
+
+export class ExchangeTokenCommand extends Command {
+  readonly params: TokenParams;
+  readonly clientCredentials: ClientCredentials | null;
+
+  constructor(input?: { params?: TokenParams; clientCredentials?: ClientCredentials | null }) {
     super();
-    this.params = input?.params || {};
+    this.params = input?.params ?? {};
     this.clientCredentials = input?.clientCredentials ?? null;
   }
 }
@@ -30,8 +67,16 @@ class ExchangeTokenCommand extends Command {
  * bu güvenlik etkilerini de siler ve saldırgan aynı kodu/jetonu tekrar
  * deneyebilirdi.
  */
-class ExchangeTokenHandler {
-  constructor(services) {
+export class ExchangeTokenHandler implements Handler<ExchangeTokenCommand, TokenSet | Row, UseCaseContext> {
+  private readonly services: ExchangeTokenServices;
+  private readonly unitOfWork: UnitOfWork;
+  private readonly opaqueTokens: OpaqueTokens;
+  private readonly pkce: Pkce;
+  private readonly passwordHasher: PasswordHasher;
+  private readonly tokenIssuer: TokenIssuer;
+  private readonly clock: Clock;
+
+  constructor(services: ExchangeTokenServices) {
     this.services = services;
     this.unitOfWork = services.unitOfWork;
     this.opaqueTokens = services.opaqueTokens;
@@ -41,7 +86,10 @@ class ExchangeTokenHandler {
     this.clock = services.clock;
   }
 
-  async handle({ params, clientCredentials }, context = {}) {
+  async handle(
+    { params, clientCredentials }: ExchangeTokenCommand,
+    context: UseCaseContext = {}
+  ): Promise<TokenSet | Row> {
     const client = await this.authenticateClient(params, clientCredentials);
 
     switch (params.grant_type) {
@@ -57,22 +105,22 @@ class ExchangeTokenHandler {
   }
 
   /** Gizli (confidential) istemci parolasını kanıtlar; açık istemci PKCE ile korunur. */
-  async authenticateClient(params, credentials) {
-    const clientId = credentials?.clientId || params.client_id;
+  async authenticateClient(params: TokenParams, credentials: ClientCredentials | null): Promise<OAuthClient & Row> {
+    const clientId = credentials?.clientId || (params.client_id as string | undefined);
     if (!clientId) throw new ValidationError("client_id zorunludur.");
 
-    const client = await this.unitOfWork.run(({ oauth }) => oauth.findClient(clientId));
+    const client = (await this.unitOfWork.run(({ oauth }) => oauth.findClient(clientId))) as (OAuthClient & Row) | null;
     if (!client) throw new UnauthorizedError("İstemci doğrulanamadı.");
 
     if (client.isConfidential) {
-      const secret = credentials?.clientSecret || params.client_secret;
+      const secret = credentials?.clientSecret || (params.client_secret as string | undefined);
       const ok = typeof secret === "string" && (await this.passwordHasher.verify(secret, client.secretHash));
       if (!ok) throw new UnauthorizedError("İstemci doğrulanamadı.");
     }
     return client;
   }
 
-  async byAuthorizationCode(client, params, context) {
+  async byAuthorizationCode(client: OAuthClient & Row, params: TokenParams, context: UseCaseContext): Promise<TokenSet> {
     assertGrantAllowed(client, GrantTypes.AUTHORIZATION_CODE);
     const { code, code_verifier: verifier, redirect_uri: redirectUri } = params;
 
@@ -84,7 +132,7 @@ class ExchangeTokenHandler {
     // 1) Kod kendi transaction'ında tüketilir ve hemen kalıcı olur.
     //    Böylece doğrulama başarısız olsa bile kod "yanmış" sayılır.
     const saved = await this.unitOfWork.run(({ oauth }) =>
-      oauth.consumeAuthorizationCode(this.opaqueTokens.hash(code), this.clock.now())
+      oauth.consumeAuthorizationCode(this.opaqueTokens.hash(code as string), this.clock.now())
     );
     if (!saved) throw new ValidationError("Yetkilendirme kodu geçersiz veya süresi dolmuş.");
 
@@ -119,7 +167,7 @@ class ExchangeTokenHandler {
     });
   }
 
-  async byRefreshToken(client, params, context) {
+  async byRefreshToken(client: OAuthClient & Row, params: TokenParams, context: UseCaseContext): Promise<TokenSet> {
     assertGrantAllowed(client, GrantTypes.REFRESH_TOKEN);
     const presented = params.refresh_token;
     if (!this.opaqueTokens.isWellFormed(presented)) {
@@ -127,7 +175,7 @@ class ExchangeTokenHandler {
     }
 
     const stored = await this.unitOfWork.run(({ oauth }) =>
-      oauth.findRefreshTokenByHash(this.opaqueTokens.hash(presented))
+      oauth.findRefreshTokenByHash(this.opaqueTokens.hash(presented as string))
     );
     if (!stored || stored.clientId !== client.clientId) {
       throw new UnauthorizedError("Yenileme jetonu geçersiz.");
@@ -173,13 +221,13 @@ class ExchangeTokenHandler {
     });
   }
 
-  async byClientCredentials(client, params) {
+  async byClientCredentials(client: OAuthClient & Row, params: TokenParams): Promise<Row> {
     assertGrantAllowed(client, GrantTypes.CLIENT_CREDENTIALS);
     if (!client.isConfidential) {
       throw new ValidationError("client_credentials yalnızca gizli istemciler içindir.");
     }
 
-    const scope = (params.scope || client.scopes.join(" "))
+    const scope = String(params.scope || client.scopes.join(" "))
       .split(/\s+/)
       .filter((value) => client.scopes.includes(value))
       .join(" ");
@@ -202,7 +250,7 @@ class ExchangeTokenHandler {
     };
   }
 
-  async loadActor(repos, userId) {
+  async loadActor(repos: Repositories, userId: string): Promise<{ user: Row; policy: AccessPolicy }> {
     const user = await repos.users.findById(userId);
     if (!user) throw new UnauthorizedError("Kullanıcı bulunamadı.");
     if (user.status === UserStatus.SUSPENDED) throw new ForbiddenError("Hesap askıya alınmış.");
@@ -211,5 +259,3 @@ class ExchangeTokenHandler {
     return { user, policy: new AccessPolicy(assignments) };
   }
 }
-
-module.exports = { ExchangeTokenCommand, ExchangeTokenHandler };

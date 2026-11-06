@@ -1,18 +1,28 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
-const { UnauthorizedError, NotFoundError } = require("../../../domain/shared/errors");
-const { assertPasswordStrength } = require("../../../domain/identity/User");
-const { EventTypes, domainEvent } = require("../../../domain/shared/DomainEvent");
-const { issueSsoSession } = require("../services/issueSession");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import { UnauthorizedError, NotFoundError } from "../../../domain/shared/errors";
+import { assertPasswordStrength } from "../../../domain/identity/User";
+import { EventTypes, domainEvent } from "../../../domain/shared/DomainEvent";
+import { issueSsoSession, type IssuedSsoSession } from "../services/issueSession";
+import type { UseCaseContext } from "../../shared/authorize";
+import type { Cache, Clock, OpaqueTokens, PasswordHasher, UnitOfWork } from "../../shared/contracts";
 
-class ChangePasswordCommand extends Command {
-  constructor(input) {
+export class ChangePasswordCommand extends Command {
+  readonly userId: string;
+  readonly currentPassword: unknown;
+  readonly newPassword: unknown;
+
+  constructor(input?: { userId?: string; currentPassword?: unknown; newPassword?: unknown }) {
     super();
-    this.userId = input?.userId;
+    this.userId = input?.userId as string;
     this.currentPassword = input?.currentPassword;
     this.newPassword = input?.newPassword;
   }
+}
+
+export interface ChangePasswordResult {
+  readonly session: IssuedSsoSession;
 }
 
 /**
@@ -20,8 +30,26 @@ class ChangePasswordCommand extends Command {
  * BAŞKA tüm oturumları ve yenileme jetonları iptal edilir; bu cihaza yeni bir
  * oturum verilir. Parolası çalınmış bir hesap böylece tek hamleyle kurtarılır.
  */
-class ChangePasswordHandler {
-  constructor({ unitOfWork, passwordHasher, opaqueTokens, cache, clock }) {
+export class ChangePasswordHandler implements Handler<ChangePasswordCommand, ChangePasswordResult, UseCaseContext> {
+  private readonly unitOfWork: UnitOfWork;
+  private readonly passwordHasher: PasswordHasher;
+  private readonly opaqueTokens: OpaqueTokens;
+  private readonly cache: Cache;
+  private readonly clock: Clock;
+
+  constructor({
+    unitOfWork,
+    passwordHasher,
+    opaqueTokens,
+    cache,
+    clock
+  }: {
+    unitOfWork: UnitOfWork;
+    passwordHasher: PasswordHasher;
+    opaqueTokens: OpaqueTokens;
+    cache: Cache;
+    clock: Clock;
+  }) {
     this.unitOfWork = unitOfWork;
     this.passwordHasher = passwordHasher;
     this.opaqueTokens = opaqueTokens;
@@ -29,7 +57,10 @@ class ChangePasswordHandler {
     this.clock = clock;
   }
 
-  async handle({ userId, currentPassword, newPassword }, context = {}) {
+  async handle(
+    { userId, currentPassword, newPassword }: ChangePasswordCommand,
+    context: UseCaseContext = {}
+  ): Promise<ChangePasswordResult> {
     const user = await this.unitOfWork.run(({ users }) => users.findById(userId));
     if (!user) throw new NotFoundError("Hesap bulunamadı.");
 
@@ -40,7 +71,7 @@ class ChangePasswordHandler {
     if (!ok) throw new UnauthorizedError("Mevcut parola hatalı.");
 
     assertPasswordStrength(newPassword, { email: user.email });
-    const passwordHash = await this.passwordHasher.hash(newPassword);
+    const passwordHash = await this.passwordHasher.hash(newPassword as string);
 
     const result = await this.unitOfWork.run(async (repos) => {
       await repos.users.changePassword(user.id, passwordHash);
@@ -70,9 +101,8 @@ class ChangePasswordHandler {
       return { session };
     });
 
+    // Oturum sürümü arttı: önbellekteki eski yetki kaydı düşmeli.
     await this.cache.delete(`policy:${user.id}`);
     return result;
   }
 }
-
-module.exports = { ChangePasswordCommand, ChangePasswordHandler };

@@ -1,7 +1,7 @@
 "use strict";
 
-const { defineContext } = require("../shared/registry");
-const authPolicy = require("./authPolicy");
+import { defineContext } from "../shared/registry";
+import authPolicy from "./authPolicy";
 
 const context = defineContext({
   name: "identity",
@@ -32,6 +32,8 @@ const context = defineContext({
   }
 });
 
-// Oturum ve jeton süreleri: presentation katmanı çerez ömrünü bunlardan okur,
-// bağlamın iç dosyalarına uzanmadan.
-module.exports = { ...context, authPolicy };
+/*
+ * Oturum ve jeton süreleri: presentation katmanı çerez ömrünü bunlardan okur,
+ * bağlamın iç dosyalarına uzanmadan.
+ */
+export = { ...context, authPolicy };

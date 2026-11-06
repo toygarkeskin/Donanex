@@ -1,26 +1,38 @@
 "use strict";
 
-const { Command } = require("../../shared/cqrs/Message");
+import { Command, type Handler } from "../../shared/cqrs/Message";
+import type { UseCaseContext } from "../../shared/authorize";
+import type { OpaqueTokens, UnitOfWork } from "../../shared/contracts";
 
-class SignOutCommand extends Command {
-  constructor(input) {
+export class SignOutCommand extends Command {
+  readonly ssoToken: string | null;
+  readonly everywhere: boolean;
+
+  constructor(input?: { ssoToken?: string | null; everywhere?: unknown }) {
     super();
     this.ssoToken = input?.ssoToken ?? null;
     this.everywhere = input?.everywhere === true;
   }
 }
 
+export interface SignOutResult {
+  readonly signedOut: boolean;
+}
+
 /**
  * Çıkış. Oturum sunucu tarafında iptal edilir ve o oturuma bağlı tüm yenileme
  * jetonları geçersiz kılınır; çalınmış bir çerez ya da jeton artık işe yaramaz.
  */
-class SignOutHandler {
-  constructor({ unitOfWork, opaqueTokens }) {
+export class SignOutHandler implements Handler<SignOutCommand, SignOutResult, UseCaseContext> {
+  private readonly unitOfWork: UnitOfWork;
+  private readonly opaqueTokens: OpaqueTokens;
+
+  constructor({ unitOfWork, opaqueTokens }: { unitOfWork: UnitOfWork; opaqueTokens: OpaqueTokens }) {
     this.unitOfWork = unitOfWork;
     this.opaqueTokens = opaqueTokens;
   }
 
-  async handle({ ssoToken, everywhere }, context = {}) {
+  async handle({ ssoToken, everywhere }: SignOutCommand, context: UseCaseContext = {}): Promise<SignOutResult> {
     if (!ssoToken || !this.opaqueTokens.isWellFormed(ssoToken)) return { signedOut: false };
 
     return this.unitOfWork.run(async (repos) => {
@@ -46,5 +58,3 @@ class SignOutHandler {
     });
   }
 }
-
-module.exports = { SignOutCommand, SignOutHandler };
