@@ -216,6 +216,11 @@ ssh -L 8092:localhost:8092 kullanici@sunucu
 > **Ödeme hâlâ benzetimdir.** Gerçek bir sağlayıcı bağlanmadan üretim yapılandırması ödemeyi
 > reddeder: sipariş verilir, ödenemez. Ayrıntı: [docs/SECURITY.md](docs/SECURITY.md)
 
+## Katkı
+
+Depoda değişiklik yapacaklar için yol gösterici: [CONTRIBUTING.md](CONTRIBUTING.md) —
+katman kuralları, yeni kullanım senaryosu nasıl eklenir, sık düşülen tuzaklar.
+
 ## Geliştirici
 
 **Toygar Keskin**

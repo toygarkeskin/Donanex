@@ -1,8 +1,8 @@
 # Bu depoda çalışma rehberi
 
-Bu dosya, depoda değişiklik yapacak kişiler ve yapay zekâ ajanları içindir. Amacı: mimariyi tarif
-etmek değil (onun için [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) var), **nereye ne yazılacağını
-ve nelerin kırılacağını** söylemek.
+Bu dosya, depoda değişiklik yapacak geliştiriciler içindir. Amacı mimariyi tarif etmek değil
+(onun için [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) var), **nereye ne yazılacağını ve nelerin
+kırılacağını** söylemek.
 
 ## Önce bunu çalıştırın
 
