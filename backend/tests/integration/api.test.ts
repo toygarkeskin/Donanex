@@ -155,6 +155,38 @@ test("arama ve filtreler; SQL enjeksiyonu ile joker etkisiz", opts, async () => 
   assert.ok(paged.data.pages > 1);
 });
 
+test("CSV içe aktarma kategoriyi uygular, tanımadığında durur", opts, async () => {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+
+  const magazalar = (await magazaci.get("/api/me")).data.stores ?? [];
+  const storeId = magazalar[0]?.id;
+  assert.ok(storeId, "mağaza sahibinin paneli olmalı");
+
+  // Tanınan kategori: ürün o kategoriyle eklenir.
+  const basarili = await magazaci.post(`/api/stores/${storeId}/products/bulk`, {
+    products: [{ name: "CSV Test Klavyesi", price: "1234.00", stock: "3", category: "Klavye" }]
+  });
+  assert.equal(basarili.status, 201, JSON.stringify(basarili.data));
+  assert.equal(basarili.data.count, 1);
+
+  // İçe aktarılan ürün taslak gelir; mağaza panelinden kategorisi görünür.
+  const panel = await magazaci.get(`/api/stores/${storeId}/products?q=${encodeURIComponent("CSV Test Klavyesi")}`);
+  const eklenen = panel.data.items.find((urun: Row) => urun.name === "CSV Test Klavyesi");
+  assert.ok(eklenen, "eklenen ürün mağaza panelinde görünmeli");
+  assert.equal(eklenen.categoryName, "Klavye", "kategori uygulanmalı");
+
+  // Tanınmayan kategori: içe aktarma durur, hiçbir satır eklenmez.
+  const red = await magazaci.post(`/api/stores/${storeId}/products/bulk`, {
+    products: [{ name: "Olmayan Kategorili Ürün", price: "99.00", stock: "1", category: "Uzay Aracı" }]
+  });
+  assert.equal(red.status, 400);
+  assert.match(red.data.message, /kategori/i);
+
+  const sonra = await magazaci.get(`/api/stores/${storeId}/products?q=${encodeURIComponent("Olmayan Kategorili")}`);
+  assert.equal(sonra.data.items.length, 0, "reddedilen satır eklenmemeli");
+});
+
 test("çoklu kategori seçimi birleşim döndürür", opts, async () => {
   const laptop = (await anon.get("/api/products?category=laptop")).data.total;
   const monitor = (await anon.get("/api/products?category=monitor")).data.total;

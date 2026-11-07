@@ -16,7 +16,7 @@ const EN_FAZLA = 500;
 const storeId = () => route.params.storeId;
 
 const dosyaAdi = ref("");
-const satirlar = ref([]); // { no, name, price, stock, sku, description, imageUrl, hata }
+const satirlar = ref([]); // { no, name, price, stock, sku, category, description, imageUrl, hata }
 const okumaHatasi = ref("");
 const gonderiliyor = ref(false);
 
@@ -118,7 +118,10 @@ async function gonder() {
       stock: s.stock || "0",
       sku: s.sku || undefined,
       description: s.description || undefined,
-      imageUrl: s.imageUrl || undefined
+      imageUrl: s.imageUrl || undefined,
+      // Boş bırakılabilir; yazılmışsa sunucu tanımadığı kategoride içe
+      // aktarmayı durdurur, ürün sessizce kategorisiz kalmaz.
+      category: s.category || undefined
     }));
 
     const sonuc = await api.post(`/stores/${storeId()}/products/bulk`, { products: yuk });
@@ -146,9 +149,14 @@ async function gonder() {
       <h2 class="mb-2 text-sm font-semibold text-ink-900">Dosya nasıl olmalı?</h2>
       <p class="text-sm text-ink-600">
         İlk satır başlık olmalı. Zorunlu sütunlar: <strong>ad</strong> ve <strong>fiyat</strong>.
-        İsteğe bağlı: <strong>stok</strong>, <strong>stok kodu</strong>, <strong>aciklama</strong>,
-        <strong>gorsel</strong>. Ayraç olarak noktalı virgül, virgül ya da sekme kullanılabilir;
-        fiyatta hem <code>1299,90</code> hem <code>1299.90</code> yazımı okunur.
+        İsteğe bağlı: <strong>stok</strong>, <strong>stok kodu</strong>, <strong>kategori</strong>,
+        <strong>aciklama</strong>, <strong>gorsel</strong>. Ayraç olarak noktalı virgül, virgül ya da
+        sekme kullanılabilir; fiyatta hem <code>1299,90</code> hem <code>1299.90</code> yazımı okunur.
+      </p>
+      <p class="mt-2 text-sm text-ink-600">
+        Kategori sütununa katalogdaki kategori adını yazın (örneğin <code>Klavye</code>). Boş
+        bırakabilirsiniz; ama yazdığınız kategori katalogda yoksa içe aktarma durur ve hiçbir ürün
+        eklenmez — ürünün sessizce kategorisiz kalıp filtrelerde kaybolmaması için.
       </p>
       <p class="mt-2 text-sm text-ink-600">
         Aktarılan ürünler <strong>taslak</strong> olarak eklenir — kontrol edip yayına almanız gerekir.
@@ -199,6 +207,7 @@ async function gonder() {
               <th>Fiyat</th>
               <th>Stok</th>
               <th>Stok kodu</th>
+              <th>Kategori</th>
               <th>Durum</th>
             </tr>
           </thead>
@@ -209,6 +218,7 @@ async function gonder() {
               <td>{{ satir.price || "—" }}</td>
               <td>{{ satir.stock || "0" }}</td>
               <td class="text-ink-500">{{ satir.sku || "—" }}</td>
+              <td class="text-ink-500">{{ satir.category || "—" }}</td>
               <td>
                 <span v-if="satir.hata" class="text-xs font-medium text-red-600">{{ satir.hata }}</span>
                 <span v-else class="text-xs font-medium text-green-600">Hazır</span>

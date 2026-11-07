@@ -2,7 +2,7 @@
 
 import { Command, type Handler } from "../../shared/cqrs/Message";
 import { ValidationError, ConflictError, NotFoundError } from "../../../domain/shared/errors";
-import { requireUuid } from "../../../domain/shared/guards";
+import { requireUuid, slugify } from "../../../domain/shared/guards";
 import { Product, type ImportRow } from "../../../domain/catalog/Product";
 import { StoreStatus } from "../../../domain/stores/Store";
 import { assertCan, type UseCaseContext } from "../../shared/authorize";
@@ -65,11 +65,36 @@ export class ImportProductsHandler implements Handler<ImportProductsCommand, Imp
         throw new ConflictError("Mağaza onaylanmadan ürün eklenemez.");
       }
 
+      /**
+       * Kategori adını/slug'ını kimliğe çevirir.
+       *
+       * Boş bırakılabilir — o zaman ürün kategorisiz kalır. Ama YAZILMIŞ da
+       * tanınmıyorsa içe aktarma durur: sessizce kategorisiz eklemek,
+       * kullanıcının ürünü kategori filtresinde boşuna aramasına yol açardı.
+       * İçe aktarma zaten hep-ya-hiç çalışıyor, bu da aynı çizgide.
+       *
+       * Aynı kategori birçok satırda geçtiği için sonuçlar not ediliyor.
+       */
+      const kategoriKimlikleri = new Map<string, string | null>();
+      const kategoriKimligi = async (deger: unknown, satirNo: number): Promise<string | null> => {
+        if (typeof deger !== "string" || !deger.trim()) return null;
+        const slug = slugify(deger);
+        if (kategoriKimlikleri.has(slug)) return kategoriKimlikleri.get(slug) ?? null;
+
+        const kategori = await repos.categories.findBySlug(slug);
+        if (!kategori) {
+          throw new ValidationError(`${satirNo}. satır: "${deger.trim()}" diye bir kategori yok.`);
+        }
+        kategoriKimlikleri.set(slug, kategori.id);
+        return kategori.id;
+      };
+
       const prepared: Row[] = [];
-      for (const product of products) {
+      for (const [index, product] of products.entries()) {
         prepared.push({
           ...product,
           id: this.ids.uuid(),
+          categoryId: await kategoriKimligi(rows[index]?.category, index + 2),
           slug: await repos.products.reserveSlug(storeId, product.slug)
         });
       }

@@ -91,6 +91,10 @@ const STORES: readonly DemoStore[] = [
     products: [
       ["GIGABYTE GAMING A16 Dizüstü", "Ryzen 7 260, 16GB DDR5, RTX 5060, 16 inç FHD 165Hz oyuncu dizüstü bilgisayarı.", 67000, 12, "Laptop", image("laptopcard.png")],
       ["HP ProBook 450 İş Dizüstü", "15.6 inç, Intel Core i5, 16GB RAM, 512GB SSD. Uzun pil ömrüyle iş kullanımına uygun.", 38500, 9, "Laptop", image("katalog/probook.webp")],
+      // Model kodu BİLEREK yazıldı: A15 FA507 serisi aynı ad altında farklı
+      // işlemci ve ekran kartlarıyla satılıyor, kod olmadan açıklama yanıltıcı
+      // olurdu. Özellikler bu varyanta (FA507NVR) aittir.
+      ["ASUS TUF Gaming A15 FA507NVR", "AMD Ryzen 7 7435HS, 16GB DDR5, 512GB PCIe 4.0 NVMe SSD, 8GB RTX 4060 (140W), 15.6 inç FHD 144Hz IPS ekran.", 72000, 6, "Laptop", image("laptop.jpg")],
       ["MSI RTX 5060 Ti SHADOW", "8GB GDDR7, 128 bit, DLSS 4 destekli çift fanlı ekran kartı.", 25000, 7, "Ekran Kartı", image("ekrankarticard.png")],
       ["ASUS Dual RTX Ekran Kartı", "8GB GDDR6, çift fanlı soğutma, kompakt kasalara uygun tasarım.", 21500, 5, "Ekran Kartı", image("asusdual.jpg")],
       ["Yüksek Performans Ekran Kartı", "Oyun ve içerik üretimi için 12GB bellekli ekran kartı.", 29900, 3, "Ekran Kartı", image("ekrankart.png")]
@@ -150,6 +154,69 @@ const ADDRESS = {
   postalCode: "34710"
 };
 
+/**
+ * Katalogdaki eksik demo ürünlerini tamamlar.
+ *
+ * Veritabanı doluyken çalışır ve YALNIZCA ekleme yapar: var olan ürünlere,
+ * siparişlere, hesaplara ve fiyatlara dokunmaz. Böylece tanıma yeni bir ürün
+ * eklendiğinde veritabanını sıfırlamak gerekmiyor — eski yol buydu ve
+ * oluşturulmuş siparişleri silmek demekti.
+ *
+ * Eşleştirme mağaza + slug üzerinden. Bir ürün elle silinmişse burada yeniden
+ * oluşur; bu bilinçli, çünkü tanım demo katalogun ne içermesi gerektiğini
+ * söyleyen tek kaynak. Mağazanın kendi eklediği ürünlere karışmaz.
+ */
+export async function eksikUrunleriTamamla({
+  unitOfWork,
+  ids,
+  logger
+}: Pick<Services, "unitOfWork" | "ids" | "logger">): Promise<{ eklenen: number }> {
+  const eklenen = await unitOfWork.run(async (repos) => {
+    let sayac = 0;
+
+    for (const definition of STORES) {
+      const { rows: magazaSatiri } = await repos.db.query("SELECT id FROM stores WHERE slug = $1", [definition.key]);
+      const magaza = magazaSatiri[0];
+      // Mağaza yoksa bu tanım bu kuruluma ait değil; sessizce geçilir.
+      if (!magaza) continue;
+
+      for (const [name, description, price, stock, category, imageUrl] of definition.products) {
+        const slug = slugify(name);
+        const { rows: varMi } = await repos.db.query(
+          "SELECT 1 FROM products WHERE store_id = $1 AND slug = $2",
+          [magaza.id, slug]
+        );
+        if (varMi.length) continue;
+
+        const { rows: kategoriSatiri } = await repos.db.query("SELECT id FROM categories WHERE slug = $1", [
+          slugify(category)
+        ]);
+
+        const product = Product.create({
+          id: ids.uuid(),
+          storeId: magaza.id,
+          categoryId: kategoriSatiri[0]?.id ?? null,
+          name,
+          description,
+          price,
+          stock,
+          imageUrl,
+          status: ProductStatus.ACTIVE
+        });
+        await repos.products.create({ ...product, slug });
+        sayac++;
+      }
+    }
+
+    return sayac;
+  });
+
+  if (eklenen) logger.info("Katalogdaki {Count} eksik ürün tamamlandı", { Count: eklenen });
+  else logger.info("Demo verisi zaten güncel, eklenecek ürün yok");
+
+  return { eklenen };
+}
+
 export async function seedDemoData({
   unitOfWork,
   passwordHasher,
@@ -167,7 +234,9 @@ export async function seedDemoData({
   });
 
   if (alreadySeeded) {
-    logger.info("Demo verisi zaten var, atlandı");
+    // Kurulum zaten yapılmış. Veritabanını sıfırlamadan katalogun
+    // büyüyebilmesi için yalnızca EKSİK ürünler tamamlanır.
+    await eksikUrunleriTamamla({ unitOfWork, ids, logger });
     return null;
   }
 

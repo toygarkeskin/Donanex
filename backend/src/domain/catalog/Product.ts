@@ -80,6 +80,12 @@ export interface ImportRow {
   sku?: unknown;
   description?: unknown;
   imageUrl?: unknown;
+  /**
+   * Kategori adı ya da slug'ı. Kimliğe çevirmek domain'in işi değil —
+   * katalogda hangi kategorilerin bulunduğunu bilmek veri erişimi gerektirir,
+   * bu yüzden çözümleme handler'da yapılır.
+   */
+  category?: unknown;
 }
 
 export interface ImportDefaults {
