@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useCartStore } from "../stores/cart";
@@ -46,6 +46,22 @@ const nav = [
   { to: { name: "stores" }, label: "Mağazalar" },
   { to: { name: "track" }, label: "Sipariş Takibi" }
 ];
+
+/**
+ * Telefondaki alt çubuk.
+ *
+ * Dört yol: en sık kullanılanlar. Hesap girişi oturuma göre değişiyor —
+ * giriş yapılmamışsa doğrudan giriş sayfasına götürür, yoksa kullanıcı
+ * hesabım'a basıp boş bir ekranla karşılaşırdı.
+ */
+const altGezinme = computed(() => [
+  { to: { name: "home" }, label: "Ana sayfa", icon: "🏠" },
+  { to: { name: "products" }, label: "Ürünler", icon: "🏷️" },
+  { to: { name: "cart" }, label: "Sepetim", icon: "🛍️", rozet: true },
+  auth.isSignedIn
+    ? { to: { name: "account-orders" }, label: "Hesabım", icon: "👤" }
+    : { to: { name: "sign-in" }, label: "Giriş", icon: "👤" }
+]);
 
 /*
  * Açılır menüleri kapatma.
@@ -274,9 +290,47 @@ async function signOut() {
       </nav>
     </header>
 
-    <main class="mx-auto w-full max-w-7xl flex-1 px-4 py-8">
+    <!--
+      pb-20: alt gezinme çubuğu sabit konumlu, yani akıştan çıkmış durumda.
+      Alt boşluk olmasaydı sayfanın son satırı çubuğun ardında kalırdı.
+      lg'de çubuk gizlendiği için boşluk da kalkıyor.
+    -->
+    <main class="mx-auto w-full max-w-7xl flex-1 px-4 pb-20 pt-6 sm:py-8 lg:pb-8">
       <RouterView />
     </main>
+
+    <!--
+      Telefonda alt gezinme çubuğu.
+      Başparmağın eriştiği yer ekranın altı; en sık kullanılan dört yol
+      (ana sayfa, ürünler, sepet, hesap) başlıktaki küçük simgeler yerine
+      buraya alındı. Geniş ekranda gizli — orada başlık zaten yetiyor.
+
+      pb-[env(safe-area-inset-bottom)]: çentikli telefonlarda ana sayfa
+      çizgisinin çubuğun üstüne binmemesi için.
+    -->
+    <nav
+      class="fixed inset-x-0 bottom-0 z-40 border-t border-ink-200 bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
+      aria-label="Alt gezinme"
+    >
+      <div class="grid grid-cols-4">
+        <RouterLink
+          v-for="item in altGezinme"
+          :key="item.label"
+          :to="item.to"
+          class="relative flex flex-col items-center gap-0.5 py-2 text-xs font-medium text-ink-500"
+          active-class="text-brand-600"
+        >
+          <span class="text-lg leading-none" aria-hidden="true">{{ item.icon }}</span>
+          {{ item.label }}
+          <span
+            v-if="item.rozet && cart.itemCount > 0"
+            class="absolute right-1/2 top-1 min-w-4 translate-x-3 rounded-full bg-brand-600 px-1 text-center text-[10px] font-bold leading-4 text-white"
+          >
+            {{ cart.itemCount > 9 ? "9+" : cart.itemCount }}
+          </span>
+        </RouterLink>
+      </div>
+    </nav>
 
     <footer class="border-t border-ink-200 bg-surface">
       <div class="mx-auto grid max-w-7xl gap-8 px-4 py-10 text-sm sm:grid-cols-2 lg:grid-cols-4">

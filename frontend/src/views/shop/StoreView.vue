@@ -59,7 +59,7 @@ onMounted(load);
 
     <LoadingBlock v-if="loading" :rows="3" />
     <EmptyState v-else-if="!result.items.length" title="Bu mağazada henüz ürün yok" icon="🏷️" />
-    <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div v-else class="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <ProductCard v-for="product in result.items" :key="product.id" :product="product" />
     </div>
 

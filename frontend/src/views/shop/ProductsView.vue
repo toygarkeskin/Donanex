@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, query } from "../../lib/api";
 import ProductCard from "../../components/ProductCard.vue";
@@ -33,17 +33,41 @@ function listeyeCevir(deger) {
     .filter(Boolean);
 }
 
+/** Adres çubuğundaki sorguyu filtre nesnesine çevirir. */
+function sorgudanFiltreler(sorgu) {
+  return {
+    q: sorgu.ara || "",
+    category: listeyeCevir(sorgu.kategori),
+    store: listeyeCevir(sorgu.magaza),
+    minPrice: sorgu.min || "",
+    maxPrice: sorgu.max || "",
+    inStock: sorgu.stokta === "true",
+    sort: sorgu.sirala || "newest",
+    page: Number(sorgu.sayfa) || 1
+  };
+}
+
 // Filtreler adres çubuğunda yaşar: sayfa paylaşılabilir ve geri tuşu çalışır.
-const filters = reactive({
-  q: route.query.ara || "",
-  category: listeyeCevir(route.query.kategori),
-  store: listeyeCevir(route.query.magaza),
-  minPrice: route.query.min || "",
-  maxPrice: route.query.max || "",
-  inStock: route.query.stokta === "true",
-  sort: route.query.sirala || "newest",
-  page: Number(route.query.sayfa) || 1
-});
+const filters = reactive(sorgudanFiltreler(route.query));
+
+/**
+ * Filtrelerin şu anki hâli, sorgudan okunanla karşılaştırılabilir biçimde.
+ *
+ * Alan sırası sorgudanFiltreler ile AYNI olmalı: karşılaştırma JSON metni
+ * üzerinden yapılıyor, sıra değişirse eşit nesneler farklı görünür.
+ */
+function filtrelerinOzeti() {
+  return {
+    q: filters.q,
+    category: [...filters.category],
+    store: [...filters.store],
+    minPrice: filters.minPrice,
+    maxPrice: filters.maxPrice,
+    inStock: filters.inStock,
+    sort: filters.sort,
+    page: filters.page
+  };
+}
 
 const SORTS = [
   { value: "newest", label: "En yeniler" },
@@ -51,6 +75,19 @@ const SORTS = [
   { value: "price_desc", label: "Fiyat: azalan" },
   { value: "name_asc", label: "İsme göre" }
 ];
+
+/**
+ * Adres çubuğu DIŞARIDAN değiştiğinde (başlıktaki kategori şeridi, tarayıcının
+ * geri/ileri tuşu, paylaşılan bir bağlantı) filtreleri yeniden okuruz.
+ *
+ * Bu bayrak kendi izleyicilerimizi o sırada susturur: aksi halde filtreleri
+ * yazmak syncUrl'i, o da bu izleyiciyi tetikler ve döngü oluşur.
+ *
+ * Şerit eklenmeden önce kategoriye tıklamak BAŞKA bir sayfadan geliyordu ve
+ * bileşen sıfırdan kuruluyordu. Şerit her sayfada olduğu için artık aynı
+ * sayfada kalıyoruz; bu yüzden adres değişimini elle dinlemek gerekiyor.
+ */
+let adrestenOkunuyor = false;
 
 function syncUrl() {
   router.replace({
@@ -128,6 +165,7 @@ let debounce;
 watch(
   () => [filters.q, filters.minPrice, filters.maxPrice],
   () => {
+    if (adrestenOkunuyor) return;
     clearTimeout(debounce);
     debounce = setTimeout(() => {
       filters.page = 1;
@@ -142,6 +180,7 @@ watch(
 watch(
   () => [filters.category.join(","), filters.store.join(","), filters.sort, filters.inStock],
   () => {
+    if (adrestenOkunuyor) return;
     filters.page = 1;
     syncUrl();
     load();
@@ -151,7 +190,30 @@ watch(
 watch(
   () => filters.page,
   () => {
+    if (adrestenOkunuyor) return;
     syncUrl();
+    load();
+  }
+);
+
+/*
+ * Adres çubuğu dışarıdan değiştiğinde filtreleri ondan tazele.
+ *
+ * Gelen sorgu, filtrelerimizin ÜRETECEĞİ sorguyla aynıysa bu bizim kendi
+ * syncUrl çağrımızdır; dokunmazsak döngü oluşmaz.
+ */
+watch(
+  () => route.query,
+  (yeni) => {
+    const gelen = sorgudanFiltreler(yeni);
+    if (JSON.stringify(gelen) === JSON.stringify(filtrelerinOzeti())) return;
+
+    adrestenOkunuyor = true;
+    Object.assign(filters, gelen);
+    // İzleyiciler bu akışta çalışıp bayrağı görür; sonraki tikte indiriyoruz.
+    nextTick(() => {
+      adrestenOkunuyor = false;
+    });
     load();
   }
 );
@@ -288,7 +350,7 @@ onMounted(async () => {
           <button type="button" class="btn-secondary" @click="reset">Filtreleri temizle</button>
         </EmptyState>
 
-        <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div v-else class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
           <ProductCard v-for="product in result.items" :key="product.id" :product="product" />
         </div>
 

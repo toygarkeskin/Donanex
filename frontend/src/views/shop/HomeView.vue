@@ -78,7 +78,7 @@ onMounted(async () => {
       </div>
 
       <LoadingBlock v-if="loading" :rows="2" />
-      <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div v-else class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <ProductCard v-for="product in products" :key="product.id" :product="product" />
       </div>
     </section>

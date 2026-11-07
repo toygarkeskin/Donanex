@@ -173,9 +173,13 @@ onMounted(() => cart.load().catch(() => {}));
           <span class="text-xl font-bold text-ink-900">{{ money(cart.subtotal) }}</span>
         </div>
 
+        <!--
+          Telefonda bu düğme gizli; onun yerine sayfanın altına sabitlenmiş
+          çubuk var. Tek düğme bırakılıyor ki aynı eylem iki yerde durmasın.
+        -->
         <button
           type="button"
-          class="btn-primary mt-5 w-full"
+          class="btn-primary mt-5 hidden w-full lg:block"
           :disabled="!cart.canCheckout"
           @click="router.push({ name: 'checkout' })"
         >
@@ -190,6 +194,32 @@ onMounted(() => cart.load().catch(() => {}));
           sepetiniz korunur, siparişlerinizi takip kodu olmadan görebilir ve adreslerinizi kaydedebilirsiniz.
         </p>
       </aside>
+    </div>
+
+    <!--
+      Telefonda sabit ödeme çubuğu.
+      Özet kartı listenin ALTINDA kaldığı için iki ürünle bile "Siparişi
+      tamamla" katlamanın altına düşüyordu; sepet doldukça daha da uzaklaşıyor.
+      bottom-16: alt gezinme çubuğunun hemen üstünde durur.
+    -->
+    <div
+      v-if="cart.items.length"
+      class="fixed inset-x-0 bottom-16 z-30 border-t border-ink-200 bg-surface px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:hidden"
+    >
+      <div class="flex items-center gap-3">
+        <div class="min-w-0">
+          <p class="text-xs text-ink-500">Toplam</p>
+          <p class="truncate text-lg font-bold leading-tight text-ink-900">{{ money(cart.subtotal) }}</p>
+        </div>
+        <button
+          type="button"
+          class="btn-primary ml-auto shrink-0"
+          :disabled="!cart.canCheckout"
+          @click="router.push({ name: 'checkout' })"
+        >
+          Siparişi tamamla
+        </button>
+      </div>
     </div>
 
     <ConfirmDialog

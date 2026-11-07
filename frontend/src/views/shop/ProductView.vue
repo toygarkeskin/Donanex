@@ -82,8 +82,13 @@ watch(() => route.fullPath, load);
   </EmptyState>
 
   <div v-else class="grid gap-8 lg:grid-cols-2">
-    <div class="card flex items-center justify-center overflow-hidden bg-surface p-8">
-      <img :src="product.imageUrl" :alt="product.name" class="max-h-[420px] w-full object-contain" />
+    <!--
+      Telefonda görsel alçak tutuluyor: 420px'te "Sepete ekle" katlamanın
+      altında kalıyor ve satın almak için kaydırmak gerekiyordu. Geniş ekranda
+      iki sütun yan yana olduğu için böyle bir sorun yok, görsel büyük kalıyor.
+    -->
+    <div class="card flex items-center justify-center overflow-hidden bg-surface p-4 sm:p-8">
+      <img :src="product.imageUrl" :alt="product.name" class="max-h-56 w-full object-contain sm:max-h-[420px]" />
     </div>
 
     <div>
@@ -182,7 +187,7 @@ watch(() => route.fullPath, load);
 
     <section v-if="benzerler.length" class="lg:col-span-2">
       <h2 class="mb-4 text-lg font-bold text-ink-900">Benzer ürünler</h2>
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <ProductCard v-for="benzer in benzerler" :key="benzer.id" :product="benzer" />
       </div>
     </section>
