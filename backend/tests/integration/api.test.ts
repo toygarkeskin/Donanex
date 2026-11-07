@@ -155,6 +155,42 @@ test("arama ve filtreler; SQL enjeksiyonu ile joker etkisiz", opts, async () => 
   assert.ok(paged.data.pages > 1);
 });
 
+test("çoklu kategori seçimi birleşim döndürür", opts, async () => {
+  const laptop = (await anon.get("/api/products?category=laptop")).data.total;
+  const monitor = (await anon.get("/api/products?category=monitor")).data.total;
+  assert.ok(laptop > 0 && monitor > 0, "demo veride iki kategori de dolu olmalı");
+
+  // Aynı türden filtreler VEYA'lanır: toplam, ikisinin birleşimi kadar olmalı.
+  const virgullu = await anon.get("/api/products?category=laptop,monitor");
+  assert.equal(virgullu.data.total, laptop + monitor);
+
+  // Tekrarlı parametre de aynı sonucu vermeli (Express bunu dizi olarak verir).
+  const tekrarli = await anon.get("/api/products?category=laptop&category=monitor");
+  assert.equal(tekrarli.data.total, virgullu.data.total);
+
+  // Sıra önbellek anahtarını değiştirmemeli, sonuç aynı kalmalı.
+  const tersSira = await anon.get("/api/products?category=monitor,laptop");
+  assert.equal(tersSira.data.total, virgullu.data.total);
+
+  // Tek değer biçimi korunuyor: kategori şeridi ve ürün kartları bunu kullanıyor.
+  assert.equal((await anon.get("/api/products?category=laptop")).data.total, laptop);
+
+  // Listenin içine enjeksiyon denemesi hiçbir şeyle eşleşmez, hata da vermez.
+  const kotu = await anon.get(`/api/products?category=${encodeURIComponent("laptop','x') OR 1=1 --")}`);
+  assert.equal(kotu.status, 200);
+  assert.equal(kotu.data.total, 0);
+
+  // Mağaza filtresi de çoklu çalışır.
+  const magazalar = (await anon.get("/api/storefront/stores")).data.items ?? [];
+  if (magazalar.length >= 2) {
+    const ikisi = `${magazalar[0].slug},${magazalar[1].slug}`;
+    const birlesim = await anon.get(`/api/products?store=${encodeURIComponent(ikisi)}`);
+    const birinci = (await anon.get(`/api/products?store=${magazalar[0].slug}`)).data.total;
+    const ikinci = (await anon.get(`/api/products?store=${magazalar[1].slug}`)).data.total;
+    assert.equal(birlesim.data.total, birinci + ikinci);
+  }
+});
+
 /* ------------------------------------------------- misafir sepeti ve sipariş */
 
 test("misafir sepet açabilir, sepet sunucuda tutulur", opts, async () => {

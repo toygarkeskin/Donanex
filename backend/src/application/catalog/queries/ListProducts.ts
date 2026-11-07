@@ -25,11 +25,42 @@ export interface ProductFilters {
   pageSize?: unknown;
 }
 
+/**
+ * Çoklu seçimli filtrede en fazla kaç değer kabul edilir.
+ *
+ * Sınırsız bırakılsaydı tek bir istekle binlerce slug gönderilip hem SQL
+ * parametresi hem önbellek anahtarı şişirilebilirdi. Yirmi, gerçek bir
+ * kullanıcının seçebileceğinin çok üzerinde.
+ */
+const COKLU_FILTRE_SINIRI = 20;
+
+/**
+ * Çoklu seçimli filtre değerini listeye çevirir.
+ *
+ * Üç biçimi de kabul eder: tek değer ("laptop"), virgülle ayrılmış liste
+ * ("laptop,monitor") ve tekrarlı parametre (?kategori=laptop&kategori=monitor
+ * — Express bunu dizi olarak verir). Tek değer biçiminin korunması önemli:
+ * başlıktaki kategori şeridi ve ürün kartları hâlâ tek slug gönderiyor.
+ *
+ * Yinelenenler atılır ve liste SIRALANIR; sıralama, aynı seçimin her zaman
+ * aynı önbellek anahtarını üretmesini sağlar (a,b ile b,a aynı sorgudur).
+ */
+function slugListesi(value: unknown): string[] {
+  const parcalar = Array.isArray(value) ? value : [value];
+  const slugler = parcalar
+    .filter((parca): parca is string => typeof parca === "string")
+    .flatMap((parca) => parca.split(","))
+    .map((parca) => parca.trim().slice(0, 120))
+    .filter(Boolean);
+  return [...new Set(slugler)].sort().slice(0, COKLU_FILTRE_SINIRI);
+}
+
 /** Read model'e giden, sınırları uygulanmış filtreler. */
 export interface NormalizedProductFilters {
   readonly search: string;
-  readonly categorySlug: string | null;
-  readonly storeSlug: string | null;
+  /** Boş dizi "filtre yok" demektir; birden çok kategori VEYA'lanır. */
+  readonly categorySlugs: readonly string[];
+  readonly storeSlugs: readonly string[];
   readonly minPriceCents: number | null;
   readonly maxPriceCents: number | null;
   readonly inStockOnly: boolean;
@@ -73,8 +104,8 @@ export class ListProductsHandler implements Handler<ListProductsQuery, Row> {
     };
     return {
       search: typeof filters.q === "string" ? filters.q.trim().slice(0, 100) : "",
-      categorySlug: typeof filters.category === "string" ? filters.category.slice(0, 120) : null,
-      storeSlug: typeof filters.store === "string" ? filters.store.slice(0, 120) : null,
+      categorySlugs: slugListesi(filters.category),
+      storeSlugs: slugListesi(filters.store),
       minPriceCents: price(filters.minPrice),
       maxPriceCents: price(filters.maxPrice),
       inStockOnly: String(filters.inStock) === "true",

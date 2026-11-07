@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, query } from "../../lib/api";
 import ProductCard from "../../components/ProductCard.vue";
@@ -11,16 +11,33 @@ import PageHeader from "../../components/PageHeader.vue";
 const route = useRoute();
 const router = useRouter();
 
+/** Dar ekranda filtre panelinin açık olup olmadığı; geniş ekranda kullanılmaz. */
+const filtrelerAcik = ref(false);
+
 const result = ref({ items: [], total: 0, page: 1, pages: 1 });
 const categories = ref([]);
 const stores = ref([]);
 const loading = ref(true);
 
+/**
+ * Adres çubuğundaki çoklu seçimi listeye çevirir.
+ *
+ * Biçim virgülle ayrılmış: ?kategori=laptop,monitor. Tek değer de geçerlidir —
+ * başlıktaki kategori şeridi ve ürün kartları hâlâ tek slug gönderiyor.
+ */
+function listeyeCevir(deger) {
+  if (Array.isArray(deger)) return deger.filter(Boolean);
+  return String(deger ?? "")
+    .split(",")
+    .map((parca) => parca.trim())
+    .filter(Boolean);
+}
+
 // Filtreler adres çubuğunda yaşar: sayfa paylaşılabilir ve geri tuşu çalışır.
 const filters = reactive({
   q: route.query.ara || "",
-  category: route.query.kategori || "",
-  store: route.query.magaza || "",
+  category: listeyeCevir(route.query.kategori),
+  store: listeyeCevir(route.query.magaza),
   minPrice: route.query.min || "",
   maxPrice: route.query.max || "",
   inStock: route.query.stokta === "true",
@@ -39,8 +56,8 @@ function syncUrl() {
   router.replace({
     query: {
       ...(filters.q ? { ara: filters.q } : {}),
-      ...(filters.category ? { kategori: filters.category } : {}),
-      ...(filters.store ? { magaza: filters.store } : {}),
+      ...(filters.category.length ? { kategori: filters.category.join(",") } : {}),
+      ...(filters.store.length ? { magaza: filters.store.join(",") } : {}),
       ...(filters.minPrice ? { min: filters.minPrice } : {}),
       ...(filters.maxPrice ? { max: filters.maxPrice } : {}),
       ...(filters.inStock ? { stokta: "true" } : {}),
@@ -56,8 +73,8 @@ async function load() {
     result.value = await api.get(
       `/products${query({
         q: filters.q,
-        category: filters.category,
-        store: filters.store,
+        category: filters.category.join(","),
+        store: filters.store.join(","),
         minPrice: filters.minPrice,
         maxPrice: filters.maxPrice,
         inStock: filters.inStock ? "true" : "",
@@ -71,8 +88,40 @@ async function load() {
   }
 }
 
+/**
+ * Açık olan filtreler, tek tek kaldırılabilsin diye düz bir liste olarak.
+ *
+ * Çoklu seçimde kenar çubuğuna bakmadan "şu an neye göre süzülüyorum?"
+ * sorusunun yanıtı görünmüyordu; rozetler bunu listenin hemen üstüne taşıyor.
+ */
+const acikFiltreler = computed(() => {
+  const rozetler = [];
+  for (const slug of filters.category) {
+    const kategori = categories.value.find((aday) => aday.slug === slug);
+    rozetler.push({ anahtar: `kategori:${slug}`, etiket: kategori?.name ?? slug, tur: "category", deger: slug });
+  }
+  for (const slug of filters.store) {
+    const magaza = stores.value.find((aday) => aday.slug === slug);
+    rozetler.push({ anahtar: `magaza:${slug}`, etiket: magaza?.name ?? slug, tur: "store", deger: slug });
+  }
+  if (filters.inStock) rozetler.push({ anahtar: "stokta", etiket: "Stokta olanlar", tur: "inStock" });
+  if (filters.minPrice) rozetler.push({ anahtar: "min", etiket: `En az ${filters.minPrice} ₺`, tur: "minPrice" });
+  if (filters.maxPrice) rozetler.push({ anahtar: "max", etiket: `En çok ${filters.maxPrice} ₺`, tur: "maxPrice" });
+  if (filters.q) rozetler.push({ anahtar: "ara", etiket: `"${filters.q}"`, tur: "q" });
+  return rozetler;
+});
+
+function rozetiKaldir(rozet) {
+  if (rozet.tur === "category" || rozet.tur === "store") {
+    filters[rozet.tur] = filters[rozet.tur].filter((slug) => slug !== rozet.deger);
+    return;
+  }
+  if (rozet.tur === "inStock") filters.inStock = false;
+  else filters[rozet.tur] = "";
+}
+
 function reset() {
-  Object.assign(filters, { q: "", category: "", store: "", minPrice: "", maxPrice: "", inStock: false, sort: "newest", page: 1 });
+  Object.assign(filters, { q: "", category: [], store: [], minPrice: "", maxPrice: "", inStock: false, sort: "newest", page: 1 });
 }
 
 let debounce;
@@ -88,8 +137,10 @@ watch(
   }
 );
 
+// Onay kutuları diziyi YERİNDE değiştirir; referans aynı kaldığı için
+// dizinin kendisini izlemek tetiklemez. Birleştirilmiş hali izleniyor.
 watch(
-  () => [filters.category, filters.store, filters.sort, filters.inStock],
+  () => [filters.category.join(","), filters.store.join(","), filters.sort, filters.inStock],
   () => {
     filters.page = 1;
     syncUrl();
@@ -120,30 +171,68 @@ onMounted(async () => {
   <div>
     <PageHeader title="Ürünler" description="Tüm mağazaların ürünleri tek listede." />
 
+    <!--
+      Dar ekranda filtreler KATLI gelir. Onay kutulu listeler açılır listelerden
+      uzun; açık bırakılsaydı telefonda ürünlere ulaşmak için bütün filtreleri
+      geçmek gerekirdi. Geniş ekranda düğme gizlenir, panel hep açıktır.
+    -->
+    <button
+      type="button"
+      class="btn-secondary mb-3 w-full lg:hidden"
+      :aria-expanded="filtrelerAcik"
+      @click="filtrelerAcik = !filtrelerAcik"
+    >
+      Filtrele<span v-if="acikFiltreler.length"> ({{ acikFiltreler.length }})</span>
+    </button>
+
     <div class="grid gap-6 lg:grid-cols-[260px_1fr]">
-      <aside class="card h-fit space-y-4 p-4">
+      <!--
+        top-32: yapışkan başlık (logo satırı + kategori şeridi) kadar aşağıda
+        durur, yoksa filtreler başlığın altında kalırdı. Yalnızca geniş
+        ekranda yapışkan; dar ekranda kenar çubuğu zaten akar.
+      -->
+      <aside
+        class="card h-fit space-y-4 p-4 lg:sticky lg:top-32 lg:block"
+        :class="filtrelerAcik ? 'block' : 'hidden'"
+      >
         <div>
           <label for="search" class="field-label">Ara</label>
           <input id="search" v-model="filters.q" type="search" class="field" placeholder="Ürün, marka…" maxlength="100" />
         </div>
 
-        <div>
-          <label for="category" class="field-label">Kategori</label>
-          <select id="category" v-model="filters.category" class="field">
-            <option value="">Tümü</option>
-            <option v-for="category in categories" :key="category.id" :value="category.slug">
-              {{ category.name }} ({{ category.productCount }})
-            </option>
-          </select>
-        </div>
+        <!--
+          Açılır liste yerine onay kutuları: tek seçimle "laptop VEYA monitör"
+          gibi bir süzme yapılamıyordu. Uzun listeler kenar çubuğunu
+          taşırmasın diye kendi içlerinde kayıyor.
+        -->
+        <fieldset>
+          <legend class="field-label">Kategori</legend>
+          <div class="max-h-52 space-y-1 overflow-y-auto pr-1">
+            <label
+              v-for="category in categories"
+              :key="category.id"
+              class="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm text-ink-700 hover:bg-ink-50"
+            >
+              <input v-model="filters.category" type="checkbox" :value="category.slug" class="rounded border-ink-300" />
+              <span class="flex-1 truncate">{{ category.name }}</span>
+              <span class="text-xs text-ink-400">{{ category.productCount }}</span>
+            </label>
+          </div>
+        </fieldset>
 
-        <div>
-          <label for="store" class="field-label">Mağaza</label>
-          <select id="store" v-model="filters.store" class="field">
-            <option value="">Tümü</option>
-            <option v-for="store in stores" :key="store.id" :value="store.slug">{{ store.name }}</option>
-          </select>
-        </div>
+        <fieldset>
+          <legend class="field-label">Mağaza</legend>
+          <div class="max-h-52 space-y-1 overflow-y-auto pr-1">
+            <label
+              v-for="store in stores"
+              :key="store.id"
+              class="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm text-ink-700 hover:bg-ink-50"
+            >
+              <input v-model="filters.store" type="checkbox" :value="store.slug" class="rounded border-ink-300" />
+              <span class="flex-1 truncate">{{ store.name }}</span>
+            </label>
+          </div>
+        </fieldset>
 
         <div>
           <span class="field-label">Fiyat aralığı</span>
@@ -163,6 +252,24 @@ onMounted(async () => {
       </aside>
 
       <div>
+        <!-- Açık filtreler: hangi süzgecin etkili olduğu listenin üstünde görünür. -->
+        <div v-if="acikFiltreler.length" class="mb-3 flex flex-wrap items-center gap-2">
+          <button
+            v-for="rozet in acikFiltreler"
+            :key="rozet.anahtar"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-ink-50 py-1 pl-3 pr-2 text-sm text-ink-700 hover:border-ink-300 hover:bg-ink-100"
+            @click="rozetiKaldir(rozet)"
+          >
+            {{ rozet.etiket }}
+            <span class="text-ink-400" aria-hidden="true">×</span>
+            <span class="sr-only">filtresini kaldır</span>
+          </button>
+          <button type="button" class="text-sm font-medium text-brand-600 hover:text-brand-700" @click="reset">
+            Tümünü temizle
+          </button>
+        </div>
+
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p class="text-sm text-ink-500">{{ result.total }} ürün bulundu</p>
           <select v-model="filters.sort" class="field w-auto" aria-label="Sıralama">

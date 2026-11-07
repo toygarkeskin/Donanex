@@ -37,8 +37,12 @@ export class PgCatalogReadModel implements CatalogReadModel {
       const term = bind(`%${escapeLike(filters.search)}%`);
       where.push(`(p.name ILIKE ${term} OR p.description ILIKE ${term} OR s.name ILIKE ${term})`);
     }
-    if (filters.categorySlug) where.push(`c.slug = ${bind(filters.categorySlug)}`);
-    if (filters.storeSlug) where.push(`s.slug = ${bind(filters.storeSlug)}`);
+    // Çoklu seçim: aynı türden filtreler VEYA'lanır (laptop YA DA monitör),
+    // farklı türdekiler VE'lenir (laptop kategorisi VE şu mağaza).
+    // ANY(...) kullanılıyor; slug'lar yine parametre olarak bağlanıyor,
+    // sorgu metnine girmiyor.
+    if (filters.categorySlugs?.length) where.push(`c.slug = ANY(${bind(filters.categorySlugs)}::text[])`);
+    if (filters.storeSlugs?.length) where.push(`s.slug = ANY(${bind(filters.storeSlugs)}::text[])`);
     if (filters.minPriceCents !== null) where.push(`p.price_cents >= ${bind(filters.minPriceCents)}`);
     if (filters.maxPriceCents !== null) where.push(`p.price_cents <= ${bind(filters.maxPriceCents)}`);
     if (filters.inStockOnly) where.push("p.stock > 0");
