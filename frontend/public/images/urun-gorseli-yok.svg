@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Görseli olmayan ürün için yer tutucu.
+
+  CSV ile toplu aktarmada görsel sütunu boş bırakılırsa bu kullanılır.
+  Önceden oradaki varsayılan gerçek bir dizüstü fotoğrafıydı; mouse ya da
+  kulaklık aktaran bir mağaza, ürünlerini yanlış fotoğrafla yayına almış
+  oluyordu. Nötr bir yer tutucu "fotoğraf henüz yok" der, yanlış bir şey
+  söylemez.
+
+  Renkler sabit bir orta gri: hem açık hem koyu kart zemininde okunur.
+  Sayfanın CSS'i <img> içine işlemediği için tema değişkeni kullanılamaz.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img"
+     aria-label="Ürün görseli eklenmemiş">
+  <rect x="26" y="34" width="108" height="78" rx="8" fill="none" stroke="#9aa3af" stroke-width="4" />
+  <circle cx="54" cy="58" r="8" fill="#9aa3af" />
+  <path d="M34 104 L62 76 L84 98 L100 86 L126 104 Z" fill="#9aa3af" />
+  <text x="80" y="136" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+        font-size="14" fill="#9aa3af">Görsel yok</text>
+</svg>

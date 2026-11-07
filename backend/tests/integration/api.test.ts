@@ -176,6 +176,11 @@ test("CSV içe aktarma kategoriyi uygular, tanımadığında durur", opts, async
   assert.ok(eklenen, "eklenen ürün mağaza panelinde görünmeli");
   assert.equal(eklenen.categoryName, "Klavye", "kategori uygulanmalı");
 
+  // Görsel verilmediğinde NÖTR yer tutucu kullanılır. Burada bir zamanlar
+  // gerçek bir dizüstü fotoğrafı vardı; mouse aktaran mağaza ürününü yanlış
+  // fotoğrafla yayınlıyordu.
+  assert.equal(eklenen.imageUrl, "/images/urun-gorseli-yok.svg", "boş görsel yer tutucuya düşmeli");
+
   // Tanınmayan kategori: içe aktarma durur, hiçbir satır eklenmez.
   const red = await magazaci.post(`/api/stores/${storeId}/products/bulk`, {
     products: [{ name: "Olmayan Kategorili Ürün", price: "99.00", stock: "1", category: "Uzay Aracı" }]

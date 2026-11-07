@@ -9,7 +9,15 @@ import { assertCan, type UseCaseContext } from "../../shared/authorize";
 import type { Cache, IdGenerator, Row, UnitOfWork } from "../../shared/contracts";
 
 export const MAX_IMPORT = 500;
-const DEFAULT_IMAGE = "/images/urunler/laptopcard.png";
+/**
+ * Görsel sütunu boş bırakılan satırlar için yer tutucu.
+ *
+ * Burada bir dizüstü fotoğrafı duruyordu: mouse ya da kulaklık aktaran bir
+ * mağaza, ürünlerini yanlış fotoğrafla yayına almış oluyordu. Nötr bir yer
+ * tutucu "fotoğraf henüz yok" der, yanlış bir şey söylemez — mağaza ürünü
+ * yayına alırken kendi fotoğrafını yükler.
+ */
+const DEFAULT_IMAGE = "/images/urun-gorseli-yok.svg";
 
 export class ImportProductsCommand extends Command {
   readonly storeId: string;
