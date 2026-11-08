@@ -114,7 +114,8 @@ Komut handler'ı read model'e, sorgu handler'ı unit of work'e dokunamaz.
 Bu kuralların hiçbiri yalnızca belgede yazmaz: `tests/architecture` kuralı çiğneyen kodda kırılır.
 
 Ayrıntılar: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DATA-MODEL.md](docs/DATA-MODEL.md) ·
-[docs/AUTH.md](docs/AUTH.md) · [docs/API.md](docs/API.md) · [docs/DECISIONS.md](docs/DECISIONS.md)
+[docs/AUTH.md](docs/AUTH.md) · [docs/API.md](docs/API.md) · [docs/DECISIONS.md](docs/DECISIONS.md) ·
+[docs/YEDEKLEME.md](docs/YEDEKLEME.md)
 
 ### Klasörler
 

@@ -22,3 +22,6 @@ backend/.build/
 
 # Yerel editör/araç yapılandırması (depoya girmez)
 .claude/
+
+# Yedekler: veri içerir, depoya girmez (scripts/yedek-al.js buraya yazar)
+yedekler/

@@ -277,3 +277,25 @@ Güvenlik kararları:
 
 **Eksik kalan:** silinen ürünün görseli diskte kalır. Periyodik temizlik işi yazılmadı; disk
 kullanımı zamanla artar. [SECURITY.md](SECURITY.md) içinde not edildi.
+
+## 28. Geri dönüş yolu yedek, "down" göçü değil
+
+Şema göçlerinin geri alınması için bir çatı (her göçün bir `down` eşi) kurulmadı. Yerine
+veritabanı + görsel yedeği kuruldu: `scripts/yedek-al.js` ve `scripts/yedek-geri-yukle.js`
+([YEDEKLEME.md](YEDEKLEME.md)).
+
+Gerekçe: `down` göçleri çoğu zaman yazıldıkları gibi çalışmaz. Kolon silen bir göçün `down`'ı
+kolonu geri getirir ama **içindeki veriyi getirmez**; birleştirilen iki tabloyu ayıran bir göç
+geri alınırken hangi satırın nereye gittiği bilinmez. Yani `down` göçü şemayı geri alır, veriyi
+değil — oysa geri dönülmesinin sebebi neredeyse her zaman veridir. Yedek ikisini birden getirir.
+
+İkinci gerekçe: şu an **tek** göç dosyası var (`001_initial_schema.sql`), yani geri alınacak bir
+şema değişikliği henüz yok. Kullanılmayan bir çatıyı şimdi yazmak, ilk gerçek göçte yanlış
+çıkacak kod yazmak olurdu.
+
+Kod tarafı rollback için ayrı araca gerek yok: üç dalın geçmişi düz, bir sürüm geri dönmek
+önceki commit'i çıkarıp `docker compose up -d --build` demek.
+
+**Bunun bedeli:** göç ileri yönde kırılırsa otomatik dönüş yok — yedekten geri yükleme elle
+yapılır ve o aradaki veri gider. Kabul edildi, çünkü alternatifi çalıştığı denenmemiş bir
+`down` zinciri.

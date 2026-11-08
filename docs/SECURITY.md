@@ -69,11 +69,14 @@ script çalıştırmaya izin vermez.
    Benzetim açıkken, bir siparişin takip kodunu bilen herkes onu "ödendi" yapabilir.
 3. `SEED_DEMO_DATA=false` yapın ve demo hesaplarını silin.
 4. **Tüm gizli değerleri yenileyin:** veritabanı, `TOKEN_PEPPER`, JWT anahtar çifti, RabbitMQ, SMTP.
-5. **Veritabanı yedeği kurun.** Şu an `db-data` volume'ünü yedekleyen hiçbir şey yok.
+5. **Yedeği zamanlanmış hâle getirin.** `node scripts/yedek-al.js` hem `db-data` hem `uploads`
+   volume'ünü yedekler ve `node scripts/yedek-geri-yukle.js --deneme` yedeğin geri
+   yüklenebildiğini canlı veriye dokunmadan doğrular ([YEDEKLEME.md](YEDEKLEME.md)). Betikler
+   kendiliğinden çalışmaz: günlük bir görev kurulmalı ve **`yedekler/` klasörü başka bir makineye
+   kopyalanmalı** — şu an yedekler korudukları diskin üstünde duruyor.
 6. Seq ve RabbitMQ arayüzlerine erişimi kısıtlayın (şu an yalnızca `127.0.0.1`'e açık).
-7. **Yüklenen görseller `uploads` volume'unda durur** ve yedeklenmiyor; veritabanı yedeğine bu
-   volume de eklenmelidir. Dosyalar silinen ürünle birlikte temizlenmez — disk zamanla birikir,
-   periyodik bir temizlik işi gerekir.
+7. **Yüklenen görseller `uploads` volume'unda durur.** Yedeğe dahil (madde 5), ama dosyalar
+   silinen ürünle birlikte temizlenmez — disk zamanla birikir, periyodik bir temizlik işi gerekir.
 
 ## Bilinen sınırlar
 
