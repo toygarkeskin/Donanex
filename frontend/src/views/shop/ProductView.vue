@@ -9,6 +9,7 @@ import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import AlertBox from "../../components/AlertBox.vue";
 import ProductCard from "../../components/ProductCard.vue";
+import { sayfayiTanimla } from "../../lib/sayfaBilgisi";
 
 const route = useRoute();
 const cart = useCartStore();
@@ -45,9 +46,13 @@ async function load() {
   try {
     product.value = await api.get(`/products/${route.params.storeSlug}/${route.params.productSlug}`);
     quantity.value = 1;
+    // Sekme başlığı ve açıklama ürünün kendi adıyla yazılır; router genel
+    // bir başlık koymuştu, veri gelince onun yerini alır.
+    sayfayiTanimla(`${product.value.name} — ${product.value.storeName}`, product.value.description);
     benzerleriYukle();
   } catch {
     notFound.value = true;
+    sayfayiTanimla("Ürün bulunamadı");
   } finally {
     loading.value = false;
   }

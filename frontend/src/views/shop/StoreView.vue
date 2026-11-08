@@ -6,6 +6,7 @@ import ProductCard from "../../components/ProductCard.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import PaginationBar from "../../components/PaginationBar.vue";
+import { sayfayiTanimla } from "../../lib/sayfaBilgisi";
 
 const route = useRoute();
 const store = ref(null);
@@ -19,9 +20,11 @@ async function load() {
   notFound.value = false;
   try {
     store.value = await api.get(`/storefront/stores/${route.params.slug}`);
+    sayfayiTanimla(store.value.name, store.value.description);
     result.value = await api.get(`/products${query({ store: route.params.slug, page: page.value, pageSize: 24 })}`);
   } catch {
     notFound.value = true;
+    sayfayiTanimla("Mağaza bulunamadı");
   } finally {
     loading.value = false;
   }

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { sayfayiTanimla } from "../lib/sayfaBilgisi";
 
 /**
  * Rotalar. Panel ekranları tembel yüklenir (lazy): vitrine gelen ziyaretçi
@@ -132,6 +133,77 @@ const routes = [
   { path: "/:pathMatch(.*)*", name: "not-found", component: () => import("../views/NotFoundView.vue") }
 ];
 
+/**
+ * Rota adı -> sekme başlığı.
+ *
+ * Tek bir haritada duruyor: kırk rota tanımına tek tek meta eklemek hem
+ * dosyayı şişirir hem başlıkları görmek için her satıra bakmayı gerektirir.
+ * Boş metin "yalnızca site adı" demektir (ana sayfa).
+ *
+ * Ürün ve mağaza sayfaları burada GENEL bir başlık alır; veri geldiğinde
+ * kendi görünümleri başlığı ürünün/mağazanın adıyla değiştirir.
+ */
+const SAYFA_BASLIKLARI = {
+  home: "",
+  products: "Ürünler",
+  product: "Ürün",
+  stores: "Mağazalar",
+  store: "Mağaza",
+  cart: "Sepetim",
+  checkout: "Siparişi tamamla",
+  payment: "Ödeme",
+  track: "Sipariş takibi",
+  support: "Destek",
+
+  "account-orders": "Siparişlerim",
+  "account-order": "Sipariş detayı",
+  "account-addresses": "Adreslerim",
+  "account-profile": "Hesap bilgilerim",
+  "account-tickets": "Destek taleplerim",
+  "account-store-application": "Mağaza başvurusu",
+
+  "sign-in": "Giriş yap",
+  register: "Kayıt ol",
+  "forgot-password": "Parolamı unuttum",
+  "reset-password": "Parola sıfırlama",
+  "verify-email": "E-posta doğrulama",
+  "auth-callback": "Yönlendiriliyor",
+
+  "store-panel": "Mağaza paneli",
+  "store-dashboard": "Mağaza paneli",
+  "store-products": "Ürünlerim",
+  "store-product-new": "Yeni ürün",
+  "store-product-edit": "Ürünü düzenle",
+  "store-product-import": "CSV ile ürün aktar",
+  "store-orders": "Mağaza siparişleri",
+  "store-order": "Sipariş detayı",
+  "store-members": "Çalışanlar",
+  "store-tickets": "Destek talepleri",
+  "store-settings": "Mağaza ayarları",
+
+  "admin-dashboard": "Yönetim paneli",
+  "admin-stores": "Mağazalar — yönetim",
+  "admin-users": "Kullanıcılar",
+  "admin-orders": "Siparişler — yönetim",
+  "admin-order": "Sipariş detayı",
+  "admin-tickets": "Destek talepleri",
+
+  "not-found": "Sayfa bulunamadı"
+};
+
+/**
+ * Arama sonuçlarında görünmesi anlamlı olan HERKESE AÇIK sayfaların
+ * açıklamaları. Panel ve hesap sayfaları buraya girmez: onlar giriş
+ * gerektirir, aramada çıkmazlar.
+ */
+const SAYFA_ACIKLAMALARI = {
+  products: "Onlarca mağazanın teknoloji ürünleri tek listede. Kategori, mağaza ve fiyata göre süzün.",
+  stores: "Donanex'teki satıcı mağazaları. Her mağazanın ürünlerini ve ilanlarını görün.",
+  track: "Sipariş numaranız ve takip kodunuzla siparişinizin durumunu üye olmadan sorgulayın.",
+  support: "Sorunuz mu var? Üye olmadan destek talebi oluşturun, yanıtı e-postayla alın.",
+  cart: "Sepetinizdeki ürünler. Farklı mağazalardan aldıklarınız tek ödemeyle tamamlanır."
+};
+
 export const router = createRouter({
   history: createWebHistory(),
   routes,
@@ -153,6 +225,21 @@ router.beforeEach(async (to) => {
     return { name: "account-store-application" };
   }
   return true;
+});
+
+/*
+ * Başlık ve açıklama gezinme TAMAMLANINCA yazılır.
+ *
+ * beforeEach'te yazılsaydı, koruma gezinmeyi iptal ettiğinde (giriş gerekiyor,
+ * yetki yok) kullanıcı hâlâ eski sayfadayken başlık gitmediği sayfanınki
+ * olurdu.
+ *
+ * Dinamik sayfalar bunun üzerine kendi başlığını yazar: ürün ve mağaza
+ * görünümleri veri gelince ürünün/mağazanın adını koyar. Burada önce genel
+ * başlık görünür, veri gelince adıyla değişir — boş bir sekme başlığından iyi.
+ */
+router.afterEach((to) => {
+  sayfayiTanimla(SAYFA_BASLIKLARI[to.name], SAYFA_ACIKLAMALARI[to.name]);
 });
 
 export default router;
