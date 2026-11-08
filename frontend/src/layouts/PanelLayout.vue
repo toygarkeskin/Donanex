@@ -14,8 +14,40 @@ const isAdminPanel = computed(() => route.path.startsWith("/yonetim"));
 const storeId = computed(() => route.params.storeId || auth.stores[0]?.id);
 const activeStore = computed(() => auth.stores.find((store) => store.id === storeId.value));
 
+/** Menüde açık sayfayı gösteren vurgu. */
+const VURGU = "bg-brand-50 text-brand-700";
+
+/**
+ * Menüde hangi bağlantının vurgulanacağı.
+ *
+ * Vue Router'ın active-class'ı ROTA KAYDI hiyerarşisine bakar, adres metnine
+ * değil. Alt sayfalar burada kardeş rota olarak tanımlı (":storeId/urunler" ve
+ * ":storeId/urunler/yeni" ayrı kayıtlar), bu yüzden yeni ürün sayfasındayken
+ * "Ürünler" vurgulanmıyordu. Eşleştirmeyi adres yolu üzerinden yapıyoruz.
+ *
+ * tamEslesme olanlar (Genel bakış) yalnızca kendi adreslerinde vurgulanır:
+ * panelin kök adresinde durdukları için ön ek eşleşmesinde her sayfada
+ * yanıyor ve menüde iki satır birden seçili görünüyordu.
+ */
+function aktifMi(link) {
+  const hedef = router.resolve({ name: link.name, params: link.params }).path;
+  if (link.tamEslesme) return route.path === hedef;
+  return route.path === hedef || route.path.startsWith(`${hedef}/`);
+}
+
+/*
+ * "tamEslesme" olan bağlantılar YALNIZCA kendi sayfalarında vurgulanır.
+ *
+ * Genel bakış panelin KÖK adresinde duruyor (/yonetim ve /magaza/:storeId),
+ * yani diğer bütün panel sayfalarının üst yolu. Vue Router'ın active-class'ı
+ * ön ek eşleşmesiyle çalıştığı için Genel bakış her sayfada vurgulu kalıyor
+ * ve menüde iki satır birden seçili görünüyordu.
+ *
+ * Diğer bağlantılarda ön ek eşleşmesi DOĞRU davranış: sipariş detayına
+ * girildiğinde "Siparişler" vurgulu kalmalı.
+ */
 const adminLinks = [
-  { name: "admin-dashboard", label: "Genel bakış", icon: "📊" },
+  { name: "admin-dashboard", label: "Genel bakış", icon: "📊", tamEslesme: true },
   { name: "admin-stores", label: "Mağazalar", icon: "🏪" },
   { name: "admin-users", label: "Kullanıcılar", icon: "👥" },
   { name: "admin-orders", label: "Siparişler", icon: "📦" },
@@ -25,7 +57,7 @@ const adminLinks = [
 const storeLinks = computed(() => {
   const params = { storeId: storeId.value };
   return [
-    { name: "store-dashboard", label: "Genel bakış", icon: "📊", params },
+    { name: "store-dashboard", label: "Genel bakış", icon: "📊", params, tamEslesme: true },
     { name: "store-products", label: "Ürünler", icon: "🏷️", params },
     { name: "store-orders", label: "Siparişler", icon: "📦", params },
     { name: "store-tickets", label: "Destek", icon: "💬", params },
@@ -66,7 +98,9 @@ async function signOut() {
           :key="link.name"
           :to="{ name: link.name, params: link.params }"
           class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-600 hover:bg-ink-100"
-          active-class="bg-brand-50 text-brand-700"
+          :class="aktifMi(link) ? VURGU : ''"
+          active-class=""
+          exact-active-class=""
           @click="sidebarOpen = false"
         >
           <span aria-hidden="true">{{ link.icon }}</span> {{ link.label }}
