@@ -9,7 +9,7 @@ import { Money } from "../../src/domain/shared/Money";
 import { isUuid, isEmail, isPhone, slugify, requireQuantity } from "../../src/domain/shared/guards";
 import { ValidationError, ConflictError, ForbiddenError } from "../../src/domain/shared/errors";
 
-import { Product, ProductStatus } from "../../src/domain/catalog/Product";
+import { MAX_GALLERY, Product, ProductStatus } from "../../src/domain/catalog/Product";
 import { Order } from "../../src/domain/ordering/Order";
 import {
   OrderStatus,
@@ -93,6 +93,31 @@ test("Product görseli yalnızca yerel varlık veya https kabul eder", () => {
   }
   assert.equal(Product.create({ ...base, imageUrl: "https://cdn.test/a.png" }).imageUrl, "https://cdn.test/a.png");
   assert.equal(Product.create({ ...base, imageUrl: "/images/a.png" }).imageUrl, "/images/a.png");
+});
+
+test("Product ek görselleri kapakla aynı kurallardan geçer", () => {
+  const base = { name: "x", description: "d", price: 1, stock: 1, storeId: "s1", imageUrl: "/images/a.png" };
+
+  // Galeri verilmezse boş liste — null ya da undefined değil, çünkü okuyan
+  // hiçbir kod null denetimi yapmak zorunda kalmamalı.
+  assert.deepEqual(Product.create(base).galleryUrls, []);
+
+  // Kapaktaki güvenlik kuralları burada da geçerli: tek bir zayıf adres
+  // yeterdi, çünkü galeri de aynı <img> etiketine giriyor.
+  assert.throws(() => Product.create({ ...base, galleryUrls: ["javascript:alert(1)"] }), ValidationError);
+  assert.throws(() => Product.create({ ...base, galleryUrls: ["http://site.test/a.png"] }), ValidationError);
+  assert.throws(() => Product.create({ ...base, galleryUrls: "/images/b.png" }), ValidationError);
+
+  // Tekrarlar atılır: aynı dosya iki kez yüklendiğinde galeride iki kez
+  // görünmemeli.
+  assert.deepEqual(Product.create({ ...base, galleryUrls: ["/images/b.png", "/images/b.png"] }).galleryUrls, [
+    "/images/b.png"
+  ]);
+
+  // Sayı sınırı: istemci yüz adres gönderip ürün sayfasını şişiremesin.
+  const cokFazla = Array.from({ length: MAX_GALLERY + 1 }, (_, i) => `/images/g${i}.png`);
+  assert.throws(() => Product.create({ ...base, galleryUrls: cokFazla }), ValidationError);
+  assert.equal(Product.create({ ...base, galleryUrls: cokFazla.slice(0, MAX_GALLERY) }).galleryUrls.length, MAX_GALLERY);
 });
 
 test("Product.fromImportRow eksik alanlara varsayılan verir ve satırı bildirir", () => {

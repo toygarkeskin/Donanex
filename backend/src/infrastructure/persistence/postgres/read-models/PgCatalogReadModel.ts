@@ -65,7 +65,10 @@ export class PgCatalogReadModel implements CatalogReadModel {
 
   async getProductBySlug(storeSlug: string, productSlug: string): Promise<Row | null> {
     const { rows } = await this.db.query(
-      `SELECT ${CARD}, p.description, p.sku, s.description AS "storeDescription"
+      // Galeri YALNIZCA ürün detayında okunuyor: listelerde kart tek görsel
+      // gösteriyor, oraya da taşımak her sayfada boşuna veri çekmek olurdu.
+      `SELECT ${CARD}, p.description, p.sku, p.gallery_urls AS "galleryUrls",
+              s.description AS "storeDescription"
        FROM products p
        JOIN stores s ON s.id = p.store_id
        LEFT JOIN categories c ON c.id = p.category_id
@@ -101,8 +104,12 @@ export class PgCatalogReadModel implements CatalogReadModel {
     const from = `FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE ${where.join(" AND ")}`;
     const count = await this.db.query(`SELECT COUNT(*)::int AS total ${from}`, params);
     const { rows } = await this.db.query(
+      // galleryUrls burada da gerekli: panelin düzenleme formu ürünü BU
+      // listeden dolduruyor. Alan gelmezse form galeriyi boş sanır ve
+      // kaydederken var olan ek görselleri siler.
       `SELECT p.id, p.slug, p.sku, p.name, p.description, p.stock, p.status,
-              p.image_url AS "imageUrl", p.category_id AS "categoryId",
+              p.image_url AS "imageUrl", p.gallery_urls AS "galleryUrls",
+              p.category_id AS "categoryId",
               c.name AS "categoryName", ${money("p.price_cents")} AS price,
               p.created_at AS "createdAt",
               EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id) AS "hasOrders"
@@ -117,7 +124,8 @@ export class PgCatalogReadModel implements CatalogReadModel {
   async getProductForStore(storeId: string, productId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT p.id, p.slug, p.sku, p.name, p.description, p.stock, p.status,
-              p.image_url AS "imageUrl", p.category_id AS "categoryId",
+              p.image_url AS "imageUrl", p.gallery_urls AS "galleryUrls",
+              p.category_id AS "categoryId",
               ${money("p.price_cents")} AS price
        FROM products p WHERE p.id = $1 AND p.store_id = $2`,
       [productId, storeId]

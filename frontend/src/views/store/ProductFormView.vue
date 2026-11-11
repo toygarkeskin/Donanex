@@ -21,6 +21,9 @@ const form = reactive({
   price: "",
   stock: 0,
   imageUrl: "",
+  // Kapağın YANINDAKİ görseller. Kapak ayrı tutuluyor çünkü ürün kartı,
+  // sepet ve sipariş kaydı onu kullanıyor; galeri yalnızca ürün sayfasında.
+  galleryUrls: [],
   sku: "",
   categoryId: "",
   status: "draft"
@@ -29,8 +32,12 @@ const form = reactive({
 const categories = ref([]);
 const yukleniyor = ref(false);
 const dosyaAlani = ref(null);
+const galeriAlani = ref(null);
+const galeriYukleniyor = ref(false);
 
 const EN_BUYUK = 2 * 1024 * 1024;
+/** Sunucudaki sınırla aynı: domain katmanı 5'ten fazlasını reddediyor. */
+const EN_FAZLA_GALERI = 5;
 
 /*
  * Görsel, ürün kaydedilmeden ÖNCE yüklenir ve dönen adres forma yazılır.
@@ -61,6 +68,61 @@ async function gorselSecildi(olay) {
     yukleniyor.value = false;
   }
 }
+
+/**
+ * Ek görseller: birden çok dosya seçilebilir, her biri tek tek yüklenir.
+ *
+ * Tek tek yükleniyor çünkü yükleme ucu tek dosya alıyor; üçü birden
+ * seçildiğinde biri reddedilse bile diğerleri kaydedilmiş olur. Sınır
+ * aşılırsa fazlası sessizce atılmaz, kullanıcıya söylenir.
+ */
+async function galeriSecildi(olay) {
+  const dosyalar = [...(olay.target.files ?? [])];
+  if (!dosyalar.length) return;
+
+  const yer = EN_FAZLA_GALERI - form.galleryUrls.length;
+  if (yer <= 0) {
+    toast.error(`En fazla ${EN_FAZLA_GALERI} ek görsel eklenebilir.`);
+    if (galeriAlani.value) galeriAlani.value.value = "";
+    return;
+  }
+  if (dosyalar.length > yer) {
+    toast.error(`Yalnızca ${yer} görsel daha eklenebilir; ilk ${yer} tanesi yüklendi.`);
+  }
+
+  galeriYukleniyor.value = true;
+  try {
+    for (const dosya of dosyalar.slice(0, yer)) {
+      if (dosya.size > EN_BUYUK) {
+        toast.error(`${dosya.name} 2 MB'tan büyük, atlandı.`);
+        continue;
+      }
+      try {
+        const sonuc = await api.upload(`/stores/${storeId()}/gorseller`, dosya);
+        if (!form.galleryUrls.includes(sonuc.imageUrl)) form.galleryUrls.push(sonuc.imageUrl);
+      } catch (hata) {
+        toast.error(`${dosya.name} yüklenemedi: ${hata.message ?? ""}`);
+      }
+    }
+  } finally {
+    galeriYukleniyor.value = false;
+    // Aynı dosya ikinci kez seçilebilsin diye alan temizlenir.
+    if (galeriAlani.value) galeriAlani.value.value = "";
+  }
+}
+
+function galeridenCikar(adres) {
+  form.galleryUrls = form.galleryUrls.filter((mevcut) => mevcut !== adres);
+}
+
+/** Ek görseli kapak yapar; eski kapak galeriye düşer, hiçbir görsel kaybolmaz. */
+function kapakYap(adres) {
+  const eskiKapak = form.imageUrl;
+  form.galleryUrls = form.galleryUrls.filter((mevcut) => mevcut !== adres);
+  if (eskiKapak && !form.galleryUrls.includes(eskiKapak)) form.galleryUrls.unshift(eskiKapak);
+  form.imageUrl = adres;
+}
+
 const saving = ref(false);
 const error = ref("");
 const loading = ref(true);
@@ -83,6 +145,7 @@ async function load() {
         price: toAmount(product.price),
         stock: product.stock,
         imageUrl: product.imageUrl,
+        galleryUrls: [...(product.galleryUrls ?? [])],
         sku: product.sku || "",
         categoryId: product.categoryId || "",
         status: product.status
@@ -147,7 +210,7 @@ onMounted(load);
         </FormField>
       </div>
 
-      <FormField id="gorselDosya" label="Görsel" hint="PNG, JPEG ya da WebP — en fazla 2 MB.">
+      <FormField id="gorselDosya" label="Kapak görseli" hint="PNG, JPEG ya da WebP — en fazla 2 MB.">
         <div class="flex flex-wrap items-center gap-3">
           <input
             id="gorselDosya"
@@ -173,8 +236,44 @@ onMounted(load);
 
       <div v-if="form.imageUrl" class="flex items-center gap-3">
         <img :src="form.imageUrl" alt="Önizleme" class="h-24 w-24 rounded-lg border border-ink-200 object-contain p-1" />
-        <span class="text-xs text-ink-500">Görsel önizlemesi</span>
+        <span class="text-xs text-ink-500">Kapak önizlemesi</span>
       </div>
+
+      <!--
+        Ek görseller. Kapak ayrı duruyor: ürün kartı, sepet ve sipariş kaydı
+        hep kapağı kullanıyor, galeri yalnızca ürün sayfasında görünüyor.
+        Bu yüzden galeriden bir görseli kapak yapmak ayrı bir düğme — sıradan
+        bir sürükleme değil, bilinçli bir seçim.
+      -->
+      <FormField
+        id="galeriDosya"
+        :label="`Ek görseller (${form.galleryUrls.length}/${EN_FAZLA_GALERI})`"
+        hint="Birden çok dosya seçebilirsiniz. Ürün sayfasında kapakla birlikte küçük resimler hâlinde görünür."
+      >
+        <div class="flex flex-wrap items-center gap-3">
+          <input
+            id="galeriDosya"
+            ref="galeriAlani"
+            type="file"
+            multiple
+            accept="image/png,image/jpeg,image/webp"
+            class="field"
+            :disabled="galeriYukleniyor || form.galleryUrls.length >= EN_FAZLA_GALERI"
+            @change="galeriSecildi"
+          />
+          <span v-if="galeriYukleniyor" class="text-xs text-ink-500">Yükleniyor…</span>
+        </div>
+      </FormField>
+
+      <ul v-if="form.galleryUrls.length" class="flex flex-wrap gap-3">
+        <li v-for="adres in form.galleryUrls" :key="adres" class="w-28">
+          <img :src="adres" alt="" class="h-24 w-28 rounded-lg border border-ink-200 object-contain p-1" />
+          <div class="mt-1 flex justify-between gap-1 text-xs">
+            <button type="button" class="text-brand-600 hover:underline" @click="kapakYap(adres)">Kapak yap</button>
+            <button type="button" class="text-red-600 hover:underline" @click="galeridenCikar(adres)">Kaldır</button>
+          </div>
+        </li>
+      </ul>
 
       <div class="grid gap-4 sm:grid-cols-2">
         <FormField id="categoryId" label="Kategori">

@@ -34,6 +34,26 @@ export function assertImageUrl(value: unknown): string {
   throw new ValidationError("Görsel adresi /images/ ile, /yuklenen/ ile veya https:// ile başlamalı.");
 }
 
+/** Kapak dışında en fazla kaç görsel tutulabilir. */
+export const MAX_GALLERY = 5;
+
+/**
+ * Ek ürün görselleri.
+ *
+ * Kapak (imageUrl) hâlâ zorunlu ve ayrı; bu liste onun YANINDAKİ görseller.
+ * Her adres kapakla aynı kurallardan geçer, tekrarlar atılır ve sayı
+ * sınırlanır: istemci yüz tane adres gönderip ürün sayfasını şişiremesin.
+ */
+export function assertGalleryUrls(value: unknown): readonly string[] {
+  if (value === undefined || value === null) return Object.freeze([]);
+  if (!Array.isArray(value)) throw new ValidationError("Ek görseller bir liste olmalı.");
+  if (value.length > MAX_GALLERY) {
+    throw new ValidationError(`En fazla ${MAX_GALLERY} ek görsel eklenebilir.`);
+  }
+  const temiz = value.filter((adres) => isNonEmptyString(adres)).map((adres) => assertImageUrl(adres));
+  return Object.freeze([...new Set(temiz)]);
+}
+
 export function assertStock(value: unknown): number {
   const stock = typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : value;
   if (!Number.isInteger(stock) || (stock as number) < 0 || (stock as number) > MAX_STOCK) {
@@ -54,6 +74,8 @@ export interface ProductFields {
   readonly price: Money;
   readonly stock: number;
   readonly imageUrl: string;
+  /** Kapağın yanındaki ek görseller; her zaman liste, hiçbir zaman null. */
+  readonly galleryUrls: readonly string[];
   readonly status: ProductStatusKind;
 }
 
@@ -69,6 +91,7 @@ export interface ProductInput {
   price?: unknown;
   stock?: unknown;
   imageUrl?: unknown;
+  galleryUrls?: unknown;
   status?: unknown;
 }
 
@@ -107,6 +130,7 @@ export class Product implements ProductFields {
   readonly price: Money;
   readonly stock: number;
   readonly imageUrl: string;
+  readonly galleryUrls: readonly string[];
   readonly status: ProductStatusKind;
 
   constructor(fields: ProductFields) {
@@ -120,6 +144,7 @@ export class Product implements ProductFields {
     this.price = fields.price;
     this.stock = fields.stock;
     this.imageUrl = fields.imageUrl;
+    this.galleryUrls = fields.galleryUrls;
     this.status = fields.status;
     Object.freeze(this);
   }
@@ -139,6 +164,7 @@ export class Product implements ProductFields {
       price: Money.fromAmount(data.price, "Fiyat"),
       stock: assertStock(data.stock),
       imageUrl: assertImageUrl(data.imageUrl),
+      galleryUrls: assertGalleryUrls(data.galleryUrls),
       status: requireEnum(
         data.status ?? ProductStatus.ACTIVE,
         Object.values(ProductStatus) as ProductStatusKind[],

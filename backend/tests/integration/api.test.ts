@@ -192,6 +192,66 @@ test("CSV içe aktarma kategoriyi uygular, tanımadığında durur", opts, async
   assert.equal(sonra.data.items.length, 0, "reddedilen satır eklenmemeli");
 });
 
+test("ürünün ek görselleri kaydedilir, düzenlemede korunur ve vitrinde görünür", opts, async () => {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await magazaci.get("/api/me")).data.stores?.[0]?.id;
+  assert.ok(storeId, "mağaza sahibinin paneli olmalı");
+
+  const galeri = ["/images/urunler/ssd.png", "/images/urun-gorseli-yok.svg"];
+  const olustur = await magazaci.post(`/api/stores/${storeId}/products`, {
+    name: "Galerili Test Ürünü",
+    description: "Ek görselleri olan ürün.",
+    price: "499.00",
+    stock: 5,
+    imageUrl: "/images/urunler/ssd.png",
+    galleryUrls: galeri,
+    status: "active"
+  });
+  assert.equal(olustur.status, 201, JSON.stringify(olustur.data));
+  // Kapak galeride de geçiyor; tekrar atılmalı.
+  assert.deepEqual(olustur.data.galleryUrls, galeri);
+
+  // Panel listesi galeriyi DÖNDÜRMELİ: düzenleme formu ürünü bu listeden
+  // dolduruyor, alan gelmezse kaydederken galeriyi siler.
+  const panel = await magazaci.get(`/api/stores/${storeId}/products?q=${encodeURIComponent("Galerili Test")}`);
+  const panelUrun = panel.data.items.find((urun: Row) => urun.name === "Galerili Test Ürünü");
+  assert.deepEqual(panelUrun.galleryUrls, galeri, "panel listesi galeriyi taşımalı");
+
+  // Galeriye dokunmayan bir güncelleme onu silmemeli.
+  const guncelle = await magazaci.put(`/api/stores/${storeId}/products/${olustur.data.id}`, {
+    name: "Galerili Test Ürünü",
+    description: "Ek görselleri olan ürün.",
+    price: "549.00",
+    stock: 5,
+    imageUrl: "/images/urunler/ssd.png",
+    galleryUrls: panelUrun.galleryUrls,
+    status: "active"
+  });
+  assert.equal(guncelle.status, 200, JSON.stringify(guncelle.data));
+  assert.deepEqual(guncelle.data.galleryUrls, galeri);
+
+  // Vitrin: ürün sayfası galeriyi görmeli, liste kartları görmemeli.
+  const anon = new Client(app.base);
+  const detay = await anon.get(`/api/products/${olustur.data.storeSlug ?? "teknoloji-deposu"}/${olustur.data.slug}`);
+  assert.equal(detay.status, 200);
+  assert.deepEqual(detay.data.galleryUrls, galeri);
+
+  const liste = await anon.get(`/api/products?q=${encodeURIComponent("Galerili Test")}`);
+  assert.equal(liste.data.items[0]?.galleryUrls, undefined, "kart galeriyi taşımamalı");
+
+  // Sınırı aşan istek reddedilir.
+  const asiri = await magazaci.post(`/api/stores/${storeId}/products`, {
+    name: "Çok Görselli Ürün",
+    description: "d",
+    price: "10.00",
+    stock: 1,
+    imageUrl: "/images/urunler/ssd.png",
+    galleryUrls: Array.from({ length: 6 }, (_, i) => `/images/g${i}.png`)
+  });
+  assert.equal(asiri.status, 400, JSON.stringify(asiri.data));
+});
+
 test("çoklu kategori seçimi birleşim döndürür", opts, async () => {
   const laptop = (await anon.get("/api/products?category=laptop")).data.total;
   const monitor = (await anon.get("/api/products?category=monitor")).data.total;

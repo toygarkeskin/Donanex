@@ -5,7 +5,8 @@ import type { ProductRepository, Row } from "../../../../application/shared/cont
 
 const COLUMNS = `
   id, store_id AS "storeId", category_id AS "categoryId", slug, sku, name, description,
-  price_cents AS "priceCents", stock, image_url AS "imageUrl", status, created_at AS "createdAt"`;
+  price_cents AS "priceCents", stock, image_url AS "imageUrl", gallery_urls AS "galleryUrls",
+  status, created_at AS "createdAt"`;
 
 export class PgProductRepository implements ProductRepository {
   private readonly db: Db;
@@ -30,8 +31,9 @@ export class PgProductRepository implements ProductRepository {
 
   async create(product: Row): Promise<Row> {
     const { rows } = await this.db.query(
-      `INSERT INTO products (id, store_id, category_id, slug, sku, name, description, price_cents, stock, image_url, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO products
+         (id, store_id, category_id, slug, sku, name, description, price_cents, stock, image_url, gallery_urls, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING ${COLUMNS}`,
       [
         product.id,
@@ -44,6 +46,7 @@ export class PgProductRepository implements ProductRepository {
         product.price.cents,
         product.stock,
         product.imageUrl,
+        product.galleryUrls,
         product.status
       ]
     );
@@ -54,9 +57,12 @@ export class PgProductRepository implements ProductRepository {
     if (!products.length) return 0;
     const values: string[] = [];
     const params: unknown[] = [];
+    // Kolon sayısı tek yerde: liste ile yer tutucu sayısı ayrı ayrı
+    // güncellenirse parametreler sessizce kayar.
+    const SUTUN_SAYISI = 12;
     products.forEach((product, index) => {
-      const offset = index * 11;
-      values.push(`(${Array.from({ length: 11 }, (_, i) => `$${offset + i + 1}`).join(", ")})`);
+      const offset = index * SUTUN_SAYISI;
+      values.push(`(${Array.from({ length: SUTUN_SAYISI }, (_, i) => `$${offset + i + 1}`).join(", ")})`);
       params.push(
         product.id,
         product.storeId,
@@ -68,11 +74,13 @@ export class PgProductRepository implements ProductRepository {
         product.price.cents,
         product.stock,
         product.imageUrl,
+        product.galleryUrls,
         product.status
       );
     });
     const result = await this.db.query(
-      `INSERT INTO products (id, store_id, category_id, slug, sku, name, description, price_cents, stock, image_url, status)
+      `INSERT INTO products
+         (id, store_id, category_id, slug, sku, name, description, price_cents, stock, image_url, gallery_urls, status)
        VALUES ${values.join(", ")}`,
       params
     );
@@ -84,8 +92,9 @@ export class PgProductRepository implements ProductRepository {
     const { rows } = await this.db.query(
       `UPDATE products
        SET category_id = $1, sku = $2, name = $3, description = $4,
-           price_cents = $5, stock = $6, image_url = $7, status = $8, updated_at = NOW()
-       WHERE id = $9 AND store_id = $10
+           price_cents = $5, stock = $6, image_url = $7, gallery_urls = $8,
+           status = $9, updated_at = NOW()
+       WHERE id = $10 AND store_id = $11
        RETURNING ${COLUMNS}`,
       [
         product.categoryId,
@@ -95,6 +104,7 @@ export class PgProductRepository implements ProductRepository {
         product.price.cents,
         product.stock,
         product.imageUrl,
+        product.galleryUrls,
         product.status,
         product.id,
         storeId

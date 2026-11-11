@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { api } from "../../lib/api";
 import { money } from "../../lib/format";
@@ -21,6 +21,26 @@ const notFound = ref(false);
 const quantity = ref(1);
 const adding = ref(false);
 const benzerler = ref([]);
+
+/*
+ * Görsel galerisi.
+ *
+ * Kapak (imageUrl) listenin BAŞINDA: ürün kartında, sepette ve sipariş
+ * kaydında görünen görsel o, yani kullanıcının tıklayarak geldiği görsel.
+ * Önce başka bir kare göstermek, yanlış ürüne girdim hissi verirdi.
+ *
+ * Tek görseli olan ürünlerde küçük resim şeridi hiç çizilmiyor: tek karelik
+ * bir "galeri" yer kaplamaktan başka bir şey yapmaz.
+ */
+const seciliGorsel = ref(0);
+
+const gorseller = computed(() => {
+  if (!product.value) return [];
+  const liste = [product.value.imageUrl, ...(product.value.galleryUrls ?? [])];
+  return [...new Set(liste.filter(Boolean))];
+});
+
+const acikGorsel = computed(() => gorseller.value[seciliGorsel.value] ?? product.value?.imageUrl);
 
 /**
  * Aynı kategorideki diğer ürünler.
@@ -46,6 +66,9 @@ async function load() {
   try {
     product.value = await api.get(`/products/${route.params.storeSlug}/${route.params.productSlug}`);
     quantity.value = 1;
+    // Başka bir ürüne geçildiğinde seçim sıfırlanmazsa, yeni üründe
+    // 3. görsel seçili kalır ya da hiç olmayan bir karenin indisi gösterilir.
+    seciliGorsel.value = 0;
     // Sekme başlığı ve açıklama ürünün kendi adıyla yazılır; router genel
     // bir başlık koymuştu, veri gelince onun yerini alır.
     sayfayiTanimla(`${product.value.name} — ${product.value.storeName}`, product.value.description);
@@ -92,8 +115,26 @@ watch(() => route.fullPath, load);
       altında kalıyor ve satın almak için kaydırmak gerekiyordu. Geniş ekranda
       iki sütun yan yana olduğu için böyle bir sorun yok, görsel büyük kalıyor.
     -->
-    <div class="card flex items-center justify-center overflow-hidden bg-surface p-3 sm:p-8">
-      <img :src="product.imageUrl" :alt="product.name" class="max-h-56 w-full object-contain sm:max-h-[420px]" />
+    <div>
+      <div class="card flex items-center justify-center overflow-hidden bg-surface p-3 sm:p-8">
+        <img :src="acikGorsel" :alt="product.name" class="max-h-56 w-full object-contain sm:max-h-[420px]" />
+      </div>
+
+      <!-- Küçük resimler yalnızca birden çok görsel varsa. -->
+      <div v-if="gorseller.length > 1" class="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          v-for="(adres, sira) in gorseller"
+          :key="adres"
+          type="button"
+          class="h-16 w-16 shrink-0 rounded-lg border bg-surface p-1 transition"
+          :class="sira === seciliGorsel ? 'border-brand-500 ring-2 ring-brand-500/30' : 'border-ink-200 hover:border-ink-300'"
+          :aria-label="`${sira + 1}. görseli göster`"
+          :aria-pressed="sira === seciliGorsel"
+          @click="seciliGorsel = sira"
+        >
+          <img :src="adres" alt="" loading="lazy" class="h-full w-full object-contain" />
+        </button>
+      </div>
     </div>
 
     <div>
