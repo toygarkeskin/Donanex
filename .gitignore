@@ -25,3 +25,6 @@ backend/.build/
 
 # Yedekler: veri içerir, depoya girmez (scripts/yedek-al.js buraya yazar)
 yedekler/
+
+# Cloudflare hızlı tüneli (geçici, kişiye özel adres)
+.tunel/
