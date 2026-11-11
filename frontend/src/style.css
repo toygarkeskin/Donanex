@@ -242,3 +242,22 @@
 .mat-zemin {
   @apply fixed inset-0 z-40 bg-night/50 backdrop-blur-sm;
 }
+
+/* ------------------------------------------------------- azaltılmış hareket
+
+   İşletim sisteminde "hareketi azalt" açık olan kullanıcılar için animasyon
+   ve geçişler durur. Bu bir tercih değil, bazı kullanıcılar için baş dönmesi
+   ve mide bulantısı sebebi; açılış ekranındaki dönen halka da buna dahil.
+
+   Tamamen sıfırlamak yerine 0.01ms: süre biten animasyonun "bitti" olayı
+   yine tetikleniyor, ona bağlı kod kırılmıyor. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
