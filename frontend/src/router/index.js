@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { sayfayiTanimla } from "../lib/sayfaBilgisi";
+import { BILGI_ROTALARI, BILGI_SAYFALARI } from "../content/bilgiSayfalari";
 
 /**
  * Rotalar. Panel ekranları tembel yüklenir (lazy): vitrine gelen ziyaretçi
@@ -29,6 +30,21 @@ const routes = [
       { path: "odeme/:orderId", name: "payment", component: () => import("../views/shop/PaymentView.vue") },
       { path: "siparis-takip", name: "track", component: () => import("../views/shop/TrackOrderView.vue") },
       { path: "destek", name: "support", component: () => import("../views/shop/SupportView.vue") },
+
+      /*
+       * Bilgilendirme sayfaları (hakkımızda, KVKK, SSS ...).
+       *
+       * Dokuz rota tek tek YAZILMIYOR, içerik listesinden üretiliyor:
+       * başlık, adres ve metin tek yerde durunca biri değişince
+       * diğerleri geride kalmıyor. Hepsi aynı görünümü kullanıyor,
+       * hangi sayfa olduğu "anahtar" prop'uyla gidiyor.
+       */
+      ...BILGI_ROTALARI.map(({ yol, ad, anahtar }) => ({
+        path: yol,
+        name: ad,
+        component: () => import("../views/shop/BilgiView.vue"),
+        props: { anahtar }
+      })),
 
       {
         path: "hesabim",
@@ -157,6 +173,9 @@ const SAYFA_BASLIKLARI = {
   track: "Sipariş takibi",
   support: "Destek",
 
+  // Bilgilendirme sayfalarının başlık ve açıklamaları da içerikten geliyor.
+  ...Object.fromEntries(BILGI_ROTALARI.map(({ ad, anahtar }) => [ad, BILGI_SAYFALARI[anahtar].baslik])),
+
   "account-orders": "Siparişlerim",
   "account-order": "Sipariş detayı",
   "account-addresses": "Adreslerim",
@@ -203,13 +222,33 @@ const SAYFA_ACIKLAMALARI = {
   stores: "Donanex'teki satıcı mağazaları. Her mağazanın ürünlerini ve ilanlarını görün.",
   track: "Sipariş numaranız ve takip kodunuzla siparişinizin durumunu üye olmadan sorgulayın.",
   support: "Sorunuz mu var? Üye olmadan destek talebi oluşturun, yanıtı e-postayla alın.",
-  cart: "Sepetinizdeki ürünler. Farklı mağazalardan aldıklarınız tek ödemeyle tamamlanır."
+  cart: "Sepetinizdeki ürünler. Farklı mağazalardan aldıklarınız tek ödemeyle tamamlanır.",
+
+  ...Object.fromEntries(BILGI_ROTALARI.map(({ ad, anahtar }) => [ad, BILGI_SAYFALARI[anahtar].aciklama]))
 };
 
 export const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior: (to, from, saved) => saved || { top: 0 }
+  /*
+   * Sayfa değişiminde kaydırma.
+   *
+   * "behavior: instant" ŞART. style.css'te `html { scroll-behavior: smooth }`
+   * var (sayfa içi bağlantılar yumuşak kaysın diye) ve bu ayar buradaki
+   * "başa dön"ü de animasyona çeviriyordu. Animasyon sürerken yeni sayfanın
+   * verisi gelip yükseklik değişince tarayıcı animasyonu kesiyor ve sayfa
+   * ortada kalıyordu: ürüne tıklayınca sayfanın bazen ortadan açılmasının
+   * sebebi buydu. "Bazen", çünkü verinin animasyondan önce mi sonra mı
+   * geldiğine bağlıydı.
+   *
+   * Geri/ileri tuşunda kayıtlı konuma dönülüyor, orada da animasyon yok:
+   * kullanıcı bıraktığı yeri görmek istiyor, oraya kayışı izlemek değil.
+   */
+  scrollBehavior: (to, from, saved) => {
+    if (to.hash) return { el: to.hash, behavior: "smooth" };
+    if (saved) return { ...saved, behavior: "instant" };
+    return { top: 0, behavior: "instant" };
+  }
 });
 
 router.beforeEach(async (to) => {

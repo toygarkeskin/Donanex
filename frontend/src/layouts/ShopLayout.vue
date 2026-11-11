@@ -7,6 +7,33 @@ import ThemeToggle from "../components/ThemeToggle.vue";
 import BrandLogo from "../components/BrandLogo.vue";
 import AppIcon from "../components/AppIcon.vue";
 import SiteSearch from "../components/SiteSearch.vue";
+import GeriTusu from "../components/GeriTusu.vue";
+import { BILGI_ROTALARI, BILGI_SAYFALARI, ILETISIM } from "../content/bilgiSayfalari";
+
+/*
+ * Footer bağlantıları içerik listesinden üretiliyor, elle yazılmıyor:
+ * bir sayfanın başlığı ya da adresi değiştiğinde footer geride kalmasın.
+ */
+const bilgiBagi = (anahtar) => {
+  const rota = BILGI_ROTALARI.find((r) => r.anahtar === anahtar);
+  return { ad: rota.ad, baslik: BILGI_SAYFALARI[anahtar].baslik };
+};
+
+const FOOTER_YASAL = ["kvkk", "gizlilik", "cerez-politikasi", "mesafeli-satis", "iptal-iade"].map(bilgiBagi);
+const FOOTER_KURUMSAL = ["hakkimizda", "garanti", "odeme-guvenlik"].map(bilgiBagi);
+const SSS_BAGI = bilgiBagi("sss");
+
+/*
+ * Üstteki dar şerit. Pazaryerinin gerçekten yaptığı işleri yazıyor
+ * ("hızlı teslimat" gibi ölçülemeyen bir söz verilmiyor): kargoyu
+ * mağazalar yapıyor, demo ortamında teslim süresi diye bir şey yok.
+ */
+const GUVEN_SERIDI = [
+  { icon: "sepet", baslik: "Tek sepet, tek ödeme", metin: "Farklı mağazalardan al, bir kez öde." },
+  { icon: "onay", baslik: "Üretici garantisi", metin: "Ürünler üretici ya da distribütör garantili." },
+  { icon: "kargo", baslik: "Sipariş takibi", metin: "Her paketi ayrı ayrı izleyin." },
+  { icon: "magaza", baslik: "Onlarca mağaza", metin: "Aynı ürünü farklı satıcıdan karşılaştır." }
+];
 
 const auth = useAuthStore();
 const cart = useCartStore();
@@ -345,6 +372,13 @@ async function signOut() {
       Alt boşluk olmasaydı sayfanın son satırı çubuğun ardında kalırdı.
       lg'de çubuk gizlendiği için boşluk da kalkıyor.
     -->
+    <!--
+      Geri tuşu main'in DIŞINDA: içine konsa sayfanın üst boşluğuna
+      eklenir ve her görünümün kendi başlığıyla arası açılırdı. Burada
+      başlığın hemen üstünde, sayfa akışının başında duruyor.
+    -->
+    <GeriTusu />
+
     <main class="mx-auto w-full max-w-7xl flex-1 px-4 pb-20 pt-4 sm:py-8 lg:pb-8">
       <RouterView />
     </main>
@@ -390,36 +424,82 @@ async function signOut() {
       listeler kısa (üç, iki ve bir bağlantı).
     -->
     <footer class="border-t border-ink-200 bg-surface">
+      <!--
+        Güven şeridi: telefonda 2x2, sm'den sonra tek satır dörtlü. Dört
+        kutuyu 320px'de yan yana dizmek her birini okunmaz hâle getiriyordu.
+      -->
+      <div class="border-b border-ink-200">
+        <ul class="mx-auto grid max-w-7xl grid-cols-2 gap-4 px-4 py-5 sm:grid-cols-4 sm:gap-6">
+          <li v-for="madde in GUVEN_SERIDI" :key="madde.baslik" class="flex items-start gap-2.5">
+            <span class="mt-0.5 shrink-0 text-brand-600"><AppIcon :name="madde.icon" :size="20" /></span>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold text-ink-800 sm:text-sm">{{ madde.baslik }}</p>
+              <p class="mt-0.5 text-xs leading-snug text-ink-500">{{ madde.metin }}</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+
       <div class="mx-auto max-w-7xl px-4 py-6">
         <div class="flex flex-col gap-5 md:flex-row md:items-start md:justify-between md:gap-10">
           <div class="md:max-w-xs">
             <BrandLogo :size="26" />
             <p class="mt-1.5 text-sm text-ink-500">Çok satıcılı teknoloji mağazası. Onlarca mağaza, tek sepet.</p>
+
+            <dl class="mt-4 space-y-1 text-sm">
+              <div class="flex gap-2">
+                <dt class="text-ink-400">Telefon</dt>
+                <dd class="font-medium text-ink-700">{{ ILETISIM.telefon }}</dd>
+              </div>
+              <div class="flex gap-2">
+                <dt class="text-ink-400">E-posta</dt>
+                <dd class="font-medium text-ink-700">{{ ILETISIM.eposta }}</dd>
+              </div>
+            </dl>
+            <p class="mt-1 text-xs text-ink-400">{{ ILETISIM.calismaSaatleri }}</p>
           </div>
 
-          <div class="grid flex-1 grid-cols-3 gap-x-4 text-xs sm:text-sm md:max-w-xl md:gap-x-10">
+          <!--
+            320px'de DÖRT kolon sığmıyor: başlıklar iki satıra bölünüp
+            kolonlar kayıyordu. Telefonda iki, sm'den sonra dört kolon.
+          -->
+          <div class="grid flex-1 grid-cols-2 gap-x-4 gap-y-5 text-xs sm:grid-cols-4 sm:text-sm md:gap-x-8">
             <div>
               <p class="font-semibold text-ink-800">Alışveriş</p>
               <ul class="mt-2 space-y-1.5 text-ink-500">
                 <li><RouterLink :to="{ name: 'products' }" class="hover:text-brand-600">Tüm ürünler</RouterLink></li>
                 <li><RouterLink :to="{ name: 'stores' }" class="hover:text-brand-600">Mağazalar</RouterLink></li>
                 <li><RouterLink :to="{ name: 'cart' }" class="hover:text-brand-600">Sepetim</RouterLink></li>
-              </ul>
-            </div>
-            <div>
-              <p class="font-semibold text-ink-800">Yardım</p>
-              <ul class="mt-2 space-y-1.5 text-ink-500">
-                <li><RouterLink :to="{ name: 'track' }" class="hover:text-brand-600">Sipariş takibi</RouterLink></li>
-                <li><RouterLink :to="{ name: 'support' }" class="hover:text-brand-600">Destek talebi</RouterLink></li>
-              </ul>
-            </div>
-            <div>
-              <p class="font-semibold text-ink-800">Satıcı</p>
-              <ul class="mt-2 space-y-1.5 text-ink-500">
                 <li>
                   <RouterLink :to="{ name: 'account-store-application' }" class="hover:text-brand-600">
                     Mağaza aç
                   </RouterLink>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p class="font-semibold text-ink-800">Destek</p>
+              <ul class="mt-2 space-y-1.5 text-ink-500">
+                <li><RouterLink :to="{ name: 'track' }" class="hover:text-brand-600">Sipariş takibi</RouterLink></li>
+                <li><RouterLink :to="{ name: 'support' }" class="hover:text-brand-600">Destek talebi</RouterLink></li>
+                <li>
+                  <RouterLink :to="{ name: SSS_BAGI.ad }" class="hover:text-brand-600">{{ SSS_BAGI.baslik }}</RouterLink>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p class="font-semibold text-ink-800">Kurumsal</p>
+              <ul class="mt-2 space-y-1.5 text-ink-500">
+                <li v-for="bagi in FOOTER_KURUMSAL" :key="bagi.ad">
+                  <RouterLink :to="{ name: bagi.ad }" class="hover:text-brand-600">{{ bagi.baslik }}</RouterLink>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p class="font-semibold text-ink-800">Yasal</p>
+              <ul class="mt-2 space-y-1.5 text-ink-500">
+                <li v-for="bagi in FOOTER_YASAL" :key="bagi.ad">
+                  <RouterLink :to="{ name: bagi.ad }" class="hover:text-brand-600">{{ bagi.baslik }}</RouterLink>
                 </li>
               </ul>
             </div>

@@ -56,6 +56,29 @@
   html {
     scroll-behavior: smooth;
   }
+  /*
+   * Sayfa değişiminde ürünün ortadan açılmasının GERÇEK sebebi buradaydı.
+   *
+   * Tarayıcının "kaydırma çapası" (scroll anchoring) özelliği, görünür
+   * alanın üstündeki içerik değişince kaydırma konumunu kendiliğinden
+   * düzelterek okuduğunuz yeri sabit tutuyor. Tek sayfa uygulamasında
+   * belge DEĞİŞMİYOR, yalnızca main'in içi değişiyor; tarayıcı bunu
+   * "içerik eklendi" sanıp navigasyondan önceki kaydırma konumunu geri
+   * uyguluyor, yeni sayfa kısa olduğu için de en sona sıkıştırıyordu.
+   *
+   * Ölçümde net görüldü: yönlendirici scrollTo({top:0}) çağrısını BİR KEZ
+   * yapıyor ve kaydırma 0'a iniyor; sonra başka hiçbir scroll çağrısı
+   * olmadan sayfa kendiliğinden sayfanın en dibine (eski konumun kırpılmış
+   * hâline) tırmanıyordu. "Bazen" olmasının sebebi, verinin çapa devreye
+   * girmeden önce mi sonra mı geldiğiydi.
+   *
+   * Çapa YALNIZCA main'de kapatılıyor, html'de değil: böylece değişen
+   * içerik çapa olarak seçilemiyor, ama sayfanın geri kalanı için
+   * özellik açık kalıyor.
+   */
+  main {
+    overflow-anchor: none;
+  }
   body {
     @apply bg-ink-50 text-ink-800 antialiased;
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;

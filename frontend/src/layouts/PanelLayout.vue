@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import BrandLogo from "../components/BrandLogo.vue";
+import GeriTusu from "../components/GeriTusu.vue";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -152,6 +153,11 @@ async function signOut() {
           <button type="button" class="btn-secondary" @click="signOut">Çıkış</button>
         </div>
       </header>
+
+      <!-- Panelde de geri tuşu: telefonda kenar menü kapalı duruyor,
+           sipariş veya ürün ayrıntısından listeye dönmenin tek yolu
+           tarayıcının geri tuşu kalıyordu. -->
+      <GeriTusu />
 
       <main class="min-w-0 flex-1 p-4 lg:p-8">
         <RouterView />
