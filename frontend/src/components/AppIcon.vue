@@ -91,6 +91,10 @@ defineProps({
       <circle cx="16" cy="17" r="2" />
     </template>
 
+    <template v-else-if="name === 'asagi'">
+      <path d="M5.2 9.2 12 16l6.8-6.8" />
+    </template>
+
     <template v-else-if="name === 'kapat'">
       <path d="M6 6l12 12M18 6L6 18" />
     </template>

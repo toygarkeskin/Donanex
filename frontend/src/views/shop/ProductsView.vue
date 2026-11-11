@@ -9,6 +9,7 @@ import PaginationBar from "../../components/PaginationBar.vue";
 import PageHeader from "../../components/PageHeader.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import CategoryStrip from "../../components/CategoryStrip.vue";
+import FiltreBolumu from "../../components/FiltreBolumu.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -17,6 +18,16 @@ const router = useRouter();
 const filtrelerAcik = ref(false);
 
 const result = ref({ items: [], total: 0, page: 1, pages: 1 });
+/**
+ * Sayfa başına ürün.
+ *
+ * 20, ızgaranın her genişliğinde TAM satır veriyor: telefonda 2 sütun (10
+ * satır), tablette 3 (… ve son satırda 2 eksik kalmıyor çünkü 20 ikiye,
+ * dörde ve beşe bölünüyor), geniş ekranda 4 sütun (5 satır). 24'te son
+ * satır 5 sütunlu düzende yarım kalıyordu.
+ */
+const SAYFA_BASINA = 20;
+
 const categories = ref([]);
 const stores = ref([]);
 const brands = ref([]);
@@ -127,7 +138,7 @@ async function load() {
         inStock: filters.inStock ? "true" : "",
         sort: filters.sort,
         page: filters.page,
-        pageSize: 24
+        pageSize: SAYFA_BASINA
       })}`
     );
   } finally {
@@ -365,8 +376,7 @@ onMounted(async () => {
           gibi bir süzme yapılamıyordu. Uzun listeler kenar çubuğunu
           taşırmasın diye kendi içlerinde kayıyor.
         -->
-        <fieldset>
-          <legend class="field-label">Kategori</legend>
+        <FiltreBolumu baslik="Kategori" :secili="filters.category.length" :varsayilan-acik="true">
           <div class="max-h-52 space-y-1 overflow-y-auto pr-1">
             <label
               v-for="category in categories"
@@ -378,10 +388,9 @@ onMounted(async () => {
               <span class="text-xs text-ink-400">{{ category.productCount }}</span>
             </label>
           </div>
-        </fieldset>
+        </FiltreBolumu>
 
-        <fieldset>
-          <legend class="field-label">Marka</legend>
+        <FiltreBolumu baslik="Marka" :secili="filters.brand.length">
           <div class="max-h-52 space-y-1 overflow-y-auto pr-1">
             <label
               v-for="marka in brands"
@@ -393,10 +402,9 @@ onMounted(async () => {
               <span class="text-xs text-ink-400">{{ marka.productCount }}</span>
             </label>
           </div>
-        </fieldset>
+        </FiltreBolumu>
 
-        <fieldset>
-          <legend class="field-label">Mağaza</legend>
+        <FiltreBolumu baslik="Mağaza" :secili="filters.store.length">
           <div class="max-h-52 space-y-1 overflow-y-auto pr-1">
             <label
               v-for="store in stores"
@@ -407,16 +415,15 @@ onMounted(async () => {
               <span class="flex-1 truncate">{{ store.name }}</span>
             </label>
           </div>
-        </fieldset>
+        </FiltreBolumu>
 
-        <div>
-          <span class="field-label">Fiyat aralığı</span>
+        <FiltreBolumu baslik="Fiyat aralığı" :secili="(filters.minPrice ? 1 : 0) + (filters.maxPrice ? 1 : 0)">
           <div class="flex items-center gap-2">
             <input v-model="filters.minPrice" type="number" min="0" class="field" placeholder="En az" aria-label="En az fiyat" />
             <span class="text-ink-400">–</span>
             <input v-model="filters.maxPrice" type="number" min="0" class="field" placeholder="En çok" aria-label="En çok fiyat" />
           </div>
-        </div>
+        </FiltreBolumu>
 
         <label class="flex items-center gap-2 text-sm text-ink-700">
           <input v-model="filters.inStock" type="checkbox" class="rounded border-ink-300" />

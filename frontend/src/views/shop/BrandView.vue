@@ -23,7 +23,7 @@ async function yukle() {
     sayfayiTanimla(`${marka.value.name} ürünleri`, marka.value.description);
     // Ürünler ürün listesi ucundan geliyor: sıralama, sayfalama ve stok
     // kuralları orada zaten çalışıyor, ikinci kez yazmaya gerek yok.
-    const sonuc = await api.get(`/products?brand=${encodeURIComponent(route.params.slug)}&pageSize=24`);
+    const sonuc = await api.get(`/products?brand=${encodeURIComponent(route.params.slug)}&pageSize=20`);
     urunler.value = sonuc.items ?? [];
   } catch {
     bulunamadi.value = true;

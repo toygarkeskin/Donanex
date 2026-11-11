@@ -21,7 +21,7 @@ async function load() {
   try {
     store.value = await api.get(`/storefront/stores/${route.params.slug}`);
     sayfayiTanimla(store.value.name, store.value.description);
-    result.value = await api.get(`/products${query({ store: route.params.slug, page: page.value, pageSize: 24 })}`);
+    result.value = await api.get(`/products${query({ store: route.params.slug, page: page.value, pageSize: 20 })}`);
   } catch {
     notFound.value = true;
     sayfayiTanimla("Mağaza bulunamadı");
