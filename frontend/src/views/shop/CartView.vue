@@ -6,6 +6,7 @@ import { useCartStore } from "../../stores/cart";
 import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
+import ProductImage from "../../components/ProductImage.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 import AlertBox from "../../components/AlertBox.vue";
@@ -89,13 +90,9 @@ onMounted(() => cart.load().catch(() => {}));
           class="card flex flex-wrap items-center gap-4 p-4"
           :class="{ 'border-amber-400 bg-amber-400/10': !item.available }"
         >
-          <img
-            v-if="item.imageUrl"
-            :src="item.imageUrl"
-            :alt="item.name"
-            loading="lazy"
-            class="h-20 w-20 shrink-0 rounded-lg bg-ink-100 object-contain p-1"
-          />
+          <div v-if="item.imageUrl" class="h-20 w-20 shrink-0 overflow-hidden rounded-lg">
+            <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-1.5" blur-class="blur-lg" />
+          </div>
           <div v-else class="h-20 w-20 shrink-0 rounded-lg bg-ink-100" />
 
           <div class="min-w-50 flex-1">

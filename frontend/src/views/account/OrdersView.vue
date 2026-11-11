@@ -4,6 +4,7 @@ import { RouterLink } from "vue-router";
 import { api, query } from "../../lib/api";
 import { money, formatDate, ORDER_STATUS } from "../../lib/format";
 import PageHeader from "../../components/PageHeader.vue";
+import ProductImage from "../../components/ProductImage.vue";
 import StatusBadge from "../../components/StatusBadge.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
@@ -53,14 +54,13 @@ onMounted(load);
         </div>
 
         <div class="flex -space-x-2">
-          <img
+          <div
             v-for="item in order.packages.flatMap((p) => p.items).slice(0, 4)"
             :key="item.productId"
-            :src="item.imageUrl"
-            :alt="item.name"
-            class="h-10 w-10 rounded-lg border-2 border-white bg-ink-100 object-contain p-0.5"
-            loading="lazy"
-          />
+            class="h-10 w-10 overflow-hidden rounded-lg border-2 border-white"
+          >
+            <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-0.5" blur-class="blur-md" />
+          </div>
         </div>
 
         <p class="text-sm text-ink-500">{{ order.packages.length }} mağaza</p>

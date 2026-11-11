@@ -5,6 +5,7 @@ import { api, query } from "../../lib/api";
 import { money, PRODUCT_STATUS } from "../../lib/format";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
+import ProductImage from "../../components/ProductImage.vue";
 import StatusBadge from "../../components/StatusBadge.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
@@ -127,12 +128,9 @@ onMounted(load);
             <tr v-for="product in result.items" :key="product.id">
               <td>
                 <div class="flex items-center gap-3">
-                  <img
-                    :src="product.imageUrl"
-                    :alt="product.name"
-                    class="h-10 w-10 rounded-lg bg-ink-100 object-contain p-0.5"
-                    loading="lazy"
-                  />
+                  <div class="h-10 w-10 shrink-0 overflow-hidden rounded-lg">
+                    <ProductImage :src="product.imageUrl" :alt="product.name" padding="p-0.5" blur-class="blur-md" />
+                  </div>
                   <div class="min-w-0">
                     <p class="truncate font-medium text-ink-800">{{ product.name }}</p>
                     <p v-if="product.sku" class="text-xs text-ink-500">{{ product.sku }}</p>

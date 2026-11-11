@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { money, formatDate, safeUrl, PACKAGE_STATUS, ORDER_STATUS, CARRIERS } from "../../lib/format";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
+import ProductImage from "../../components/ProductImage.vue";
 import StatusBadge from "../../components/StatusBadge.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 import FormField from "../../components/FormField.vue";
@@ -107,12 +108,9 @@ onMounted(load);
           <h2 class="border-b border-ink-100 bg-ink-50 px-4 py-3 text-sm font-semibold text-ink-800">Ürünler</h2>
           <ul class="divide-y divide-ink-100">
             <li v-for="item in pkg.items" :key="item.productId" class="flex items-center gap-3 px-4 py-3">
-              <img
-                :src="item.imageUrl"
-                :alt="item.name"
-                class="h-12 w-12 rounded-lg bg-ink-100 object-contain p-1"
-                loading="lazy"
-              />
+              <div class="h-12 w-12 shrink-0 overflow-hidden rounded-lg">
+                <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-1" blur-class="blur-md" />
+              </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium text-ink-800">{{ item.name }}</p>
                 <p class="text-xs text-ink-500">{{ item.quantity }} × {{ money(item.unitPrice) }}</p>

@@ -4,6 +4,7 @@ import { RouterLink } from "vue-router";
 import { money } from "../lib/format";
 import { useCartStore } from "../stores/cart";
 import { useToastStore } from "../stores/toast";
+import ProductImage from "./ProductImage.vue";
 
 const props = defineProps({ product: { type: Object, required: true } });
 
@@ -31,18 +32,17 @@ async function addToCart() {
     yanlarda boşluk kalıyordu. Kare oran kartı bir miktar UZATIR; ekran başına
     düşen ürün sayısındaki artış orandan değil, ızgaranın 4 sütuna çıkması ve
     iç boşlukların daralmasından geliyor.
+
+    Kutunun içi ProductImage'a bırakıldı: katalogdaki oranlar 0.67 ile 2.44
+    arasında değiştiği için düz contain, geniş fotoğraflarda kutunun yarısını
+    boş gri bantla dolduruyordu.
   -->
   <article class="card group flex flex-col overflow-hidden transition hover:shadow-md">
     <RouterLink
       :to="{ name: 'product', params: { storeSlug: product.storeSlug, productSlug: product.slug } }"
-      class="block aspect-square overflow-hidden bg-ink-100"
+      class="block aspect-square overflow-hidden transition group-hover:scale-105"
     >
-      <img
-        :src="product.imageUrl"
-        :alt="product.name"
-        loading="lazy"
-        class="h-full w-full object-contain p-3 transition group-hover:scale-105"
-      />
+      <ProductImage :src="product.imageUrl" :alt="product.name" />
     </RouterLink>
 
     <div class="flex flex-1 flex-col gap-1 p-3">

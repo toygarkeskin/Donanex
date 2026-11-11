@@ -9,6 +9,7 @@ import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import AlertBox from "../../components/AlertBox.vue";
 import ProductCard from "../../components/ProductCard.vue";
+import ProductImage from "../../components/ProductImage.vue";
 import { sayfayiTanimla } from "../../lib/sayfaBilgisi";
 
 const route = useRoute();
@@ -116,8 +117,13 @@ watch(() => route.fullPath, load);
       iki sütun yan yana olduğu için böyle bir sorun yok, görsel büyük kalıyor.
     -->
     <div>
-      <div class="card flex items-center justify-center overflow-hidden bg-surface p-3 sm:p-8">
-        <img :src="acikGorsel" :alt="product.name" class="max-h-56 w-full object-contain sm:max-h-[420px]" />
+      <!--
+        Sabit oran: fotoğrafın oranına göre kutu boy değiştirdiğinde, ürün
+        değiştikçe ya da galeride geçiş yapıldıkça altındaki her şey zıplıyordu.
+        Kare kutu + ProductImage, geniş fotoğrafta da boş bant bırakmıyor.
+      -->
+      <div class="card aspect-square overflow-hidden">
+        <ProductImage :src="acikGorsel" :alt="product.name" padding="p-4 sm:p-8" :lazy="false" />
       </div>
 
       <!-- Küçük resimler yalnızca birden çok görsel varsa. -->
@@ -126,13 +132,13 @@ watch(() => route.fullPath, load);
           v-for="(adres, sira) in gorseller"
           :key="adres"
           type="button"
-          class="h-16 w-16 shrink-0 rounded-lg border bg-surface p-1 transition"
+          class="h-16 w-16 shrink-0 overflow-hidden rounded-lg border transition"
           :class="sira === seciliGorsel ? 'border-brand-500 ring-2 ring-brand-500/30' : 'border-ink-200 hover:border-ink-300'"
           :aria-label="`${sira + 1}. görseli göster`"
           :aria-pressed="sira === seciliGorsel"
           @click="seciliGorsel = sira"
         >
-          <img :src="adres" alt="" loading="lazy" class="h-full w-full object-contain" />
+          <ProductImage :src="adres" padding="p-1" />
         </button>
       </div>
     </div>

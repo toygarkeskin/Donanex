@@ -1,6 +1,7 @@
 <script setup>
 import { money, formatDate, safeUrl, PACKAGE_STATUS } from "../lib/format";
 import StatusBadge from "./StatusBadge.vue";
+import ProductImage from "./ProductImage.vue";
 
 /**
  * Siparişin mağaza bazlı paketleri. Çok satıcılı yapıda bir sipariş birden
@@ -25,13 +26,9 @@ defineProps({
 
       <ul class="divide-y divide-ink-100">
         <li v-for="item in pkg.items" :key="item.productId" class="flex items-center gap-3 px-4 py-3">
-          <img
-            v-if="item.imageUrl"
-            :src="item.imageUrl"
-            :alt="item.name"
-            class="h-12 w-12 rounded-lg bg-ink-100 object-contain p-1"
-            loading="lazy"
-          />
+          <div v-if="item.imageUrl" class="h-12 w-12 shrink-0 overflow-hidden rounded-lg">
+            <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-1" blur-class="blur-md" />
+          </div>
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-ink-800">{{ item.name }}</p>
             <p class="text-xs text-ink-500">{{ item.quantity }} × {{ money(item.unitPrice) }}</p>
