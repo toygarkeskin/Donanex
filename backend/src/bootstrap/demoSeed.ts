@@ -166,6 +166,40 @@ const ADDRESS = {
  * oluşur; bu bilinçli, çünkü tanım demo katalogun ne içermesi gerektiğini
  * söyleyen tek kaynak. Mağazanın kendi eklediği ürünlere karışmaz.
  */
+/**
+ * Markası boş ürünleri adlarından markaya bağlar.
+ *
+ * Neden göçte değil de burada: 003_brands.sql markaları oluşturuyor ve o AN
+ * var olan ürünleri bağlıyor, ama göçler dondurulmuş anlık görüntülerdir —
+ * kendilerinden SONRA eklenen demo ürünlerini göremezler. Taze bir kurulumda
+ * (ve testlerde) sıra "göç → tohum" olduğu için markalar ürünsüz kalıyordu:
+ * Markalar sayfası boş açılıyordu.
+ *
+ * Eşleşme ürün adının BAŞINDAKİ markaya bakar. "Ortada geçsin" kuralı
+ * kurulsaydı "ASUS TUF" araması başka markaların TUF ürünlerini de
+ * yakalardı. Takma adlar, marka adından türetilemeyen kullanımlar içindir.
+ */
+const MARKA_TAKMA_ADLARI: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  "western-digital": ["WD"],
+  microsoft: ["Xbox"]
+});
+
+export async function markalariBagla(repos: { db: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Row[] }> } }): Promise<number> {
+  const { rows: markalar } = await repos.db.query("SELECT id, slug, name FROM brands");
+  let bagli = 0;
+  for (const marka of markalar) {
+    const onekler = [marka.name as string, ...(MARKA_TAKMA_ADLARI[marka.slug as string] ?? [])];
+    for (const onek of onekler) {
+      const sonuc = await repos.db.query(
+        "UPDATE products SET brand_id = $1 WHERE brand_id IS NULL AND name ILIKE $2 RETURNING id",
+        [marka.id, `${onek} %`]
+      );
+      bagli += sonuc.rows.length;
+    }
+  }
+  return bagli;
+}
+
 export async function eksikUrunleriTamamla({
   unitOfWork,
   ids,
@@ -305,6 +339,8 @@ export async function seedDemoData({
       }
       createdStores.push({ store, owner, products });
     }
+
+    await markalariBagla(repos);
 
     /* ---------- mağaza çalışanı (rol ayrımını göstermek için) ---------- */
     const staff = await createUser({ email: "calisan@donanex.test", fullName: "Burak Şahin" });

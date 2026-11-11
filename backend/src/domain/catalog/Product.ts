@@ -67,6 +67,7 @@ export interface ProductFields {
   readonly id: string | null;
   readonly storeId: string | null;
   readonly categoryId: string | null;
+  readonly brandId: string | null;
   readonly name: string;
   readonly slug: string;
   readonly sku: string | null;
@@ -84,6 +85,7 @@ export interface ProductInput {
   id?: string | null;
   storeId?: string | null;
   categoryId?: string | null;
+  brandId?: string | null;
   name?: unknown;
   slug?: unknown;
   sku?: unknown;
@@ -123,6 +125,7 @@ export class Product implements ProductFields {
   readonly id: string | null;
   readonly storeId: string | null;
   readonly categoryId: string | null;
+  readonly brandId: string | null;
   readonly name: string;
   readonly slug: string;
   readonly sku: string | null;
@@ -137,6 +140,7 @@ export class Product implements ProductFields {
     this.id = fields.id;
     this.storeId = fields.storeId;
     this.categoryId = fields.categoryId;
+    this.brandId = fields.brandId;
     this.name = fields.name;
     this.slug = fields.slug;
     this.sku = fields.sku;
@@ -157,6 +161,7 @@ export class Product implements ProductFields {
       id: data.id ?? null,
       storeId: data.storeId ?? null,
       categoryId: data.categoryId ?? null,
+      brandId: data.brandId ?? null,
       name,
       slug: slugify(data.slug || name),
       sku: optionalText(data.sku, "Stok kodu", 60),

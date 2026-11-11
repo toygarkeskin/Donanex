@@ -23,6 +23,8 @@ const routes = [
       },
       { path: "magazalar", name: "stores", component: () => import("../views/shop/StoresView.vue") },
       { path: "magazalar/:slug", name: "store", component: () => import("../views/shop/StoreView.vue") },
+      { path: "markalar", name: "brands", component: () => import("../views/shop/BrandsView.vue") },
+      { path: "markalar/:slug", name: "brand", component: () => import("../views/shop/BrandView.vue") },
       { path: "sepet", name: "cart", component: () => import("../views/shop/CartView.vue") },
       { path: "odeme", name: "checkout", component: () => import("../views/shop/CheckoutView.vue") },
       { path: "odeme/:orderId", name: "payment", component: () => import("../views/shop/PaymentView.vue") },
@@ -149,6 +151,8 @@ const SAYFA_BASLIKLARI = {
   product: "Ürün",
   stores: "Mağazalar",
   store: "Mağaza",
+  brands: "Markalar",
+  brand: "Marka",
   cart: "Sepetim",
   checkout: "Siparişi tamamla",
   payment: "Ödeme",
@@ -199,6 +203,7 @@ const SAYFA_BASLIKLARI = {
 const SAYFA_ACIKLAMALARI = {
   products: "Onlarca mağazanın teknoloji ürünleri tek listede. Kategori, mağaza ve fiyata göre süzün.",
   stores: "Donanex'teki satıcı mağazaları. Her mağazanın ürünlerini ve ilanlarını görün.",
+  brands: "Katalogdaki markalar. Her markanın ürünlerini ve o markayı satan mağazaları görün.",
   track: "Sipariş numaranız ve takip kodunuzla siparişinizin durumunu üye olmadan sorgulayın.",
   support: "Sorunuz mu var? Üye olmadan destek talebi oluşturun, yanıtı e-postayla alın.",
   cart: "Sepetinizdeki ürünler. Farklı mağazalardan aldıklarınız tek ödemeyle tamamlanır."

@@ -95,6 +95,18 @@ defineProps({
       <path d="M6 6l12 12M18 6L6 18" />
     </template>
 
+    <!-- Marka etiketi -->
+    <template v-else-if="name === 'etiket'">
+      <path d="M3.8 11.3V5.2a1.4 1.4 0 0 1 1.4-1.4h6.1a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8l-5.9 5.9a2 2 0 0 1-2.8 0l-7-7a2 2 0 0 1-.6-1.4Z" />
+      <circle cx="8.2" cy="8.2" r="1.5" />
+    </template>
+
+    <!-- Onay: daire içinde tik -->
+    <template v-else-if="name === 'onay'">
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M8.4 12.2l2.5 2.5 4.7-4.9" />
+    </template>
+
     <!-- Sipariş takibi: kargo kolisi -->
     <template v-else-if="name === 'kargo'">
       <path d="M3.8 7.6 12 3.6l8.2 4v8.8l-8.2 4-8.2-4V7.6Z" />

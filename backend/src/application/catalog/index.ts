@@ -12,6 +12,8 @@ import * as CreateCategory from "./commands/CreateCategory";
 import * as ListProducts from "./queries/ListProducts";
 import * as GetProduct from "./queries/GetProduct";
 import * as ListCategories from "./queries/ListCategories";
+import * as ListBrands from "./queries/ListBrands";
+import * as GetBrand from "./queries/GetBrand";
 import * as ListStoreProducts from "./queries/ListStoreProducts";
 
 /*
@@ -34,6 +36,8 @@ export = defineContext({
     ListProducts,
     GetProduct,
     ListCategories,
+    ListBrands,
+    GetBrand,
     ListStoreProducts,
   }
 });

@@ -211,6 +211,19 @@ watch(() => route.fullPath, load);
         </RouterLink>
       </nav>
 
+      <!--
+        Marka BAŞLIĞIN ÜSTÜNDE: ürünü kim üretti sorusunun cevabı, hangi
+        mağazanın sattığından önce geliyor. Markası atanmamış ürünlerde
+        satır hiç çizilmiyor — boş bir bağlantı hiçbir yere götürmez.
+      -->
+      <RouterLink
+        v-if="product.brandSlug"
+        :to="{ name: 'brand', params: { slug: product.brandSlug } }"
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {{ product.brandName }}
+      </RouterLink>
+
       <h1 class="text-2xl font-bold tracking-tight text-ink-900">{{ product.name }}</h1>
 
       <RouterLink

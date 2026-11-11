@@ -8,7 +8,8 @@ const CARD = `
   p.id, p.slug, p.name, p.image_url AS "imageUrl", p.stock, p.status,
   ${money("p.price_cents")} AS price,
   s.id AS "storeId", s.slug AS "storeSlug", s.name AS "storeName",
-  c.slug AS "categorySlug", c.name AS "categoryName"`;
+  c.slug AS "categorySlug", c.name AS "categoryName",
+  b.slug AS "brandSlug", b.name AS "brandName"`;
 
 /**
  * Sıralama seçenekleri BURADA sabittir: kullanıcının gönderdiği metin asla
@@ -43,6 +44,7 @@ export class PgCatalogReadModel implements CatalogReadModel {
     // sorgu metnine girmiyor.
     if (filters.categorySlugs?.length) where.push(`c.slug = ANY(${bind(filters.categorySlugs)}::text[])`);
     if (filters.storeSlugs?.length) where.push(`s.slug = ANY(${bind(filters.storeSlugs)}::text[])`);
+    if (filters.brandSlugs?.length) where.push(`b.slug = ANY(${bind(filters.brandSlugs)}::text[])`);
     if (filters.minPriceCents !== null) where.push(`p.price_cents >= ${bind(filters.minPriceCents)}`);
     if (filters.maxPriceCents !== null) where.push(`p.price_cents <= ${bind(filters.maxPriceCents)}`);
     if (filters.inStockOnly) where.push("p.stock > 0");
@@ -51,6 +53,7 @@ export class PgCatalogReadModel implements CatalogReadModel {
       FROM products p
       JOIN stores s ON s.id = p.store_id
       LEFT JOIN categories c ON c.id = p.category_id
+      LEFT JOIN brands b ON b.id = p.brand_id
       WHERE ${where.join(" AND ")}`;
 
     const count = await this.db.query(`SELECT COUNT(*)::int AS total ${from}`, params);
@@ -72,6 +75,7 @@ export class PgCatalogReadModel implements CatalogReadModel {
        FROM products p
        JOIN stores s ON s.id = p.store_id
        LEFT JOIN categories c ON c.id = p.category_id
+       LEFT JOIN brands b ON b.id = p.brand_id
        WHERE s.slug = $1 AND p.slug = $2 AND p.status = 'active' AND s.status = 'active'`,
       [storeSlug, productSlug]
     );
@@ -109,7 +113,7 @@ export class PgCatalogReadModel implements CatalogReadModel {
       // kaydederken var olan ek görselleri siler.
       `SELECT p.id, p.slug, p.sku, p.name, p.description, p.stock, p.status,
               p.image_url AS "imageUrl", p.gallery_urls AS "galleryUrls",
-              p.category_id AS "categoryId",
+              p.category_id AS "categoryId", p.brand_id AS "brandId",
               c.name AS "categoryName", ${money("p.price_cents")} AS price,
               p.created_at AS "createdAt",
               EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id) AS "hasOrders"
@@ -125,11 +129,68 @@ export class PgCatalogReadModel implements CatalogReadModel {
     const { rows } = await this.db.query(
       `SELECT p.id, p.slug, p.sku, p.name, p.description, p.stock, p.status,
               p.image_url AS "imageUrl", p.gallery_urls AS "galleryUrls",
-              p.category_id AS "categoryId",
+              p.category_id AS "categoryId", p.brand_id AS "brandId",
               ${money("p.price_cents")} AS price
        FROM products p WHERE p.id = $1 AND p.store_id = $2`,
       [productId, storeId]
     );
     return rows[0] || null;
+  }
+
+  /**
+   * Markalar sayfası.
+   *
+   * Ürünü olmayan marka LİSTELENMEZ: boş bir marka sayfasına götüren bir
+   * kart, kullanıcıya verilmiş boş bir sözdür. Sayım yalnızca vitrinde
+   * görünen ürünleri kapsar (aktif ürün, aktif mağaza) — taslak ürünler
+   * marka sayfasında da görünmemeli.
+   */
+  async listBrands(): Promise<Row[]> {
+    const { rows } = await this.db.query(
+      `SELECT b.id, b.slug, b.name, b.description, b.logo_url AS "logoUrl", b.verified,
+              COUNT(p.id)::int AS "productCount"
+       FROM brands b
+       JOIN products p ON p.brand_id = b.id AND p.status = 'active'
+       JOIN stores s ON s.id = p.store_id AND s.status = 'active'
+       GROUP BY b.id
+       ORDER BY b.name`
+    );
+    return rows;
+  }
+
+  async getBrandBySlug(slug: string): Promise<Row | null> {
+    const { rows } = await this.db.query(
+      `SELECT b.id, b.slug, b.name, b.description, b.logo_url AS "logoUrl", b.verified,
+              COUNT(p.id) FILTER (WHERE p.status = 'active' AND s.status = 'active')::int AS "productCount"
+       FROM brands b
+       LEFT JOIN products p ON p.brand_id = b.id
+       LEFT JOIN stores s ON s.id = p.store_id
+       WHERE b.slug = $1
+       GROUP BY b.id`,
+      [slug]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Markayı satan mağazalar.
+   *
+   * "Onaylı satıcı" rozeti BURADAN geliyor ve uydurma değil: mağaza
+   * yöneticinin başvurusunu onaylamasıyla 'active' durumuna geçiyor.
+   * Sistemin gerçekten bildiği tek güven işareti bu.
+   */
+  async listBrandStores(brandId: string): Promise<Row[]> {
+    const { rows } = await this.db.query(
+      `SELECT s.id, s.slug, s.name, s.description,
+              (s.status = 'active') AS "approved",
+              COUNT(p.id)::int AS "productCount"
+       FROM stores s
+       JOIN products p ON p.store_id = s.id AND p.brand_id = $1 AND p.status = 'active'
+       WHERE s.status = 'active'
+       GROUP BY s.id
+       ORDER BY COUNT(p.id) DESC, s.name`,
+      [brandId]
+    );
+    return rows;
   }
 }

@@ -277,6 +277,9 @@ export interface CatalogReadModel {
   listCategories(): Promise<Row[]>;
   listStoreProducts(storeId: string, filters: ListFilters): Promise<Row>;
   getProductForStore(storeId: string, productId: string): Promise<Row | null>;
+  listBrands(): Promise<Row[]>;
+  getBrandBySlug(slug: string): Promise<Row | null>;
+  listBrandStores(brandId: string): Promise<Row[]>;
 }
 
 export interface StoreReadModel {

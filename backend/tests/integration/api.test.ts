@@ -252,6 +252,56 @@ test("ürünün ek görselleri kaydedilir, düzenlemede korunur ve vitrinde gör
   assert.equal(asiri.status, 400, JSON.stringify(asiri.data));
 });
 
+test("markalar listelenir, marka sayfası satıcılarını verir ve ürünler markaya göre süzülür", opts, async () => {
+  const anon = new Client(app.base);
+
+  const liste = await anon.get("/api/brands");
+  assert.equal(liste.status, 200);
+  assert.ok(liste.data.items.length > 0, "göç markaları oluşturmalı");
+
+  // Ürünü olmayan marka LİSTELENMEZ: boş bir marka sayfasına götüren kart
+  // kullanıcıya verilmiş boş bir sözdür.
+  assert.ok(
+    liste.data.items.every((marka: Row) => (marka.productCount as number) > 0),
+    "ürünsüz marka listelenmemeli"
+  );
+
+  const ornek = liste.data.items.find((marka: Row) => marka.slug === "logitech") ?? liste.data.items[0];
+  const detay = await anon.get(`/api/brands/${ornek.slug}`);
+  assert.equal(detay.status, 200);
+  assert.equal(detay.data.slug, ornek.slug);
+  assert.ok(Array.isArray(detay.data.stores), "marka sayfası satıcılarını taşımalı");
+
+  // "Onaylı satıcı" rozeti uydurma değil: mağaza yönetici onayıyla yayına
+  // girdiği için burada her zaman true çıkar.
+  assert.ok(
+    detay.data.stores.every((magaza: Row) => magaza.approved === true),
+    "vitrinde yalnızca onaylı mağazalar görünür"
+  );
+
+  // Marka filtresi: dönen her ürün gerçekten o markadan olmalı.
+  const suzulmus = await anon.get(`/api/products?brand=${ornek.slug}&pageSize=60`);
+  assert.equal(suzulmus.status, 200);
+  assert.ok(suzulmus.data.items.length > 0, `${ornek.slug} ürünü dönmeli`);
+  assert.ok(
+    suzulmus.data.items.every((urun: Row) => urun.brandSlug === ornek.slug),
+    "filtre başka markanın ürününü döndürmemeli"
+  );
+
+  assert.equal((await anon.get("/api/brands/boyle-bir-marka-yok")).status, 404);
+
+  // Panel listesi brandId'yi TAŞIMALI: düzenleme formu ürünü bu listeden
+  // dolduruyor, alan gelmezse kaydederken markayı siler.
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await magazaci.get("/api/me")).data.stores?.[0]?.id;
+  const panel = await magazaci.get(`/api/stores/${storeId}/products?pageSize=60`);
+  assert.ok(
+    panel.data.items.some((urun: Row) => urun.brandId),
+    "panel listesi markası olan ürünlerde brandId taşımalı"
+  );
+});
+
 test("çoklu kategori seçimi birleşim döndürür", opts, async () => {
   const laptop = (await anon.get("/api/products?category=laptop")).data.total;
   const monitor = (await anon.get("/api/products?category=monitor")).data.total;

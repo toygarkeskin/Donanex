@@ -18,6 +18,7 @@ const filtrelerAcik = ref(false);
 const result = ref({ items: [], total: 0, page: 1, pages: 1 });
 const categories = ref([]);
 const stores = ref([]);
+const brands = ref([]);
 const loading = ref(true);
 
 /**
@@ -40,6 +41,7 @@ function sorgudanFiltreler(sorgu) {
     q: sorgu.ara || "",
     category: listeyeCevir(sorgu.kategori),
     store: listeyeCevir(sorgu.magaza),
+    brand: listeyeCevir(sorgu.marka),
     minPrice: sorgu.min || "",
     maxPrice: sorgu.max || "",
     inStock: sorgu.stokta === "true",
@@ -62,6 +64,10 @@ function filtrelerinOzeti() {
     q: filters.q,
     category: [...filters.category],
     store: [...filters.store],
+    // Anahtar SIRASI sorgudanFiltreler ile aynı olmalı: karşılaştırma
+    // JSON.stringify ile yapılıyor ve sıra değişirse iki özdeş filtre
+    // farklı görünüp adres izleyicisini boşuna tetikliyor.
+    brand: [...filters.brand],
     minPrice: filters.minPrice,
     maxPrice: filters.maxPrice,
     inStock: filters.inStock,
@@ -96,6 +102,7 @@ function syncUrl() {
       ...(filters.q ? { ara: filters.q } : {}),
       ...(filters.category.length ? { kategori: filters.category.join(",") } : {}),
       ...(filters.store.length ? { magaza: filters.store.join(",") } : {}),
+      ...(filters.brand.length ? { marka: filters.brand.join(",") } : {}),
       ...(filters.minPrice ? { min: filters.minPrice } : {}),
       ...(filters.maxPrice ? { max: filters.maxPrice } : {}),
       ...(filters.inStock ? { stokta: "true" } : {}),
@@ -113,6 +120,7 @@ async function load() {
         q: filters.q,
         category: filters.category.join(","),
         store: filters.store.join(","),
+        brand: filters.brand.join(","),
         minPrice: filters.minPrice,
         maxPrice: filters.maxPrice,
         inStock: filters.inStock ? "true" : "",
@@ -142,6 +150,10 @@ const acikFiltreler = computed(() => {
     const magaza = stores.value.find((aday) => aday.slug === slug);
     rozetler.push({ anahtar: `magaza:${slug}`, etiket: magaza?.name ?? slug, tur: "store", deger: slug });
   }
+  for (const slug of filters.brand) {
+    const marka = brands.value.find((aday) => aday.slug === slug);
+    rozetler.push({ anahtar: `marka:${slug}`, etiket: marka?.name ?? slug, tur: "brand", deger: slug });
+  }
   if (filters.inStock) rozetler.push({ anahtar: "stokta", etiket: "Stokta olanlar", tur: "inStock" });
   if (filters.minPrice) rozetler.push({ anahtar: "min", etiket: `En az ${filters.minPrice} ₺`, tur: "minPrice" });
   if (filters.maxPrice) rozetler.push({ anahtar: "max", etiket: `En çok ${filters.maxPrice} ₺`, tur: "maxPrice" });
@@ -150,7 +162,7 @@ const acikFiltreler = computed(() => {
 });
 
 function rozetiKaldir(rozet) {
-  if (rozet.tur === "category" || rozet.tur === "store") {
+  if (rozet.tur === "category" || rozet.tur === "store" || rozet.tur === "brand") {
     filters[rozet.tur] = filters[rozet.tur].filter((slug) => slug !== rozet.deger);
     return;
   }
@@ -159,7 +171,7 @@ function rozetiKaldir(rozet) {
 }
 
 function reset() {
-  Object.assign(filters, { q: "", category: [], store: [], minPrice: "", maxPrice: "", inStock: false, sort: "newest", page: 1 });
+  Object.assign(filters, { q: "", category: [], store: [], brand: [], minPrice: "", maxPrice: "", inStock: false, sort: "newest", page: 1 });
 }
 
 let debounce;
@@ -179,7 +191,7 @@ watch(
 // Onay kutuları diziyi YERİNDE değiştirir; referans aynı kaldığı için
 // dizinin kendisini izlemek tetiklemez. Birleştirilmiş hali izleniyor.
 watch(
-  () => [filters.category.join(","), filters.store.join(","), filters.sort, filters.inStock],
+  () => [filters.category.join(","), filters.store.join(","), filters.brand.join(","), filters.sort, filters.inStock],
   () => {
     if (adrestenOkunuyor) return;
     filters.page = 1;
@@ -220,12 +232,14 @@ watch(
 );
 
 onMounted(async () => {
-  const [categoryList, storeList] = await Promise.all([
+  const [categoryList, storeList, brandList] = await Promise.all([
     api.get("/categories"),
-    api.get("/storefront/stores")
+    api.get("/storefront/stores"),
+    api.get("/brands")
   ]);
   categories.value = categoryList.items;
   stores.value = storeList.items;
+  brands.value = brandList.items;
   await load();
 });
 </script>
@@ -334,6 +348,21 @@ onMounted(async () => {
               <input v-model="filters.category" type="checkbox" :value="category.slug" class="rounded border-ink-300" />
               <span class="flex-1 truncate">{{ category.name }}</span>
               <span class="text-xs text-ink-400">{{ category.productCount }}</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend class="field-label">Marka</legend>
+          <div class="max-h-52 space-y-1 overflow-y-auto pr-1">
+            <label
+              v-for="marka in brands"
+              :key="marka.id"
+              class="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm text-ink-700 hover:bg-ink-50"
+            >
+              <input v-model="filters.brand" type="checkbox" :value="marka.slug" class="rounded border-ink-300" />
+              <span class="flex-1 truncate">{{ marka.name }}</span>
+              <span class="text-xs text-ink-400">{{ marka.productCount }}</span>
             </label>
           </div>
         </fieldset>

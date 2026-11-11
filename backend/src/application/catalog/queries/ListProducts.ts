@@ -17,6 +17,7 @@ export interface ProductFilters {
   q?: unknown;
   category?: unknown;
   store?: unknown;
+  brand?: unknown;
   minPrice?: unknown;
   maxPrice?: unknown;
   inStock?: unknown;
@@ -61,6 +62,7 @@ export interface NormalizedProductFilters {
   /** Boş dizi "filtre yok" demektir; birden çok kategori VEYA'lanır. */
   readonly categorySlugs: readonly string[];
   readonly storeSlugs: readonly string[];
+  readonly brandSlugs: readonly string[];
   readonly minPriceCents: number | null;
   readonly maxPriceCents: number | null;
   readonly inStockOnly: boolean;
@@ -106,6 +108,7 @@ export class ListProductsHandler implements Handler<ListProductsQuery, Row> {
       search: typeof filters.q === "string" ? filters.q.trim().slice(0, 100) : "",
       categorySlugs: slugListesi(filters.category),
       storeSlugs: slugListesi(filters.store),
+      brandSlugs: slugListesi(filters.brand),
       minPriceCents: price(filters.minPrice),
       maxPriceCents: price(filters.maxPrice),
       inStockOnly: String(filters.inStock) === "true",

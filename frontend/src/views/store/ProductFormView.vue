@@ -27,10 +27,12 @@ const form = reactive({
   galleryUrls: [],
   sku: "",
   categoryId: "",
+  brandId: "",
   status: "draft"
 });
 
 const categories = ref([]);
+const brands = ref([]);
 const yukleniyor = ref(false);
 const dosyaAlani = ref(null);
 const galeriAlani = ref(null);
@@ -131,6 +133,7 @@ const loading = ref(true);
 async function load() {
   try {
     categories.value = (await api.get("/categories")).items;
+    brands.value = (await api.get("/brands")).items ?? [];
 
     if (isEdit.value) {
       // Panel listesi üzerinden ürünü bul: ayrı bir uç açmadan düzenleme.
@@ -149,6 +152,7 @@ async function load() {
         galleryUrls: [...(product.galleryUrls ?? [])],
         sku: product.sku || "",
         categoryId: product.categoryId || "",
+        brandId: product.brandId || "",
         status: product.status
       });
     }
@@ -161,7 +165,7 @@ async function submit() {
   error.value = "";
   saving.value = true;
   try {
-    const payload = { ...form, categoryId: form.categoryId || null, sku: form.sku || null };
+    const payload = { ...form, categoryId: form.categoryId || null, brandId: form.brandId || null, sku: form.sku || null };
     const result = isEdit.value
       ? await api.put(`/stores/${storeId()}/products/${route.params.productId}`, payload)
       : await api.post(`/stores/${storeId()}/products`, payload);
@@ -287,6 +291,17 @@ onMounted(load);
             <option v-for="category in categories" :key="category.id" :value="category.id">
               {{ category.name }}
             </option>
+          </select>
+        </FormField>
+        <!--
+          Marka kategoriden ayrı: kategori ürünün NE olduğunu ("Mouse"),
+          marka KİMİN ürettiğini ("Logitech") söyler. İkisi de isteğe bağlı,
+          çünkü markasız jenerik ürünler de satılabiliyor.
+        -->
+        <FormField id="brandId" label="Marka" hint="Ürün markalar sayfasında bu markanın altında listelenir.">
+          <select id="brandId" v-model="form.brandId" class="field">
+            <option value="">Seçilmedi</option>
+            <option v-for="marka in brands" :key="marka.id" :value="marka.id">{{ marka.name }}</option>
           </select>
         </FormField>
         <FormField id="status" label="Durum" hint="Taslak ürünler vitrinde görünmez.">

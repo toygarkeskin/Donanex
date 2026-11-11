@@ -3,12 +3,14 @@ import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/auth";
+import BrandAvatar from "../../components/BrandAvatar.vue";
 import ProductCard from "../../components/ProductCard.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 
 const auth = useAuthStore();
 const products = ref([]);
 const stores = ref([]);
+const brands = ref([]);
 const loading = ref(true);
 
 /*
@@ -18,12 +20,15 @@ const loading = ref(true);
  */
 onMounted(async () => {
   try {
-    const [latest, storeList] = await Promise.all([
+    const [latest, storeList, brandList] = await Promise.all([
       api.get("/products?pageSize=12"),
-      api.get("/storefront/stores?pageSize=4")
+      api.get("/storefront/stores?pageSize=4"),
+      api.get("/brands")
     ]);
     products.value = latest.items;
     stores.value = storeList.items.slice(0, 4);
+    // Ana sayfada en çok ürünü olan sekiz marka; tamamı markalar sayfasında.
+    brands.value = [...(brandList.items ?? [])].sort((a, b) => b.productCount - a.productCount).slice(0, 8);
   } finally {
     loading.value = false;
   }
@@ -80,6 +85,34 @@ onMounted(async () => {
       <LoadingBlock v-if="loading" :rows="2" />
       <div v-else class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <ProductCard v-for="product in products" :key="product.id" :product="product" />
+      </div>
+    </section>
+
+    <!--
+      Markalar mağazalardan AYRI bir bölüm: mağaza satıcıdır, marka
+      üreticidir. Kullanıcı çoğu zaman "Logitech mouse" arar, "Teknoloji
+      Deposu'nun mouse'u" değil.
+    -->
+    <section v-if="brands.length">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-lg font-bold text-ink-900">Markalar</h2>
+        <RouterLink :to="{ name: 'brands' }" class="text-sm font-medium text-brand-600 hover:text-brand-700">
+          Tümünü gör →
+        </RouterLink>
+      </div>
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <RouterLink
+          v-for="marka in brands"
+          :key="marka.id"
+          :to="{ name: 'brand', params: { slug: marka.slug } }"
+          class="card flex items-center gap-3 p-3 transition hover:shadow-md"
+        >
+          <BrandAvatar :brand="marka" size="h-11 w-11" />
+          <div class="min-w-0">
+            <p class="truncate text-sm font-semibold text-ink-800">{{ marka.name }}</p>
+            <p class="text-xs text-ink-500">{{ marka.productCount }} ürün</p>
+          </div>
+        </RouterLink>
       </div>
     </section>
 
