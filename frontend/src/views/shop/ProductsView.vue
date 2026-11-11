@@ -249,12 +249,13 @@ onMounted(async () => {
 
     <div class="grid gap-6 lg:grid-cols-[260px_1fr]">
       <!--
-        top-32: yapışkan başlık (logo satırı + kategori şeridi) kadar aşağıda
-        durur, yoksa filtreler başlığın altında kalırdı. Yalnızca geniş
-        ekranda yapışkan; dar ekranda kenar çubuğu zaten akar.
+        top-28: geniş ekranda yapışkan başlığın yüksekliği kadar (logo satırı
+        64px + kategori şeridi ~44px) aşağıda durur, yoksa filtrelerin üstü
+        başlığın altında kalırdı. Yalnızca geniş ekranda yapışkan — telefonda
+        başlığın kendisi de yapışkan değil, kenar çubuğu sayfayla akar.
       -->
       <aside
-        class="card h-fit space-y-4 p-4 lg:sticky lg:top-32 lg:block"
+        class="card h-fit space-y-4 p-4 lg:sticky lg:top-28 lg:block"
         :class="filtrelerAcik ? 'block' : 'hidden'"
       >
         <div>

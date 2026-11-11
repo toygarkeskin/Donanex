@@ -1,0 +1,86 @@
+<script setup>
+/*
+ * Arayüz ikonları.
+ *
+ * Önceden simgeler emoji idi (🛍️ 🏠 🏷️ 👤). Emoji her işletim sisteminde
+ * BAŞKA türlü çizilir — Windows'ta düz, iPhone'da parlak ve renkli — yani
+ * markanın görünüşü kullanıcının telefonuna kalıyordu. Ayrıca emoji renk
+ * almaz: yanındaki yazı griyken simge rengarenk duruyordu.
+ *
+ * Buradaki ikonlar BrandLogo ile aynı dili konuşuyor: aynı çizgi kalınlığı
+ * (1.8), yuvarlatılmış uçlar ve yuvarlatılmış köşeler. Renk currentColor'dan
+ * gelir, yani yanındaki yazıyla birlikte değişir ve iki temada da doğru çıkar.
+ */
+defineProps({
+  name: { type: String, required: true },
+  size: { type: Number, default: 22 }
+});
+</script>
+
+<template>
+  <svg
+    :width="size"
+    :height="size"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+    class="shrink-0"
+  >
+    <!-- Sepet: kulplu çanta. Gövde logodaki çip gövdesi gibi yuvarlatılmış. -->
+    <template v-if="name === 'sepet'">
+      <path d="M4.6 8.6h14.8l-1.2 10.1a2.6 2.6 0 0 1-2.6 2.3H8.4a2.6 2.6 0 0 1-2.6-2.3L4.6 8.6Z" />
+      <path d="M9 8.6V7.1a3 3 0 0 1 6 0v1.5" />
+    </template>
+
+    <!-- Ana sayfa -->
+    <template v-else-if="name === 'ev'">
+      <path d="M3.6 10.4 12 3.8l8.4 6.6" />
+      <path d="M5.9 9.6V19a1.6 1.6 0 0 0 1.6 1.6h9A1.6 1.6 0 0 0 18.1 19V9.6" />
+      <path d="M9.9 20.6v-5.2h4.2v5.2" />
+    </template>
+
+    <!-- Ürünler: dört yuvarlatılmış kare, logodaki çip gövdesinin yankısı -->
+    <template v-else-if="name === 'urunler'">
+      <rect x="3.6" y="3.6" width="7.2" height="7.2" rx="2.2" />
+      <rect x="13.2" y="3.6" width="7.2" height="7.2" rx="2.2" />
+      <rect x="3.6" y="13.2" width="7.2" height="7.2" rx="2.2" />
+      <rect x="13.2" y="13.2" width="7.2" height="7.2" rx="2.2" />
+    </template>
+
+    <!-- Hesap -->
+    <template v-else-if="name === 'hesap'">
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M4.8 20.4a7.2 7.2 0 0 1 14.4 0" />
+    </template>
+
+    <!-- Arama -->
+    <template v-else-if="name === 'arama'">
+      <circle cx="10.8" cy="10.8" r="6.4" />
+      <path d="M15.6 15.6l4.6 4.6" />
+    </template>
+
+    <template v-else-if="name === 'sol'">
+      <path d="M14.8 5.2 8 12l6.8 6.8" />
+    </template>
+
+    <template v-else-if="name === 'sag'">
+      <path d="M9.2 5.2 16 12l-6.8 6.8" />
+    </template>
+
+    <!-- Mağaza: tenteli dükkân -->
+    <template v-else-if="name === 'magaza'">
+      <path d="M3.6 8.4h16.8V19a1.6 1.6 0 0 1-1.6 1.6H5.2A1.6 1.6 0 0 1 3.6 19V8.4Z" />
+      <path d="M3.6 8.4 5.4 3.8h13.2l1.8 4.6" />
+      <path d="M9.6 20.6v-6h4.8v6" />
+    </template>
+
+    <!-- Menü -->
+    <template v-else-if="name === 'menu'">
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </template>
+  </svg>
+</template>

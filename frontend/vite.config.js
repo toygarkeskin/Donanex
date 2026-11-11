@@ -16,7 +16,12 @@ export default defineConfig({
     proxy: {
       "/api": { target: BACKEND, changeOrigin: false },
       "/oauth": { target: BACKEND, changeOrigin: false },
-      "/.well-known": { target: BACKEND, changeOrigin: false }
+      "/.well-known": { target: BACKEND, changeOrigin: false },
+      // Yüklenen ürün görselleri. Bu yol "/api" ağacının dışında; listede
+      // olmadığı için geliştirme sunucusu isteği SPA'ya yutturuyor ve
+      // index.html döndürüyordu — yani yerelde hiçbir yüklenmiş ürün
+      // görseli görünmüyordu. Üretimde aynı yönlendirmeyi nginx yapıyor.
+      "/yuklenen": { target: BACKEND, changeOrigin: false }
     }
   },
   build: {

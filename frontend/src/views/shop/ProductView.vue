@@ -86,13 +86,13 @@ watch(() => route.fullPath, load);
     <RouterLink :to="{ name: 'products' }" class="btn-primary">Ürünlere dön</RouterLink>
   </EmptyState>
 
-  <div v-else class="grid gap-8 lg:grid-cols-2">
+  <div v-else class="grid gap-5 lg:grid-cols-2 lg:gap-8">
     <!--
       Telefonda görsel alçak tutuluyor: 420px'te "Sepete ekle" katlamanın
       altında kalıyor ve satın almak için kaydırmak gerekiyordu. Geniş ekranda
       iki sütun yan yana olduğu için böyle bir sorun yok, görsel büyük kalıyor.
     -->
-    <div class="card flex items-center justify-center overflow-hidden bg-surface p-4 sm:p-8">
+    <div class="card flex items-center justify-center overflow-hidden bg-surface p-3 sm:p-8">
       <img :src="product.imageUrl" :alt="product.name" class="max-h-56 w-full object-contain sm:max-h-[420px]" />
     </div>
 
@@ -118,40 +118,64 @@ watch(() => route.fullPath, load);
         🏪 {{ product.storeName }}
       </RouterLink>
 
-      <p class="mt-6 text-3xl font-bold text-ink-900">{{ money(product.price) }}</p>
-
-      <p v-if="product.stock > 0" class="mt-2 text-sm text-ink-500">
-        Stokta <strong class="text-ink-800">{{ product.stock }}</strong> adet
-      </p>
-      <p v-else class="mt-2 text-sm font-medium text-red-600">Bu ürün şu anda stokta yok.</p>
-
-      <div v-if="product.stock > 0" class="mt-6 flex flex-wrap items-end gap-3">
-        <div>
-          <label for="quantity" class="field-label">Adet</label>
-          <input
-            id="quantity"
-            v-model="quantity"
-            type="number"
-            min="1"
-            :max="Math.min(99, product.stock)"
-            class="field w-24"
-          />
-        </div>
-        <button type="button" class="btn-primary h-10 px-6" :disabled="adding" @click="addToCart">
-          {{ adding ? "Ekleniyor…" : "Sepete ekle" }}
-        </button>
+      <!--
+        Açıklama fiyatın ÜSTÜNDE.
+        Önceden sıra şöyleydi: fiyat, stok, adet, sepete ekle, uyarı — ve
+        ancak ondan sonra açıklama. Oysa kullanıcı bir ürüne tıkladığında
+        önce "bu ne?" diye bakar, fiyata kararını ondan sonra verir. Telefonda
+        açıklama katlamanın çok altında kalıyordu.
+      -->
+      <div class="mt-4">
+        <h2 class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">Ürün açıklaması</h2>
+        <p class="whitespace-pre-line text-sm leading-relaxed text-ink-700">{{ product.description }}</p>
       </div>
 
-      <AlertBox v-if="product.stock > 0 && product.stock <= 5" tone="warn" class="mt-4">
+      <!--
+        Satın alma kutusu: SOLDA adet ve düğme, SAĞDA fiyat — telefonda da
+        aynı satırda. Ölçüler 375px'e göre seçildi (adet 56px + düğme ~105px
+        + fiyat ~112px), bu yüzden alta atmıyor. 320px gibi daha dar bir
+        ekranda flex-wrap devreye girer: yatay kaydırma yerine düzgün bir
+        alt satır.
+      -->
+      <div class="card mt-4 p-3 sm:p-4">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+          <div v-if="product.stock > 0" class="flex items-end gap-2">
+            <div>
+              <label for="quantity" class="mb-1 block text-[11px] font-medium text-ink-500">Adet</label>
+              <input
+                id="quantity"
+                v-model="quantity"
+                type="number"
+                min="1"
+                :max="Math.min(99, product.stock)"
+                class="field h-10 w-14 px-2 text-center"
+              />
+            </div>
+            <button
+              type="button"
+              class="btn-primary h-10 shrink-0 px-4 text-sm sm:px-6"
+              :disabled="adding"
+              @click="addToCart"
+            >
+              {{ adding ? "Ekleniyor…" : "Sepete ekle" }}
+            </button>
+          </div>
+          <p v-else class="text-sm font-medium text-red-600">Bu ürün şu anda stokta yok.</p>
+
+          <div class="ml-auto text-right">
+            <p class="text-xl font-bold text-ink-900 sm:text-3xl">{{ money(product.price) }}</p>
+            <p v-if="product.stock > 0" class="mt-0.5 text-xs text-ink-500">
+              Stokta <strong class="font-semibold text-ink-700">{{ product.stock }}</strong> adet
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <AlertBox v-if="product.stock > 0 && product.stock <= 5" tone="warn" class="mt-3">
         Son {{ product.stock }} ürün — stok bitmeden sipariş verin.
       </AlertBox>
 
-      <div class="mt-8">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-ink-500">Ürün açıklaması</h2>
-        <p class="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-700">{{ product.description }}</p>
-      </div>
-
-      <dl v-if="product.sku" class="mt-6 flex gap-2 text-sm">
+      <dl v-if="product.sku" class="mt-4 flex gap-2 text-sm">
         <dt class="text-ink-500">Stok kodu:</dt>
         <dd class="font-medium text-ink-800">{{ product.sku }}</dd>
       </dl>
@@ -163,7 +187,7 @@ watch(() => route.fullPath, load);
         Tahmini teslim tarihi YOK — öyle bir veri tutulmuyor, uydurmak
         müşteriye yanlış söz vermek olurdu.
       -->
-      <div class="mt-8 space-y-3">
+      <div class="mt-5 space-y-3">
         <div class="card flex items-start gap-3 p-4">
           <span class="text-lg" aria-hidden="true">🚚</span>
           <div class="text-sm">
