@@ -1007,6 +1007,44 @@ test("sistem yöneticisi panoyu, mağazaları ve kullanıcıları yönetir", opt
   assert.ok(dashboard.data.activeStores >= 4);
   assert.equal(dashboard.data.last14Days.length, 14);
 
+  /*
+   * Panonun ÇİZİLEBİLMESİ için gereken alanların hepsi burada sayılıyor.
+   *
+   * Sebebi dürüst bir sınır: yönetim paneline tarayıcıyla girip gözle bakmak
+   * her zaman mümkün olmuyor (yönetici parolası ilk kurulumda üretiliyor ve
+   * kimsede durmuyor). Bu yüzden "arayüzün okuduğu her alan geliyor mu"
+   * sorusunu teste bağladık — bir alan adı değişirse ya da düşerse, pano
+   * sessizce boş kutular göstermek yerine burada kırılır.
+   */
+  for (const alan of [
+    "activeUsers",
+    "activeStores",
+    "pendingStores",
+    "activeProducts",
+    "totalOrders",
+    "pendingPayment",
+    "openTickets"
+  ]) {
+    assert.equal(typeof dashboard.data[alan], "number", `${alan} sayı olarak gelmeli`);
+  }
+  assert.equal(typeof dashboard.data.paidVolume?.cents, "number", "paidVolume para nesnesi olmalı");
+
+  for (const gun of dashboard.data.last14Days) {
+    assert.match(gun.date, /^\d{4}-\d{2}-\d{2}$/, "gün tarihi YYYY-AA-GG olmalı");
+    assert.equal(typeof gun.orders, "number");
+    assert.ok(Number.isFinite(Number(gun.revenueCents)), `${gun.date}: ciro sayıya çevrilemiyor`);
+  }
+
+  // Panodaki "Son siparişler" listesi bu uçtan besleniyor ve şu alanları okuyor.
+  const sonSiparisler = await admin.get("/api/admin/orders?pageSize=6");
+  assert.ok(sonSiparisler.data.items.length > 0, "panoda gösterilecek sipariş olmalı");
+  for (const siparis of sonSiparisler.data.items) {
+    for (const alan of ["id", "orderNumber", "customerName", "placedAt", "status"]) {
+      assert.ok(siparis[alan], `sipariş listesinde ${alan} eksik`);
+    }
+    assert.equal(typeof siparis.total?.cents, "number", "sipariş tutarı para nesnesi olmalı");
+  }
+
   assert.ok((await admin.get("/api/admin/stores")).data.total >= 4);
   assert.ok((await admin.get("/api/admin/users")).data.total >= 5);
   assert.ok((await admin.get("/api/admin/orders")).data.total > 0);
