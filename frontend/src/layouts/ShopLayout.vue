@@ -137,7 +137,13 @@ async function signOut() {
       class="sticky top-0 border-b border-ink-200 bg-surface/95 backdrop-blur"
       :class="menuOpen ? 'z-50' : 'z-30'"
     >
-      <div class="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 lg:h-16 lg:gap-4">
+      <!--
+        gap-2 sm:gap-3 — 320px'lik (iPhone SE) ekranda logo, tema düğmesi,
+        "Giriş yap" ve menü düğmesi toplamı satıra 1px sığmıyor ve bütün
+        sayfa yatay kayıyordu. Yan boşluk (px-4) DEĞİŞMEDİ: altındaki arama
+        ve içerikle hizası bozulmasın diye yalnızca öğe arası daraldı.
+      -->
+      <div class="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:gap-3 lg:h-16 lg:gap-4">
           <RouterLink :to="{ name: 'home' }" class="shrink-0" aria-label="Donanex ana sayfa">
             <BrandLogo />
           </RouterLink>
