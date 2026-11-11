@@ -299,3 +299,29 @@ Kod tarafı rollback için ayrı araca gerek yok: üç dalın geçmişi düz, bi
 **Bunun bedeli:** göç ileri yönde kırılırsa otomatik dönüş yok — yedekten geri yükleme elle
 yapılır ve o aradaki veri gider. Kabul edildi, çünkü alternatifi çalıştığı denenmemiş bir
 `down` zinciri.
+
+## 29. Telefonda deneme HTTPS tüneliyle; yerel dönüş adresleri her zaman kayıtlı
+
+Telefondan yerel ağ adresiyle (`http://192.168.x.x:8090`) girilemiyor ve bu bir hata değil:
+PKCE `crypto.subtle` istiyor, tarayıcı onu yalnızca güvenli bağlamda veriyor. Düz HTTP'de
+giriş ekranı "hazırlanıyor"da takılıyor; service worker ve "uygulamayı yükle" de aynı duvara
+çarpıyor. Çözüm olarak Cloudflare hızlı tüneli seçildi ve `scripts/tunel.js` ile tek komuta
+indirildi ([TELEFONDA-DENEME.md](TELEFONDA-DENEME.md)).
+
+Kendi sertifikasını üretip (mkcert gibi) yerel HTTPS kurmak denenmedi: her telefona kök
+sertifika yüklemek gerekirdi, iOS'ta bu birkaç ayar ekranı sürüyor ve kurulum bilgisayara
+özel kalıyor. Tünel hiçbir şey yüklemiyor.
+
+Tünelin bedeli adresin her açılışta değişmesi. Bu yüzden betik `PUBLIC_URL`'i kendisi yazıp
+`api`'yi yeniden başlatıyor; adres elle takip edilmiyor.
+
+**Bu kararın ortaya çıkardığı gerçek arıza** ve kalıcı düzeltmesi: `redirect_uris` listesinin
+tek kaynağı `PUBLIC_URL`'di ve `upsertClient` listeyi üzerine yazıyor. `PUBLIC_URL` tünele
+çevrildiği an bilgisayardan giriş "redirect_uri bu istemci için kayıtlı değil" diye kırıldı —
+hata mesajı sebebi hiç söylemiyor. Artık `EXTRA_REDIRECT_URIS` var: geliştirmede
+`localhost:8090` ve `localhost:5173` **her zaman** kayıtlı kalıyor, üretimde liste boş.
+Boş dize "verilmedi" sayılıyor, çünkü compose tanımsız değişkeni boş geçiriyor ve `??`
+buna düşmediği için ayarı compose'tan geçirmek varsayılanı sessizce silerdi.
+
+**Bunun bedeli:** geliştirme ortamında `localhost`'a dönen iki redirect_uri kayıtlı duruyor.
+Üretimde durmadığı ve açık istemcinin PKCE zorunluluğu kalktığı için kabul edildi.

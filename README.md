@@ -115,7 +115,8 @@ Bu kuralların hiçbiri yalnızca belgede yazmaz: `tests/architecture` kuralı �
 
 Ayrıntılar: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/DATA-MODEL.md](docs/DATA-MODEL.md) ·
 [docs/AUTH.md](docs/AUTH.md) · [docs/API.md](docs/API.md) · [docs/DECISIONS.md](docs/DECISIONS.md) ·
-[docs/YEDEKLEME.md](docs/YEDEKLEME.md)
+[docs/YEDEKLEME.md](docs/YEDEKLEME.md) ·
+[docs/TELEFONDA-DENEME.md](docs/TELEFONDA-DENEME.md)
 
 ### Klasörler
 

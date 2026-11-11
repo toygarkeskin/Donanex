@@ -74,3 +74,42 @@ test("PUBLIC_URL sondaki eğik çizgiden arındırılır ve issuer olur", () => 
   assert.equal(config.publicUrl, "https://donanex.test");
   assert.equal(config.issuer, "https://donanex.test");
 });
+
+test("PUBLIC_URL tünele çevrilse bile yerel giriş adresi kayıtlı kalır", () => {
+  /*
+   * Gerçek bir arıza: telefonda denemek için PUBLIC_URL bir tünel adresine
+   * çevrilince bilgisayardaki giriş "redirect_uri bu istemci için kayıtlı
+   * değil" diye kırıldı. Sebebi redirect_uris'in tek kaynağının PUBLIC_URL
+   * olmasıydı.
+   */
+  const config = loadConfig({ ...valid, PUBLIC_URL: "https://rastgele-kelimeler.trycloudflare.com" });
+  assert.ok(
+    config.extraRedirectUris.includes("http://localhost:8090/auth/callback"),
+    "geliştirmede yerel adres her zaman kabul edilmeli"
+  );
+  assert.ok(config.extraRedirectUris.includes("http://localhost:5173/auth/callback"), "Vite adresi de kalmalı");
+});
+
+test("Üretimde ek giriş adresi varsayılan olarak yoktur", () => {
+  // localhost'a dönen bir redirect_uri üretimde yalnızca saldırı yüzeyi.
+  const config = loadConfig({ ...valid, NODE_ENV: "production", PAYMENTS_MODE: "live" });
+  assert.deepEqual(config.extraRedirectUris, []);
+});
+
+test("EXTRA_REDIRECT_URIS virgülle ayrılır ve boşluklar atılır", () => {
+  const config = loadConfig({
+    ...valid,
+    EXTRA_REDIRECT_URIS: " https://a.test/auth/callback , https://b.test/auth/callback ,, "
+  });
+  assert.deepEqual(config.extraRedirectUris, ["https://a.test/auth/callback", "https://b.test/auth/callback"]);
+});
+
+test("Boş EXTRA_REDIRECT_URIS varsayılanı silmez", () => {
+  /*
+   * docker compose, tanımsız bir değişkeni BOŞ DİZE olarak geçiriyor.
+   * Boş dize "verilmedi" sayılmazsa, ayarı compose'tan geçirmek yerel giriş
+   * adreslerini sessizce siler ve hata ancak telefonda denerken çıkar.
+   */
+  const config = loadConfig({ ...valid, EXTRA_REDIRECT_URIS: "" });
+  assert.ok(config.extraRedirectUris.includes("http://localhost:8090/auth/callback"));
+});

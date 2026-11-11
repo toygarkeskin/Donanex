@@ -32,6 +32,8 @@ export interface AppConfig {
   readonly isProduction: boolean;
   readonly isTest: boolean;
   readonly publicUrl: string;
+  /** PUBLIC_URL'in yanında giriş dönüşü için kabul edilecek EK adresler. */
+  readonly extraRedirectUris: readonly string[];
   /** Jetonların "iss" alanı. Doğrulayan taraf bu değeri bekler. */
   readonly issuer: string;
   /** Express'in "trust proxy" ayarı: atlanacak vekil sayısı ya da false. */
@@ -60,6 +62,33 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     isProduction,
     isTest: env.NODE_ENV === "test",
     publicUrl,
+    /*
+     * Giriş dönüşünün kabul edileceği EK adresler.
+     *
+     * redirect_uris'in tek kaynağı PUBLIC_URL olduğunda, PUBLIC_URL'i bir
+     * tünele çevirmek YERELDEKİ girişi anında kırıyor: tarayıcı
+     * http://localhost:8090/auth/callback gönderiyor, kayıtlı tek adres
+     * tünelin adresi oluyor, istek "redirect_uri kayıtlı değil" diye
+     * reddediliyor. Telefonda denemek için PUBLIC_URL'i değiştirmek olağan
+     * bir iş olduğundan geliştirmede yerel adresler HER ZAMAN kayıtlı kalır.
+     *
+     * Üretimde varsayılan BOŞ: orada localhost'a dönen bir redirect_uri
+     * tutmanın faydası yok, yalnızca saldırı yüzeyini genişletir.
+     *
+     * WEB_PORT'u değiştirdiysen bu değişkeni elle vermen gerekir; api
+     * konteyneri compose'un yayın portunu görmüyor.
+     */
+    extraRedirectUris: Object.freeze(
+      String(
+        // Boş dize de "verilmedi" sayılır: compose tanımsız değişkeni boş
+        // geçiriyor, "??" buna düşmediği için varsayılan kaybolurdu.
+        env.EXTRA_REDIRECT_URIS ||
+          (isProduction ? "" : "http://localhost:8090/auth/callback,http://localhost:5173/auth/callback")
+      )
+        .split(",")
+        .map((adres) => adres.trim())
+        .filter(Boolean)
+    ),
     // Jetonların "iss" alanı. Doğrulayan taraf bu değeri bekler.
     issuer: publicUrl,
     trustProxy: env.TRUST_PROXY ? Number(env.TRUST_PROXY) || env.TRUST_PROXY : false,

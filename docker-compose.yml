@@ -43,6 +43,10 @@ x-backend-env: &backend-env
   SMTP_PASS: ${SMTP_PASS:-}
   SMTP_FROM: ${SMTP_FROM:-Donanex <bildirim@donanex.test>}
   PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8090}
+  # PUBLIC_URL bir tünele çevrildiğinde yereldeki girişin kırılmaması için
+  # kabul edilen EK dönüş adresleri. Verilmezse geliştirmede localhost
+  # adresleri kendiliğinden eklenir, üretimde hiçbiri eklenmez.
+  EXTRA_REDIRECT_URIS: ${EXTRA_REDIRECT_URIS:-}
   JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?.env içinde tanımlı olmalı — generate-env.js ile üretin}
   JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?.env içinde tanımlı olmalı}
   TOKEN_PEPPER: ${TOKEN_PEPPER:?.env içinde tanımlı olmalı}

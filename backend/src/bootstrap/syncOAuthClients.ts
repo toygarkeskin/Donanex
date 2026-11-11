@@ -24,11 +24,15 @@ export async function syncOAuthClients({
     clientId: "donanex-web",
     name: "Donanex Web",
     secretHash: null,
-    redirectUris: [
-      `${base}/auth/callback`,
-      // Vite geliştirme sunucusu için.
-      "http://localhost:5173/auth/callback"
-    ],
+    /*
+     * upsertClient bu listeyi ÜZERİNE YAZIYOR, eklemiyor. Yani burada
+     * olmayan bir adres bir sonraki açılışta sessizce kaybolur; elle
+     * veritabanına eklenen adresler de öyle. Tünelle denerken yerel
+     * girişin kırılma sebebi buydu.
+     *
+     * Aynı adres iki kaynaktan gelebileceği için Set ile tekilleştiriliyor.
+     */
+    redirectUris: [...new Set([`${base}/auth/callback`, ...config.extraRedirectUris])],
     grantTypes: [GrantTypes.AUTHORIZATION_CODE, GrantTypes.REFRESH_TOKEN],
     scopes: ["openid", "profile", "email", "shop", "store:manage", "admin"],
     isConfidential: false,

@@ -118,6 +118,7 @@ async function startHarness() {
     isProduction: false,
     isTest: true,
     publicUrl: "http://localhost:8090",
+    extraRedirectUris: [],
     issuer: "http://localhost:8090",
     trustProxy: false,
     cookieSecure: false,
