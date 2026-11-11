@@ -72,15 +72,57 @@ beklenen davranış, hata değil.
 
 ## Açılışta otomatik başlatma
 
-Görev zamanlayıcıya kayıtlıysa bilgisayar her açıldığında tünel kendiliğinden
-kuruluyor. Kaydetme ve kaldırma komutları:
+`Donanex-Tunel` adlı görev, oturum açıldıktan 30 saniye sonra betiği çalıştırıyor.
+Betik Docker'ı beklediği için bu gecikme yalnızca açılış kalabalığını azaltmak
+için var.
+
+### Görevin iki ayarı neden böyle
+
+**`StopOnIdleEnd` kapalı.** Windows'un varsayılanı bunu AÇIK bırakıyor ve
+bilgisayar boşta kalmayı bıraktığında görevi durduruyor. Tünel saatlerce açık
+kalacağı için bu ayar betiği birkaç saniye içinde Ctrl+C ile öldürüyordu;
+`LastTaskResult` 0xC000013A (CONTROL_C_EXIT) oluyor, `cloudflared` yetim
+kalıyor ve adres birden cevap vermez oluyordu. Hata mesajı yoktu: görev
+"Ready" görünüyor, sanki düzgün bitmiş gibi.
+
+Yetim kalan tünel ayrıca `services.exe` altına geçiyor ve yönetici yetkisi
+olmadan kapatılamıyor. Bilgisayar yeniden başlayınca gidiyor.
+
+**`ExecutionTimeLimit` sıfır**, yani sınırsız. Varsayılan 3 gün; tünelin
+günlerce açık kalması olağan.
+
+Görev `node.exe`'yi doğrudan çalıştırıyor, araya `powershell` sarmalayıcısı
+koymuyor. Bedeli: görev çalışırken bir konsol penceresi açık duruyor. O
+pencereyi kapatmak tüneli de kapatır.
+
+Görev kaybolursa yeniden kaydetmek için (proje kökünde çalıştırın):
 
 ```powershell
-schtasks /query /tn Donanex-Tunel
+$proje = (Get-Location).Path; $node = (Get-Command node).Source; $eylem = New-ScheduledTaskAction -Execute $node -Argument "scripts/tunel.js" -WorkingDirectory $proje; $tetik = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN$env:USERNAME"; $tetik.Delay = "PT30S"; $ayar = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1); Register-ScheduledTask -TaskName "Donanex-Tunel" -Action $eylem -Trigger $tetik -Settings $ayar -RunLevel Limited -Force
+```
+
+Durumu görmek, elle çalıştırmak, durdurmak ve kaldırmak:
+
+```powershell
+Get-ScheduledTaskInfo -TaskName Donanex-Tunel
 ```
 
 ```powershell
-schtasks /delete /tn Donanex-Tunel /f
+Start-ScheduledTask -TaskName Donanex-Tunel
+```
+
+```powershell
+Stop-ScheduledTask -TaskName Donanex-Tunel
+```
+
+```powershell
+Unregister-ScheduledTask -TaskName Donanex-Tunel -Confirm:$false
+```
+
+O anki adres `.tunel/adres.txt` dosyasında duruyor:
+
+```powershell
+Get-Content .tuneladres.txt
 ```
 
 Görev `.tunel/tunel.log` dosyasına yazıyor; bir şey ters giderse oraya bakın.

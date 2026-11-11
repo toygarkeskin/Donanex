@@ -42,6 +42,8 @@ const GUNLUK = path.join(TUNEL_DIZINI, "tunel.log");
 const YIGIN_BEKLEME_MS = 5 * 60 * 1000;
 /** cloudflared adresi normalde 5-10 saniyede veriyor. */
 const ADRES_BEKLEME_MS = 90 * 1000;
+/** api yeniden başlatıldıktan sonra sağlıklı olması için. */
+const API_BEKLEME_MS = 120 * 1000;
 
 const CLOUDFLARED_ADAYLARI = [
   "C:\\Program Files (x86)\\cloudflared\\cloudflared.exe",
@@ -124,6 +126,13 @@ function apiSaglikli() {
   return (sonuc.stdout || "").split(/\r?\n/).some((satir) => /^api\s+healthy/.test(satir.trim()));
 }
 
+/** Projenin ayakta olan konteyner sayısı. */
+function ayaktaSayisi() {
+  const sonuc = compose(["ps", "--format", "{{.Service}}"], { sessiz: true });
+  if (sonuc.status !== 0) return 0;
+  return (sonuc.stdout || "").split(/\r?\n/).filter((satir) => satir.trim()).length;
+}
+
 const bekle = (ms) => new Promise((coz) => setTimeout(coz, ms));
 
 /**
@@ -140,7 +149,16 @@ async function yiginiBekle() {
     if (apiSaglikli()) return true;
 
     const dockerVar = spawnSync("docker", ["info"], { encoding: "utf8", shell: false }).status === 0;
-    if (dockerVar && !baslatmaDenendi) {
+    /*
+     * Yığını YALNIZCA hiçbir konteyner ayakta değilken başlatıyoruz.
+     *
+     * Önce "api sağlıklı değilse up -d" deniyordu ve bu yan etkiliydi: sade
+     * "up -d", docker-compose.dev.yml ile başlatılmış servisleri override'sız
+     * yeniden kuruyor, yani db'nin 5434 portu yayından düşüyor ve bütünleşme
+     * testleri sessizce çalışmaz oluyor. Yığın zaten ayaktaysa beklemek doğru
+     * davranış: api büyük olasılıkla açılıyor.
+     */
+    if (dockerVar && !baslatmaDenendi && ayaktaSayisi() === 0) {
       yaz("Yigin ayakta degil, baslatiliyor: docker compose up -d");
       compose(["up", "-d"]);
       baslatmaDenendi = true;
@@ -218,11 +236,37 @@ function tuneliAc(exe, hedef) {
 
 // ---------------------------------------------------------------- akış
 
-function ayarlariUygula(adres) {
+/**
+ * api'nin saglikli olmasini bekler.
+ *
+ * Gerekli, cunku "docker compose up -d" sifir donse bile konteyner
+ * "created" durumunda kalabiliyor. Bu kontrol olmadan betik "hazir" diye
+ * banner basiyordu, oysa api hic calismiyordu; arıza ancak telefonda
+ * giriş denenince ortaya cikiyordu.
+ */
+async function apiyiBekle(sureMs) {
+  const bitis = Date.now() + sureMs;
+  while (Date.now() < bitis) {
+    if (apiSaglikli()) return true;
+    await bekle(3000);
+  }
+  return false;
+}
+
+async function ayarlariUygula(adres) {
   envYaz("PUBLIC_URL", adres);
   yaz(`PUBLIC_URL=${adres}`);
   yaz("api ve worker yeniden baslatiliyor (yeni issuer ve dönüş adresi için)");
   compose(["up", "-d", "--force-recreate", "api", "worker"]);
+
+  if (await apiyiBekle(API_BEKLEME_MS)) return true;
+
+  yaz("api saglikli olmadi, bir kez daha deneniyor: docker compose up -d api worker");
+  compose(["up", "-d", "api", "worker"]);
+  if (await apiyiBekle(API_BEKLEME_MS)) return true;
+
+  yaz("HATA: api ayaga kalkmadi. Gunluk: docker compose logs api");
+  return false;
 }
 
 function yereleDon(oncekiAdres) {
@@ -266,10 +310,13 @@ async function main() {
   yaz(`Tunel adresi: ${adres}`);
   fs.writeFileSync(ADRES_DOSYASI, adres + os.EOL);
 
-  ayarlariUygula(adres);
+  const hazir = await ayarlariUygula(adres);
 
   yaz("");
   yaz("===========================================================");
+  if (!hazir) {
+    yaz("  DIKKAT: tunel acik ama api calismiyor; giris calismaz.");
+  }
   yaz(`  Telefonda bu adresi acin: ${adres}`);
   yaz("  Surec yasadigi surece calisir.");
   yaz("  Elle calistirildiysa Ctrl+C; gorevden calisiyorsa:");
