@@ -6,6 +6,7 @@ import { useAuthStore } from "../../stores/auth";
 import ProductCard from "../../components/ProductCard.vue";
 import ProductImage from "../../components/ProductImage.vue";
 import BrandAvatar from "../../components/BrandAvatar.vue";
+import YataySerit from "../../components/YataySerit.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 
 const auth = useAuthStore();
@@ -116,9 +117,13 @@ onMounted(async () => {
       ürün ızgarası koymadan hareket katıyor. Mağazadan farklı bir eksen —
       kullanıcı çoğu zaman "Logitech mouse" arar.
     -->
+    <!--
+      Oklar başlık satırında: şeridin üstünde yüzen düğmeler son kartı
+      kapatıyordu. Kaydığı ayrıca kenar solması ve yarım görünen kartla
+      belli oluyor — telefonda parmakla kaydırmak zaten doğal yol.
+    -->
     <section v-if="brands.length">
-      <h2 class="mb-4 text-lg font-bold text-ink-900">Markalar</h2>
-      <div class="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <YataySerit etiket="Markalar" baslik="Markalar" class="pb-2">
         <RouterLink
           v-for="marka in brands"
           :key="marka.id"
@@ -128,7 +133,7 @@ onMounted(async () => {
           <BrandAvatar :brand="marka" size="h-12 w-12" />
           <p class="w-full truncate text-center text-xs font-medium text-ink-700">{{ marka.name }}</p>
         </RouterLink>
-      </div>
+      </YataySerit>
     </section>
 
     <!--
