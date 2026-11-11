@@ -173,3 +173,60 @@
 :root[data-theme="dark"] .rozet {
   --tw-ring-color: color-mix(in srgb, currentColor 40%, transparent);
 }
+
+/* ------------------------------------------------------------ kaydırma çubuğu
+
+   Varsayılan Windows kaydırma çubuğu kalın, gri ve okları olan bir kutu;
+   koyu temada ise bembeyaz kalıyordu çünkü işletim sisteminin kendi
+   çizdiği bir parçaydı. İnce, yuvarlak ve TEMA RENKLERİNDEN türetilen bir
+   çubuk, iki temada da sayfanın parçası gibi duruyor.
+
+   Firefox yalnızca scrollbar-width/color anlıyor, WebKit ise kendi
+   sözde-öğelerini; ikisi birden yazıldı.
+
+   Dokunmatikte çubuk zaten görünmüyor, bu yüzden kural fareyle gezilen
+   (hover eden) cihazlarla sınırlı — telefonda kalınlık/renk değiştirmenin
+   bir karşılığı yok. */
+@media (hover: hover) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink-300) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-ink-300);
+    border-radius: 9999px;
+    /* Şeffaf kenarlık + background-clip: tutamağı inceltir ama tıklama
+       alanını 10px'te bırakır — ince görünür, yine de kolay yakalanır. */
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-ink-400);
+  }
+
+  /* Köşedeki kare: iki çubuk birleştiğinde kalan boşluk. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* --------------------------------------------------------------- mat zemin
+
+   Panel, çekmece ya da sayfa üstünde bir şey açıldığında arkadaki sayfa
+   soluklaşır. Yalnızca karartma değil, hafif bulanıklık da var: arkadaki
+   metin okunaklı kalırsa göz oraya kayıyor ve açılan panelin "üstte"
+   olduğu hissi kayboluyor. */
+.mat-zemin {
+  @apply fixed inset-0 z-40 bg-night/50 backdrop-blur-sm;
+}

@@ -7,6 +7,7 @@ import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import PaginationBar from "../../components/PaginationBar.vue";
 import PageHeader from "../../components/PageHeader.vue";
+import AppIcon from "../../components/AppIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -240,24 +241,78 @@ onMounted(async () => {
     -->
     <button
       type="button"
-      class="btn-secondary mb-3 w-full lg:hidden"
+      class="btn-secondary mb-3 flex w-full items-center justify-center gap-2 lg:hidden"
       :aria-expanded="filtrelerAcik"
-      @click="filtrelerAcik = !filtrelerAcik"
+      @click="filtrelerAcik = true"
     >
-      Filtrele<span v-if="acikFiltreler.length"> ({{ acikFiltreler.length }})</span>
+      <AppIcon name="filtre" :size="17" />
+      Filtrele
+      <span
+        v-if="acikFiltreler.length"
+        class="rounded-full bg-brand-600 px-1.5 text-xs font-bold leading-5 text-white"
+      >
+        {{ acikFiltreler.length }}
+      </span>
     </button>
+
+    <!--
+      Panel açıkken arkadaki sayfa soluklaşıyor. Karartma yalnızca süs değil:
+      açılan panelin nerede bittiği, arkasının tıklanamadığı ve kapatmak için
+      dışarı basılabileceği bundan anlaşılıyor.
+    -->
+    <Transition
+      enter-from-class="opacity-0"
+      leave-to-class="opacity-0"
+      enter-active-class="transition-opacity"
+      leave-active-class="transition-opacity"
+    >
+      <div v-if="filtrelerAcik" class="mat-zemin lg:hidden" @click="filtrelerAcik = false" />
+    </Transition>
 
     <div class="grid gap-6 lg:grid-cols-[260px_1fr]">
       <!--
+        TELEFONDA alttan açılan bir panel, GENİŞ ekranda yapışkan kenar çubuğu
+        — tek bir işaretleme. Filtre alanları iki yerde de aynı olduğu için
+        ikinci bir kopya yazmak, birini güncelleyip diğerini unutmaya davetiye
+        olurdu.
+
+        Önceden telefonda panel sayfanın akışında açılıyordu: ürün ızgarasını
+        aşağı itiyor, filtreyi kapatmak için en alta inmek gerekiyordu.
+
         top-28: geniş ekranda yapışkan başlığın yüksekliği kadar (logo satırı
-        64px + kategori şeridi ~44px) aşağıda durur, yoksa filtrelerin üstü
-        başlığın altında kalırdı. Yalnızca geniş ekranda yapışkan — telefonda
-        başlığın kendisi de yapışkan değil, kenar çubuğu sayfayla akar.
+        64px + kategori şeridi ~44px) aşağıda durur.
       -->
       <aside
-        class="card h-fit space-y-4 p-4 lg:sticky lg:top-28 lg:block"
-        :class="filtrelerAcik ? 'block' : 'hidden'"
+        class="card space-y-4 p-4 lg:static lg:z-auto lg:block lg:h-fit lg:max-h-none lg:overflow-visible lg:rounded-xl lg:pb-4 lg:sticky lg:top-28"
+        :class="
+          filtrelerAcik
+            ? 'fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-b-none rounded-t-2xl pt-0 pb-24 lg:pt-4'
+            : 'hidden'
+        "
       >
+        <!--
+          Telefonda panel başlığı; yapışkan, çünkü içerik uzun ve kaydırılıyor.
+
+          Üst marjı NEGATİF DEĞİL: kaydırma kutusunda "sticky top-0" elemanı
+          kutunun üst kenarına yapıştırır, negatif marjla yukarı çekilen bir
+          başlık ise yapıştığı yere geri itilip altındaki alanın üstüne
+          biniyordu. Bunun yerine panelin üst dolgusu kaldırıldı (pt-0) ve
+          boşluğu başlığın kendi py'si veriyor.
+        -->
+        <div
+          class="sticky top-0 z-10 -mx-4 mb-1 flex items-center justify-between border-b border-ink-200 bg-surface px-4 py-3 lg:hidden"
+        >
+          <p class="text-sm font-semibold text-ink-900">Filtrele</p>
+          <button
+            type="button"
+            class="rounded-lg p-1.5 text-ink-500 hover:bg-ink-100 hover:text-ink-900"
+            aria-label="Filtreleri kapat"
+            @click="filtrelerAcik = false"
+          >
+            <AppIcon name="kapat" :size="18" />
+          </button>
+        </div>
+
         <div>
           <label for="search" class="field-label">Ara</label>
           <input id="search" v-model="filters.q" type="search" class="field" placeholder="Ürün, marka…" maxlength="100" />
@@ -312,6 +367,19 @@ onMounted(async () => {
         </label>
 
         <button type="button" class="btn-secondary w-full" @click="reset">Filtreleri temizle</button>
+
+        <!--
+          Telefonda panelin dibinde sabit duran onay çubuğu. Sonuç sayısı
+          burada yazıyor çünkü filtre seçilirken liste arkada kalıyor ve
+          kullanıcı kaç ürün kaldığını göremiyor.
+        -->
+        <div
+          class="fixed inset-x-0 bottom-0 border-t border-ink-200 bg-surface p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden"
+        >
+          <button type="button" class="btn-primary w-full" @click="filtrelerAcik = false">
+            {{ result.total }} ürünü göster
+          </button>
+        </div>
       </aside>
 
       <div>

@@ -82,5 +82,23 @@ defineProps({
     <template v-else-if="name === 'menu'">
       <path d="M4 7h16M4 12h16M4 17h16" />
     </template>
+
+    <!-- Filtre: üç ayar sürgüsü -->
+    <template v-else-if="name === 'filtre'">
+      <path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h10M18 17h2" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="12" r="2" />
+      <circle cx="16" cy="17" r="2" />
+    </template>
+
+    <template v-else-if="name === 'kapat'">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </template>
+
+    <!-- Sipariş takibi: kargo kolisi -->
+    <template v-else-if="name === 'kargo'">
+      <path d="M3.8 7.6 12 3.6l8.2 4v8.8l-8.2 4-8.2-4V7.6Z" />
+      <path d="M3.8 7.6 12 11.7l8.2-4.1M12 11.7v8.7" />
+    </template>
   </svg>
 </template>

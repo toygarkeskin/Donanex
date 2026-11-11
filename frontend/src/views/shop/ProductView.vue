@@ -10,6 +10,7 @@ import EmptyState from "../../components/EmptyState.vue";
 import AlertBox from "../../components/AlertBox.vue";
 import ProductCard from "../../components/ProductCard.vue";
 import ProductImage from "../../components/ProductImage.vue";
+import AppIcon from "../../components/AppIcon.vue";
 import { sayfayiTanimla } from "../../lib/sayfaBilgisi";
 
 const route = useRoute();
@@ -42,6 +43,18 @@ const gorseller = computed(() => {
 });
 
 const acikGorsel = computed(() => gorseller.value[seciliGorsel.value] ?? product.value?.imageUrl);
+
+/**
+ * Görseller arasında gezinme.
+ *
+ * Başa/sona gelince başa dönüyor: sonda "ileri"nin çalışmaması, düğmenin
+ * bozuk olduğu izlenimi veriyor. Tek görselli üründe düğmeler hiç çizilmiyor.
+ */
+function gorselKaydir(adim) {
+  const adet = gorseller.value.length;
+  if (adet < 2) return;
+  seciliGorsel.value = (seciliGorsel.value + adim + adet) % adet;
+}
 
 /**
  * Aynı kategorideki diğer ürünler.
@@ -122,8 +135,50 @@ watch(() => route.fullPath, load);
         değiştikçe ya da galeride geçiş yapıldıkça altındaki her şey zıplıyordu.
         Kare kutu + ProductImage, geniş fotoğrafta da boş bant bırakmıyor.
       -->
-      <div class="card aspect-square overflow-hidden">
-        <ProductImage :src="acikGorsel" :alt="product.name" padding="p-4 sm:p-8" :lazy="false" />
+      <div class="group relative">
+        <div class="card aspect-square overflow-hidden">
+          <ProductImage :src="acikGorsel" :alt="product.name" padding="p-4 sm:p-8" :lazy="false" />
+        </div>
+
+        <!--
+          Ok düğmeleri görselin ÜSTÜNDE duruyor: küçük resimlere nişan almak
+          yerine kocaman bir hedefe basılıyor. Telefonda hep görünür, fareyle
+          gezilen ekranda görselin üstüne gelince beliriyor.
+        -->
+        <template v-if="gorseller.length > 1">
+          <button
+            type="button"
+            class="absolute left-2 top-1/2 -translate-y-1/2 rounded-full border border-ink-200 bg-surface/90 p-2 text-ink-700 shadow-sm backdrop-blur transition hover:bg-surface sm:opacity-0 sm:group-hover:opacity-100"
+            aria-label="Önceki görsel"
+            @click="gorselKaydir(-1)"
+          >
+            <AppIcon name="sol" :size="18" />
+          </button>
+          <button
+            type="button"
+            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-ink-200 bg-surface/90 p-2 text-ink-700 shadow-sm backdrop-blur transition hover:bg-surface sm:opacity-0 sm:group-hover:opacity-100"
+            aria-label="Sonraki görsel"
+            @click="gorselKaydir(1)"
+          >
+            <AppIcon name="sag" :size="18" />
+          </button>
+        </template>
+      </div>
+
+      <!--
+        Geçiş çubuğu: kaçıncı görselde olunduğunu ve kaç tane olduğunu tek
+        bakışta gösterir. Küçük resimler de bunu söylüyor ama dar ekranda
+        şerit kayabildiği için seçili kare görüş dışında kalabiliyor.
+        Süsleme değil, konum göstergesi — bu yüzden küçük resimler gizlense
+        bile kalıyor.
+      -->
+      <div v-if="gorseller.length > 1" class="mt-2 flex gap-1" aria-hidden="true">
+        <span
+          v-for="(adres, sira) in gorseller"
+          :key="`cubuk-${adres}`"
+          class="h-1 flex-1 rounded-full transition-colors duration-200"
+          :class="sira === seciliGorsel ? 'bg-brand-600' : 'bg-ink-200'"
+        />
       </div>
 
       <!-- Küçük resimler yalnızca birden çok görsel varsa. -->

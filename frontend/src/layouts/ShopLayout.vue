@@ -45,9 +45,9 @@ watch(
 
 // "Destek" buradan kaldırıldı: hesap menüsüne ve alt bilgiye taşındı.
 const nav = [
-  { to: { name: "products" }, label: "Ürünler" },
-  { to: { name: "stores" }, label: "Mağazalar" },
-  { to: { name: "track" }, label: "Sipariş Takibi" }
+  { to: { name: "products" }, label: "Ürünler", icon: "urunler" },
+  { to: { name: "stores" }, label: "Mağazalar", icon: "magaza" },
+  { to: { name: "track" }, label: "Sipariş Takibi", icon: "kargo" }
 ];
 
 /**
@@ -131,7 +131,17 @@ async function signOut() {
       ebeveyninin sınırları içinde yapışır. Üst satır başlık kutusunun içinde
       kalsaydı, başlık ekrandan çıktığı anda o da onunla birlikte giderdi.
     -->
-    <header class="sticky top-0 z-30 border-b border-ink-200 bg-surface/95 backdrop-blur">
+    <!--
+      Menü açıkken başlık mat zeminin ÜSTÜNE çıkıyor (z-50).
+      Açılan panel başlığın içinde duruyor; başlık kendi yığın bağlamını
+      kurduğu için paneldeki z-50 dışarıdaki zemini aşamıyordu — panel
+      karartmanın altında kalıyordu. Başlığın kendisinin aydınlık kalması
+      zaten istenen davranış: kullanıcı nereden açtığını görüyor.
+    -->
+    <header
+      class="sticky top-0 border-b border-ink-200 bg-surface/95 backdrop-blur"
+      :class="menuOpen ? 'z-50' : 'z-30'"
+    >
       <div class="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 lg:h-16 lg:gap-4">
           <RouterLink :to="{ name: 'home' }" class="shrink-0" aria-label="Donanex ana sayfa">
             <BrandLogo />
@@ -267,19 +277,49 @@ async function signOut() {
         </div>
       </div>
 
-      <!-- Hamburger menüsü başlığın içinde: düğmenin hemen altından açılır. -->
-      <nav v-if="menuOpen" class="border-t border-ink-200 px-4 py-2 lg:hidden" aria-label="Mobil menü">
-        <RouterLink
-          v-for="item in nav"
-          :key="item.label"
-          :to="item.to"
-          class="block rounded-lg px-3 py-2 text-sm font-medium text-ink-600 hover:bg-ink-100"
-          @click="menuOpen = false"
+      <!--
+        Hamburger menüsü.
+
+        Önceden başlığın altına açılan ve sayfayı aşağı iten bir listeydi:
+        üç bağlantı için ekranın üst şeridini kaplıyordu. Artık düğmenin
+        hizasında duran, kendi genişliği kadar yer kaplayan bir panel;
+        arkasındaki sayfa soluklaşıyor ki panelin nerede bittiği belli olsun
+        ve dışarı basınca kapansın.
+      -->
+      <Transition
+        enter-from-class="opacity-0 -translate-y-1"
+        leave-to-class="opacity-0 -translate-y-1"
+        enter-active-class="transition duration-150"
+        leave-active-class="transition duration-150"
+      >
+        <nav
+          v-if="menuOpen"
+          class="absolute right-3 top-[calc(100%-0.25rem)] z-50 w-56 overflow-hidden rounded-xl border border-ink-200 bg-surface py-1 shadow-lg lg:hidden"
+          aria-label="Mobil menü"
         >
-          {{ item.label }}
-        </RouterLink>
-      </nav>
+          <RouterLink
+            v-for="item in nav"
+            :key="item.label"
+            :to="item.to"
+            class="flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
+            active-class="text-brand-700"
+            @click="menuOpen = false"
+          >
+            <AppIcon :name="item.icon" :size="17" />
+            {{ item.label }}
+          </RouterLink>
+        </nav>
+      </Transition>
     </header>
+
+    <Transition
+      enter-from-class="opacity-0"
+      leave-to-class="opacity-0"
+      enter-active-class="transition-opacity"
+      leave-active-class="transition-opacity"
+    >
+      <div v-if="menuOpen" class="mat-zemin lg:hidden" @click="menuOpen = false" />
+    </Transition>
 
     <!-- Telefonda arama: kendi satırında ve yapışkan DEĞİL. -->
     <div class="border-b border-ink-200 bg-surface px-4 py-2 md:hidden">
@@ -315,7 +355,7 @@ async function signOut() {
       çizgisinin çubuğun üstüne binmemesi için.
     -->
     <nav
-      class="fixed inset-x-0 bottom-0 z-40 border-t border-ink-200 bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
+      class="fixed inset-x-0 bottom-0 z-30 border-t border-ink-200 bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
       aria-label="Alt gezinme"
     >
       <div class="grid grid-cols-4">
