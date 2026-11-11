@@ -69,7 +69,7 @@ onMounted(load);
     <LoadingBlock v-if="loading" :rows="3" />
     <EmptyState v-else-if="!result.items.length" title="Destek talebi yok" icon="💬" />
 
-    <div v-else class="grid gap-6 lg:grid-cols-[1fr_380px]">
+    <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div>
         <div class="table-wrap">
           <table class="table">

@@ -102,7 +102,7 @@ onMounted(load);
       Bu siparişin ödemesi henüz tamamlanmadı. Ödeme alınmadan paketi hazırlamaya başlayamazsınız.
     </AlertBox>
 
-    <div class="grid gap-6 lg:grid-cols-[1fr_340px]">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div class="space-y-6">
         <section class="card overflow-hidden">
           <h2 class="border-b border-ink-100 bg-ink-50 px-4 py-3 text-sm font-semibold text-ink-800">Ürünler</h2>

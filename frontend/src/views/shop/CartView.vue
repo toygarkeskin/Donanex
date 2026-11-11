@@ -78,7 +78,7 @@ onMounted(() => cart.load().catch(() => {}));
       <RouterLink :to="{ name: 'products' }" class="btn-primary">Ürünlere git</RouterLink>
     </EmptyState>
 
-    <div v-else class="grid gap-6 lg:grid-cols-[1fr_340px]">
+    <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div class="space-y-3">
         <AlertBox v-if="cart.hasIssues" tone="warn" title="Sepetinizde dikkat etmeniz gereken ürünler var">
           Aşağıda işaretli satırları düzeltmeden siparişi tamamlayamazsınız.

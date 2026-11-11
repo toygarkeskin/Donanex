@@ -8,6 +8,7 @@ import BrandLogo from "../components/BrandLogo.vue";
 import AppIcon from "../components/AppIcon.vue";
 import SiteSearch from "../components/SiteSearch.vue";
 import GeriTusu from "../components/GeriTusu.vue";
+import FooterBolumu from "../components/FooterBolumu.vue";
 import { BILGI_ROTALARI, BILGI_SAYFALARI, ILETISIM } from "../content/bilgiSayfalari";
 
 /*
@@ -423,18 +424,26 @@ async function signOut() {
       solda, üç bağlantı grubu YAN YANA — telefonda bile üç sütun, çünkü
       listeler kısa (üç, iki ve bir bağlantı).
     -->
-    <footer class="border-t border-ink-200 bg-surface">
+    <!--
+      pb-16: alt gezinme çubuğu sabit konumlu (fixed) ve akıştan çıkmış.
+      main'e alt boşluk verilmişti ama footer'a verilmemişti; sayfanın en
+      altına inildiğinde footer'ın son satırı ("demo ortamı" notu) çubuğun
+      TAMAMEN ardında kalıyordu. lg'de çubuk gizlendiği için boşluk da
+      kalkıyor.
+    -->
+    <footer class="border-t border-ink-200 bg-surface pb-16 lg:pb-0">
       <!--
-        Güven şeridi: telefonda 2x2, sm'den sonra tek satır dörtlü. Dört
-        kutuyu 320px'de yan yana dizmek her birini okunmaz hâle getiriyordu.
+        Güven şeridi. Telefonda AÇIKLAMALAR ÇİZİLMİYOR, yalnızca simge ve
+        kısa başlık: dört açıklama orada 150px yer kaplıyor ve kimse
+        footer'da paragraf okumuyor. sm'den sonra yer bol, açıklama geliyor.
       -->
       <div class="border-b border-ink-200">
-        <ul class="mx-auto grid max-w-7xl grid-cols-2 gap-4 px-4 py-5 sm:grid-cols-4 sm:gap-6">
+        <ul class="mx-auto grid max-w-7xl grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 sm:grid-cols-4 sm:gap-6 sm:py-5">
           <li v-for="madde in GUVEN_SERIDI" :key="madde.baslik" class="flex items-start gap-2.5">
-            <span class="mt-0.5 shrink-0 text-brand-600"><AppIcon :name="madde.icon" :size="20" /></span>
+            <span class="mt-0.5 shrink-0 text-brand-600"><AppIcon :name="madde.icon" :size="18" /></span>
             <div class="min-w-0">
-              <p class="text-xs font-semibold text-ink-800 sm:text-sm">{{ madde.baslik }}</p>
-              <p class="mt-0.5 text-xs leading-snug text-ink-500">{{ madde.metin }}</p>
+              <p class="text-xs font-semibold leading-snug text-ink-800 sm:text-sm">{{ madde.baslik }}</p>
+              <p class="mt-0.5 hidden text-xs leading-snug text-ink-500 sm:block">{{ madde.metin }}</p>
             </div>
           </li>
         </ul>
@@ -444,29 +453,35 @@ async function signOut() {
         <div class="flex flex-col gap-5 md:flex-row md:items-start md:justify-between md:gap-10">
           <div class="md:max-w-xs">
             <BrandLogo :size="26" />
-            <p class="mt-1.5 text-sm text-ink-500">Çok satıcılı teknoloji mağazası. Onlarca mağaza, tek sepet.</p>
+            <!--
+              Tanıtım cümlesi telefonda yok: hemen üstündeki şerit zaten
+              aynı şeyi söylüyor ("Tek sepet, tek ödeme", "Onlarca mağaza").
+            -->
+            <p class="mt-1.5 hidden text-sm text-ink-500 sm:block">
+              Çok satıcılı teknoloji mağazası. Onlarca mağaza, tek sepet.
+            </p>
 
-            <dl class="mt-4 space-y-1 text-sm">
+            <dl class="mt-3 space-y-0.5 text-sm sm:mt-4 sm:space-y-1">
               <div class="flex gap-2">
                 <dt class="text-ink-400">Telefon</dt>
                 <dd class="font-medium text-ink-700">{{ ILETISIM.telefon }}</dd>
               </div>
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-x-2">
                 <dt class="text-ink-400">E-posta</dt>
-                <dd class="font-medium text-ink-700">{{ ILETISIM.eposta }}</dd>
+                <dd class="font-medium break-all text-ink-700">{{ ILETISIM.eposta }}</dd>
               </div>
             </dl>
             <p class="mt-1 text-xs text-ink-400">{{ ILETISIM.calismaSaatleri }}</p>
           </div>
 
           <!--
-            320px'de DÖRT kolon sığmıyor: başlıklar iki satıra bölünüp
-            kolonlar kayıyordu. Telefonda iki, sm'den sonra dört kolon.
+            Telefonda TEK kolon ve katlanmış başlıklar; sm'den sonra dört
+            kolon ve hepsi açık. Dört grubu 375px'te açık göstermek footer'ı
+            neredeyse tam ekran yapıyordu.
           -->
-          <div class="grid flex-1 grid-cols-2 gap-x-4 gap-y-5 text-xs sm:grid-cols-4 sm:text-sm md:gap-x-8">
-            <div>
-              <p class="font-semibold text-ink-800">Alışveriş</p>
-              <ul class="mt-2 space-y-1.5 text-ink-500">
+          <div class="grid flex-1 grid-cols-1 gap-x-8 sm:grid-cols-4 sm:gap-y-0 sm:text-sm">
+            <FooterBolumu baslik="Alışveriş">
+              <ul class="space-y-1.5 text-sm text-ink-500">
                 <li><RouterLink :to="{ name: 'products' }" class="hover:text-brand-600">Tüm ürünler</RouterLink></li>
                 <li><RouterLink :to="{ name: 'stores' }" class="hover:text-brand-600">Mağazalar</RouterLink></li>
                 <li><RouterLink :to="{ name: 'cart' }" class="hover:text-brand-600">Sepetim</RouterLink></li>
@@ -476,33 +491,33 @@ async function signOut() {
                   </RouterLink>
                 </li>
               </ul>
-            </div>
-            <div>
-              <p class="font-semibold text-ink-800">Destek</p>
-              <ul class="mt-2 space-y-1.5 text-ink-500">
+            </FooterBolumu>
+
+            <FooterBolumu baslik="Destek">
+              <ul class="space-y-1.5 text-sm text-ink-500">
                 <li><RouterLink :to="{ name: 'track' }" class="hover:text-brand-600">Sipariş takibi</RouterLink></li>
                 <li><RouterLink :to="{ name: 'support' }" class="hover:text-brand-600">Destek talebi</RouterLink></li>
                 <li>
                   <RouterLink :to="{ name: SSS_BAGI.ad }" class="hover:text-brand-600">{{ SSS_BAGI.baslik }}</RouterLink>
                 </li>
               </ul>
-            </div>
-            <div>
-              <p class="font-semibold text-ink-800">Kurumsal</p>
-              <ul class="mt-2 space-y-1.5 text-ink-500">
+            </FooterBolumu>
+
+            <FooterBolumu baslik="Kurumsal">
+              <ul class="space-y-1.5 text-sm text-ink-500">
                 <li v-for="bagi in FOOTER_KURUMSAL" :key="bagi.ad">
                   <RouterLink :to="{ name: bagi.ad }" class="hover:text-brand-600">{{ bagi.baslik }}</RouterLink>
                 </li>
               </ul>
-            </div>
-            <div>
-              <p class="font-semibold text-ink-800">Yasal</p>
-              <ul class="mt-2 space-y-1.5 text-ink-500">
+            </FooterBolumu>
+
+            <FooterBolumu baslik="Yasal">
+              <ul class="space-y-1.5 text-sm text-ink-500">
                 <li v-for="bagi in FOOTER_YASAL" :key="bagi.ad">
                   <RouterLink :to="{ name: bagi.ad }" class="hover:text-brand-600">{{ bagi.baslik }}</RouterLink>
                 </li>
               </ul>
-            </div>
+            </FooterBolumu>
           </div>
         </div>
       </div>

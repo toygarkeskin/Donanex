@@ -76,7 +76,7 @@ onMounted(load);
       ve ürünler stoğa geri döner.
     </AlertBox>
 
-    <div class="grid gap-6 lg:grid-cols-[1fr_320px]">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <OrderPackages :packages="order.packages" />
 
       <aside class="card h-fit p-5 text-sm">

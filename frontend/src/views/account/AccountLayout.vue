@@ -13,7 +13,7 @@ const links = [
 </script>
 
 <template>
-  <div class="grid gap-6 lg:grid-cols-[240px_1fr]">
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
     <aside class="card h-fit p-3">
       <p class="px-3 py-2 text-sm font-semibold text-ink-800">{{ auth.displayName }}</p>
       <nav class="mt-1 space-y-1" aria-label="Hesap menüsü">

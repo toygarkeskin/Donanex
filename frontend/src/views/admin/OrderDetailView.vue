@@ -37,7 +37,7 @@ onMounted(async () => {
       <span v-if="!order.userId" class="rounded bg-ink-100 px-2 py-1 text-xs text-ink-600">Misafir siparişi</span>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-[1fr_320px]">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <OrderPackages :packages="order.packages" />
 
       <aside class="space-y-6">

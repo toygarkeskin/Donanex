@@ -322,7 +322,7 @@ onMounted(async () => {
       <div v-if="filtrelerAcik" class="mat-zemin lg:hidden" @click="filtrelerAcik = false" />
     </Transition>
 
-    <div class="grid gap-6 lg:grid-cols-[260px_1fr]">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
       <!--
         TELEFONDA alttan açılan bir panel, GENİŞ ekranda yapışkan kenar çubuğu
         — tek bir işaretleme. Filtre alanları iki yerde de aynı olduğu için

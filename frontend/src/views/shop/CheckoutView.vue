@@ -106,7 +106,7 @@ onMounted(async () => {
       <RouterLink :to="{ name: 'products' }" class="btn-primary">Ürünlere git</RouterLink>
     </EmptyState>
 
-    <form v-else class="grid gap-6 lg:grid-cols-[1fr_340px]" @submit.prevent="submit">
+    <form v-else class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" @submit.prevent="submit">
       <div class="space-y-6">
         <AlertBox v-if="!auth.isSignedIn" tone="info" title="Üye olmadan devam ediyorsunuz">
           Siparişinizi takip edebilmeniz için size tek kullanımlık bir takip kodu vereceğiz.

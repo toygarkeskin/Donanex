@@ -15,9 +15,16 @@ const tones = {
 </script>
 
 <template>
-  <article class="card p-4">
-    <p class="text-xs font-medium uppercase tracking-wide text-ink-500">{{ label }}</p>
-    <p class="mt-2 text-2xl font-bold" :class="tones[tone] || tones.neutral">{{ value }}</p>
+  <!--
+    Telefonda kutular ikişerli diziliyor, yani genişlik yarıya iniyor.
+    Sayı orada text-2xl kalsaydı uzun tutarlar ("₺268.399,00") kutuyu
+    esnetiyordu; bu yüzden telefonda bir ölçü küçük ve break-words açık.
+  -->
+  <article class="card min-w-0 p-3 sm:p-4">
+    <p class="text-[11px] font-medium uppercase tracking-wide text-ink-500 sm:text-xs">{{ label }}</p>
+    <p class="mt-1.5 break-words text-xl font-bold sm:mt-2 sm:text-2xl" :class="tones[tone] || tones.neutral">
+      {{ value }}
+    </p>
     <p v-if="hint" class="mt-1 text-xs text-ink-500">{{ hint }}</p>
   </article>
 </template>

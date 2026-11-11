@@ -91,13 +91,15 @@ const digerleri = computed(() =>
       Telefonda yukarıda olsaydı kullanıcı aradığı metne ulaşmak için dokuz
       bağlantıyı geçmek zorunda kalırdı.
     -->
-    <aside class="mt-10 lg:mt-0">
+    <aside
+      class="mt-8 rounded-xl border border-ink-200 p-4 lg:mt-0 lg:rounded-none lg:border-0 lg:p-0"
+    >
       <p class="text-xs font-semibold uppercase tracking-wide text-ink-400">Diğer sayfalar</p>
-      <ul class="mt-3 space-y-1">
-        <li v-for="d in digerleri" :key="d.ad">
+      <ul class="mt-2 lg:mt-3 lg:space-y-1">
+        <li v-for="d in digerleri" :key="d.ad" class="border-t border-ink-200 first:border-t-0 lg:border-t-0">
           <RouterLink
             :to="{ name: d.ad }"
-            class="block rounded-lg px-2 py-1.5 text-sm text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+            class="block py-2.5 text-sm text-ink-600 hover:text-ink-900 lg:rounded-lg lg:px-2 lg:py-1.5 lg:hover:bg-ink-100"
           >
             {{ d.baslik }}
           </RouterLink>
