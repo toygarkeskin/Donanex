@@ -141,6 +141,31 @@ async function load() {
  * Çoklu seçimde kenar çubuğuna bakmadan "şu an neye göre süzülüyorum?"
  * sorusunun yanıtı görünmüyordu; rozetler bunu listenin hemen üstüne taşıyor.
  */
+/**
+ * Sayfanın başlığı: ne süzülüyorsa o.
+ *
+ * Tek kategori ya da tek marka seçiliyse onun adı yazıyor; arama varsa
+ * aranan terim. Birden çok seçimde geri "Ürünler"e dönüyor, çünkü
+ * "Laptop, Monitör ve Mouse" gibi bir başlık okunmuyor — o durumda
+ * rozetler zaten neyin seçili olduğunu gösteriyor.
+ */
+const sayfaBasligi = computed(() => {
+  if (filters.q) return `"${filters.q}" için sonuçlar`;
+  if (filters.category.length === 1) {
+    return categories.value.find((k) => k.slug === filters.category[0])?.name ?? "Ürünler";
+  }
+  if (filters.brand.length === 1) {
+    return brands.value.find((m) => m.slug === filters.brand[0])?.name ?? "Ürünler";
+  }
+  return "Ürünler";
+});
+
+/** Yükleme bitmeden sayı yazılmıyor: bir an "0 ürün" görünmesi yanlış bilgi. */
+const sayfaAciklamasi = computed(() => {
+  if (loading.value) return "";
+  return result.value.total > 0 ? `${result.value.total} ürün` : "Sonuç yok";
+});
+
 const acikFiltreler = computed(() => {
   const rozetler = [];
   for (const slug of filters.category) {
@@ -247,7 +272,13 @@ onMounted(async () => {
 
 <template>
   <div>
-    <PageHeader title="Ürünler" description="Tüm mağazaların ürünleri tek listede." />
+    <!--
+      Başlık seçili filtreye göre değişiyor.
+      Her durumda "Ürünler" yazsaydı, kategoriye tıklayan kullanıcı aynı
+      sayfada kalmış gibi hissederdi — oysa liste değişti. Ürün sayısı da
+      başlığın altında: ayrı bir satır olarak yer kaplamasına gerek yok.
+    -->
+    <PageHeader :title="sayfaBasligi" :description="sayfaAciklamasi" />
 
     <!--
       Kategori şeridi ARTIK SADECE BURADA.
@@ -265,21 +296,6 @@ onMounted(async () => {
       uzun; açık bırakılsaydı telefonda ürünlere ulaşmak için bütün filtreleri
       geçmek gerekirdi. Geniş ekranda düğme gizlenir, panel hep açıktır.
     -->
-    <button
-      type="button"
-      class="btn-secondary mb-3 flex w-full items-center justify-center gap-2 lg:hidden"
-      :aria-expanded="filtrelerAcik"
-      @click="filtrelerAcik = true"
-    >
-      <AppIcon name="filtre" :size="17" />
-      Filtrele
-      <span
-        v-if="acikFiltreler.length"
-        class="rounded-full bg-brand-600 px-1.5 text-xs font-bold leading-5 text-white"
-      >
-        {{ acikFiltreler.length }}
-      </span>
-    </button>
 
     <!--
       Panel açıkken arkadaki sayfa soluklaşıyor. Karartma yalnızca süs değil:
@@ -442,9 +458,33 @@ onMounted(async () => {
           </button>
         </div>
 
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <p class="text-sm text-ink-500">{{ result.total }} ürün bulundu</p>
-          <select v-model="filters.sort" class="field w-auto" aria-label="Sıralama">
+        <!--
+          Filtre ve sıralama TEK SATIRDA. Önce telefonda alt alta iki blok
+          vardı: tam genişlikte "Filtrele" düğmesi, altında sayı ve sıralama.
+          İkisi de aynı işi yapıyor (listeyi daraltmak), bu yüzden aynı
+          satırda olmaları gerekiyordu; ürün sayısı da başlığa taşındı.
+
+          Düğme yalnızca dar ekranda: geniş ekranda filtreler zaten solda
+          açık duruyor.
+        -->
+        <div class="mb-4 flex items-center gap-3">
+          <button
+            type="button"
+            class="btn-secondary flex shrink-0 items-center gap-2 lg:hidden"
+            :aria-expanded="filtrelerAcik"
+            @click="filtrelerAcik = true"
+          >
+            <AppIcon name="filtre" :size="17" />
+            Filtrele
+            <span
+              v-if="acikFiltreler.length"
+              class="rounded-full bg-brand-600 px-1.5 text-xs font-bold leading-5 text-white"
+            >
+              {{ acikFiltreler.length }}
+            </span>
+          </button>
+
+          <select v-model="filters.sort" class="field ml-auto w-auto shrink-0" aria-label="Sıralama">
             <option v-for="option in SORTS" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
         </div>
