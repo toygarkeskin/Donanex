@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import { money } from "../lib/format";
 import ProductImage from "./ProductImage.vue";
@@ -17,7 +18,21 @@ import ProductImage from "./ProductImage.vue";
  * Yan faydası: kart artık yalnızca bağlantılardan oluşuyor; sepete ekleme
  * tek bir yerde (ürün sayfası) yaşıyor.
  */
-defineProps({ product: { type: Object, required: true } });
+const props = defineProps({ product: { type: Object, required: true } });
+
+/**
+ * Ürün adının marka ÇIKARILMIŞ hâli.
+ *
+ * Marka ayrı yazıldığı için ad olduğu gibi bırakılsaydı "Logitech Logitech
+ * MX Master 3S" çıkardı. Yalnızca ad gerçekten markayla BAŞLIYORSA kırpılır:
+ * markası "Microsoft" olup adı "Xbox ..." ile başlayan üründe kırpacak bir
+ * şey yok ve "Microsoft Xbox ..." doğru okunuyor.
+ */
+const adSiz = computed(() => {
+  const marka = props.product.brandName ?? "";
+  const ad = props.product.name ?? "";
+  return marka && ad.toLowerCase().startsWith(`${marka.toLowerCase()} `) ? ad.slice(marka.length + 1) : ad;
+});
 </script>
 
 <template>
@@ -43,9 +58,37 @@ defineProps({ product: { type: Object, required: true } });
         {{ product.storeName }}
       </RouterLink>
 
-      <h3 class="line-clamp-2 flex-1 text-sm font-medium leading-snug text-ink-800">
-        <RouterLink :to="{ name: 'product', params: { storeSlug: product.storeSlug, productSlug: product.slug } }">
-          {{ product.name }}
+      <!--
+        Marka ürün adının BAŞINDA ve yalnızca marka adı bağlantılı; gerisi
+        ürüne gider. Trendyol'daki "Defacto %100 Pamuk ... Tişört" kalıbı:
+        kullanıcı markayı okurken aynı anda ürünü de okuyor, marka için ayrı
+        bir satır ya da ayrı bir sayfa gezmek gerekmiyor.
+
+        İki bağlantı İÇ İÇE DEĞİL, yan yana: <a> içine <a> koymak geçersiz
+        HTML ve tarayıcı iç bağlantıyı dışarı taşıyıp kartı bozuyor.
+        Markası olmayan üründe yalnızca ad yazılıyor.
+      -->
+      <h3 class="line-clamp-2 flex-1 text-sm leading-snug text-ink-800">
+        <RouterLink
+          v-if="product.brandSlug"
+          :to="{ name: 'brand', params: { slug: product.brandSlug } }"
+          class="font-bold text-ink-900 hover:text-brand-600 hover:underline"
+          @click.stop
+        >
+          {{ product.brandName }}
+        </RouterLink>
+        <!--
+          Açık boşluk: Vue şablonu iki etiket ARASINDAKİ satır sonunu siler,
+          bu yüzden marka ile ürün adı "LogitechMX Master 3S" diye bitişik
+          çıkıyordu. &#32; de işe yaramıyor — derleyici onu çözüp boşluk
+          sıkıştırmasına takılıyor. İFADE olarak yazılan boşluk duruyor.
+        -->
+        <span>{{ " " }}</span>
+        <RouterLink
+          :to="{ name: 'product', params: { storeSlug: product.storeSlug, productSlug: product.slug } }"
+          class="font-medium"
+        >
+          {{ product.brandSlug ? adSiz : product.name }}
         </RouterLink>
       </h3>
 

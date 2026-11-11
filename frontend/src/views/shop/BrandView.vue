@@ -46,12 +46,17 @@ watch(() => route.params.slug, yukle);
     description="Aradığınız marka kaldırılmış olabilir."
     icon="🏷️"
   >
-    <RouterLink :to="{ name: 'brands' }" class="btn-primary">Markalara dön</RouterLink>
+    <RouterLink :to="{ name: 'products' }" class="btn-primary">Ürünlere dön</RouterLink>
   </EmptyState>
 
   <div v-else>
+    <!--
+      Yol ÜRÜNLERE çıkıyor, markalar listesine değil: marka sayfasına ürünün
+      üstündeki marka bağlantısından geliniyor, tüm markaları listeleyen bir
+      sayfa yok.
+    -->
     <nav class="mb-3 flex flex-wrap items-center gap-2 text-sm text-ink-500" aria-label="Yol">
-      <RouterLink :to="{ name: 'brands' }" class="hover:text-brand-600">Markalar</RouterLink>
+      <RouterLink :to="{ name: 'products' }" class="hover:text-brand-600">Ürünler</RouterLink>
       <span aria-hidden="true">/</span>
       <span class="text-ink-700">{{ marka.name }}</span>
     </nav>

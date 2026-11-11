@@ -46,7 +46,6 @@ watch(
 // "Destek" buradan kaldırıldı: hesap menüsüne ve alt bilgiye taşındı.
 const nav = [
   { to: { name: "products" }, label: "Ürünler", icon: "urunler" },
-  { to: { name: "brands" }, label: "Markalar", icon: "etiket" },
   { to: { name: "stores" }, label: "Mağazalar", icon: "magaza" },
   { to: { name: "track" }, label: "Sipariş Takibi", icon: "kargo" }
 ];

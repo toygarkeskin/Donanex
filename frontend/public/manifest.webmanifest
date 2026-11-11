@@ -1,0 +1,28 @@
+{
+  "name": "Donanex — Çok satıcılı teknoloji mağazası",
+  "short_name": "Donanex",
+  "description": "Onlarca mağaza, tek sepet, tek ödeme. Üye olmadan da sipariş verebilirsiniz.",
+  "lang": "tr",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#12151b",
+  "theme_color": "#12151b",
+  "categories": ["shopping"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "maskable"
+    }
+  ]
+}
