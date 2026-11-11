@@ -18,7 +18,31 @@ import ProductImage from "./ProductImage.vue";
  * Yan faydası: kart artık yalnızca bağlantılardan oluşuyor; sepete ekleme
  * tek bir yerde (ürün sayfası) yaşıyor.
  */
-const props = defineProps({ product: { type: Object, required: true } });
+/*
+ * İki görünüm, tek bileşen.
+ *
+ * "liste": ürün listesinde. Kullanıcı KARŞILAŞTIRIYOR — satıcı kim, stok
+ *   az mı, tam ad ne? Bu yüzden yoğun: mağaza adı, iki satırlık başlık ve
+ *   stok uyarısı var.
+ *
+ * "vitrin": ana sayfada. Kullanıcı henüz karşılaştırmıyor, GEZİNİYOR. Orada
+ *   mağaza adı ve stok uyarısı gürültü; fotoğraf ve fiyat yeter. Başlık tek
+ *   satır, böylece altı altı kart aynı yükseklikte duruyor ve sıra düzgün
+ *   görünüyor.
+ *
+ * İki ayrı bileşen yazmak, ileride kartın bir yerini düzeltip diğerini
+ * unutmak demekti.
+ */
+const props = defineProps({
+  product: { type: Object, required: true },
+  gorunum: {
+    type: String,
+    default: "liste",
+    validator: (deger) => ["liste", "vitrin"].includes(deger)
+  }
+});
+
+const vitrin = computed(() => props.gorunum === "vitrin");
 
 /**
  * Ürün adının marka ÇIKARILMIŞ hâli.
@@ -51,7 +75,9 @@ const adSiz = computed(() => {
     </RouterLink>
 
     <div class="flex flex-1 flex-col gap-1 p-3">
+      <!-- Mağaza adı yalnızca listede: vitrinde karşılaştırma yapılmıyor. -->
       <RouterLink
+        v-if="!vitrin"
         :to="{ name: 'store', params: { slug: product.storeSlug } }"
         class="text-xs font-medium text-ink-400 hover:text-brand-600"
       >
@@ -68,7 +94,10 @@ const adSiz = computed(() => {
         HTML ve tarayıcı iç bağlantıyı dışarı taşıyıp kartı bozuyor.
         Markası olmayan üründe yalnızca ad yazılıyor.
       -->
-      <h3 class="line-clamp-2 flex-1 text-sm leading-snug text-ink-800">
+      <h3
+        class="flex-1 text-sm leading-snug text-ink-800"
+        :class="vitrin ? 'line-clamp-1' : 'line-clamp-2'"
+      >
         <RouterLink
           v-if="product.brandSlug"
           :to="{ name: 'brand', params: { slug: product.brandSlug } }"
@@ -99,10 +128,18 @@ const adSiz = computed(() => {
       -->
       <p class="mt-1 text-lg font-bold leading-tight text-brand-600">{{ money(product.price) }}</p>
 
-      <p v-if="product.stock > 0 && product.stock <= 5" class="text-xs font-medium text-amber-700">
-        Son {{ product.stock }} ürün
-      </p>
-      <p v-else-if="product.stock <= 0" class="text-xs font-medium text-red-600">Stokta yok</p>
+      <!--
+        Stok uyarısı yalnızca listede. Vitrinde "Son 2 ürün" bir aciliyet
+        rozetine dönüşüyor; kullanıcı henüz o ürünü almaya karar vermemişken
+        acele ettirmek, gezinmeyi baskıya çeviriyor. Listede ise iki ürün
+        arasında seçim yapan kişi için gerçek bir bilgi.
+      -->
+      <template v-if="!vitrin">
+        <p v-if="product.stock > 0 && product.stock <= 5" class="text-xs font-medium text-amber-700">
+          Son {{ product.stock }} ürün
+        </p>
+        <p v-else-if="product.stock <= 0" class="text-xs font-medium text-red-600">Stokta yok</p>
+      </template>
     </div>
   </article>
 </template>
