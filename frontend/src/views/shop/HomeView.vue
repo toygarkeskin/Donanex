@@ -4,26 +4,40 @@ import { RouterLink } from "vue-router";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/auth";
 import ProductCard from "../../components/ProductCard.vue";
+import ProductImage from "../../components/ProductImage.vue";
+import BrandAvatar from "../../components/BrandAvatar.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 
 const auth = useAuthStore();
 const products = ref([]);
 const stores = ref([]);
+const categories = ref([]);
+const brands = ref([]);
 const loading = ref(true);
 
 /*
- * Kategoriler artık burada çekilmiyor: başlıktaki şerit onları her sayfada
- * gösteriyor, aynı listeyi ikinci kez istemenin ve ekranın üstünde yer
- * kaplamanın anlamı yok.
+ * Ana sayfa bir LİSTE DEĞİL, bir giriş kapısı.
+ *
+ * Eskiden burada 12 ürünlük bir ızgara vardı ve ürünler sayfasında da aynı
+ * kart, aynı ızgara duruyordu; iki sayfa birbirinden ayırt edilemiyordu.
+ * Artık ana sayfa "nereye gitmek istiyorsun?" sorusunu soruyor:
+ * kategoriler, markalar, mağazalar. Ürün satırı kaldı ama KISA — sayfanın
+ * tamamı değil, bir parçası.
  */
 onMounted(async () => {
   try {
-    const [latest, storeList] = await Promise.all([
-      api.get("/products?pageSize=12"),
-      api.get("/storefront/stores?pageSize=4")
+    const [latest, storeList, categoryList, brandList] = await Promise.all([
+      api.get("/products?pageSize=6"),
+      api.get("/storefront/stores?pageSize=4"),
+      api.get("/categories"),
+      api.get("/brands")
     ]);
     products.value = latest.items;
     stores.value = storeList.items.slice(0, 4);
+    // Ürünü olmayan kategori gösterilmiyor: boş bir listeye götüren kutu,
+    // kullanıcıya verilmiş boş bir sözdür.
+    categories.value = (categoryList.items ?? []).filter((k) => k.productCount > 0);
+    brands.value = [...(brandList.items ?? [])].sort((a, b) => b.productCount - a.productCount);
   } finally {
     loading.value = false;
   }
@@ -69,6 +83,58 @@ onMounted(async () => {
       </div>
     </section>
 
+    <!--
+      Kategoriler ana sayfanın ASIL içeriği.
+
+      Kutunun görseli o kategorideki en yeni ürünün fotoğrafı: gerçek
+      katalog verisi, bakımı olan ayrı bir "kategori görseli" alanı değil.
+      Ürünü olmayan kategori hiç çizilmiyor.
+    -->
+    <section v-if="categories.length">
+      <h2 class="mb-4 text-lg font-bold text-ink-900">Ne arıyorsunuz?</h2>
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <RouterLink
+          v-for="kategori in categories"
+          :key="kategori.id"
+          :to="{ name: 'products', query: { kategori: kategori.slug } }"
+          class="card group overflow-hidden transition hover:shadow-md"
+        >
+          <div class="aspect-[4/3] overflow-hidden transition group-hover:scale-105">
+            <ProductImage v-if="kategori.imageUrl" :src="kategori.imageUrl" alt="" padding="p-3" />
+            <div v-else class="h-full w-full bg-ink-100" />
+          </div>
+          <div class="p-3">
+            <p class="truncate text-sm font-semibold text-ink-800">{{ kategori.name }}</p>
+            <p class="text-xs text-ink-500">{{ kategori.productCount }} ürün</p>
+          </div>
+        </RouterLink>
+      </div>
+    </section>
+
+    <!--
+      Markalar: 17 markanın logosu var, yatay bir şerit olarak ana sayfaya
+      ürün ızgarası koymadan hareket katıyor. Mağazadan farklı bir eksen —
+      kullanıcı çoğu zaman "Logitech mouse" arar.
+    -->
+    <section v-if="brands.length">
+      <h2 class="mb-4 text-lg font-bold text-ink-900">Markalar</h2>
+      <div class="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <RouterLink
+          v-for="marka in brands"
+          :key="marka.id"
+          :to="{ name: 'brand', params: { slug: marka.slug } }"
+          class="card flex w-28 shrink-0 flex-col items-center gap-2 p-3 transition hover:shadow-md"
+        >
+          <BrandAvatar :brand="marka" size="h-12 w-12" />
+          <p class="w-full truncate text-center text-xs font-medium text-ink-700">{{ marka.name }}</p>
+        </RouterLink>
+      </div>
+    </section>
+
+    <!--
+      Ürün satırı KISA (6 ürün) ve sayfanın sonlarında. Ana sayfanın
+      tamamını ürün ızgarası kaplasaydı ürünler sayfasından farkı kalmazdı.
+    -->
     <section>
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-bold text-ink-900">Yeni eklenenler</h2>
@@ -78,7 +144,7 @@ onMounted(async () => {
       </div>
 
       <LoadingBlock v-if="loading" :rows="2" />
-      <div v-else class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div v-else class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <ProductCard v-for="product in products" :key="product.id" :product="product" />
       </div>
     </section>

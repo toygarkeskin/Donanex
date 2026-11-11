@@ -84,7 +84,17 @@ export class PgCatalogReadModel implements CatalogReadModel {
 
   async listCategories(): Promise<Row[]> {
     const { rows } = await this.db.query(
-      `SELECT c.id, c.slug, c.name, COUNT(p.id)::int AS "productCount"
+      /*
+       * imageUrl: ana sayfadaki kategori kutusunun görseli.
+       *
+       * Kategorinin kendi fotoğrafı yok ve uydurmak istemiyoruz; onun
+       * yerine o kategorideki EN YENİ ürünün fotoğrafı kullanılıyor.
+       * Gerçek katalog verisi, kategori boşaldığında da kendiliğinden
+       * boşalıyor — elle bakımı olan ayrı bir görsel alanı değil.
+       */
+      `SELECT c.id, c.slug, c.name, COUNT(p.id)::int AS "productCount",
+              (ARRAY_AGG(p.image_url ORDER BY p.created_at DESC)
+                 FILTER (WHERE p.image_url IS NOT NULL))[1] AS "imageUrl"
        FROM categories c
        LEFT JOIN products p ON p.category_id = c.id AND p.status = 'active'
        LEFT JOIN stores s ON s.id = p.store_id AND s.status = 'active'

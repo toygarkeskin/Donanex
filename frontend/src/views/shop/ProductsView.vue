@@ -8,6 +8,7 @@ import EmptyState from "../../components/EmptyState.vue";
 import PaginationBar from "../../components/PaginationBar.vue";
 import PageHeader from "../../components/PageHeader.vue";
 import AppIcon from "../../components/AppIcon.vue";
+import CategoryStrip from "../../components/CategoryStrip.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -247,6 +248,17 @@ onMounted(async () => {
 <template>
   <div>
     <PageHeader title="Ürünler" description="Tüm mağazaların ürünleri tek listede." />
+
+    <!--
+      Kategori şeridi ARTIK SADECE BURADA.
+      Eskiden her sayfanın üstündeydi ve bütün sayfaları birbirine
+      benzetiyordu. Burada ise bir filtre aracı: tıklanan kategori adres
+      çubuğuna yazılıyor ve liste ona göre süzülüyor.
+    -->
+    <CategoryStrip
+      :categories="categories"
+      class="-mx-4 mb-4 rounded-none border-x-0 border-t-0 sm:mx-0 sm:rounded-xl sm:border"
+    />
 
     <!--
       Dar ekranda filtreler KATLI gelir. Onay kutulu listeler açılır listelerden

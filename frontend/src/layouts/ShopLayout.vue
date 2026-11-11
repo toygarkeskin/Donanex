@@ -3,16 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useCartStore } from "../stores/cart";
-import { useCatalogStore } from "../stores/catalog";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import BrandLogo from "../components/BrandLogo.vue";
 import AppIcon from "../components/AppIcon.vue";
 import SiteSearch from "../components/SiteSearch.vue";
-import CategoryStrip from "../components/CategoryStrip.vue";
 
 const auth = useAuthStore();
 const cart = useCartStore();
-const catalog = useCatalogStore();
 const router = useRouter();
 const route = useRoute();
 
@@ -89,8 +86,6 @@ function tusaBasildi(olay) {
 onMounted(() => {
   // Sepet kayıtsız kullanıcı için de yüklenir.
   if (!cart.loaded) cart.load().catch(() => {});
-  // Kategori şeridi; hata yutulur, şerit boş kalsa da sayfa çalışır.
-  catalog.load();
   document.addEventListener("click", disaridaTiklandi);
   document.addEventListener("keydown", tusaBasildi);
 });
@@ -327,14 +322,17 @@ async function signOut() {
     </div>
 
     <!--
-      Kategori şeridi: her sayfadan tek tıkla kategoriye geçilir. Daha önce
-      kategoriler yalnızca ana sayfadaydı; bir ürün sayfasındayken başka
-      kategoriye bakmak için önce ana sayfaya dönmek gerekiyordu.
+      KATEGORİ ŞERİDİ BURADA DEĞİL.
 
-      lg:sticky lg:top-16 — geniş ekranda başlığın (64px) hemen altına yapışır;
-      telefonda yapışmaz, sayfayla birlikte kayar.
+      Bir süre her sayfanın üstünde durdu. Sonuç: ana sayfa, ürün listesi,
+      ürün detayı, sepet ve mağaza sayfaları aynı şeridi taşıdığı için
+      hepsi birbirinin aynısı gibi görünüyordu — telefonda "sürekli aynı
+      sayfadayım" hissi büyük ölçüde bundandı.
+
+      Şerit artık yalnızca ürün listesinde (ProductsView): orada bir
+      filtreleme aracı ve işe yarıyor. Diğer sayfalarda kategoriye geçmenin
+      yolu başlıktaki "Ürünler" ve ana sayfadaki kategori kutuları.
     -->
-    <CategoryStrip :categories="catalog.categories" class="lg:sticky lg:top-16 lg:z-20" />
 
     <!--
       pb-20: alt gezinme çubuğu sabit konumlu, yani akıştan çıkmış durumda.
