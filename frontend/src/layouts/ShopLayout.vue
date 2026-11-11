@@ -282,7 +282,7 @@ async function signOut() {
                   :to="{ name: 'admin-dashboard' }"
                   class="block px-4 py-2 text-sm font-medium hover:bg-ink-50"
                 >
-                  ⚙️ Yönetim Paneli
+                  <AppIcon name="ayarlar" :size="16" /> Yönetim Paneli
                 </RouterLink>
 
                 <hr class="my-1 border-ink-200" />

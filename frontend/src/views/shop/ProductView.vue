@@ -230,7 +230,7 @@ watch(() => route.fullPath, load);
         :to="{ name: 'store', params: { slug: product.storeSlug } }"
         class="mt-2 inline-flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700"
       >
-        🏪 {{ product.storeName }}
+        <AppIcon name="magaza" :size="16" />{{ product.storeName }}
       </RouterLink>
 
       <!--
@@ -304,7 +304,7 @@ watch(() => route.fullPath, load);
       -->
       <div class="mt-5 space-y-3">
         <div class="card flex items-start gap-3 p-4">
-          <span class="text-lg" aria-hidden="true">🚚</span>
+          <AppIcon name="kargo" :size="18" class="text-ink-400" />
           <div class="text-sm">
             <p class="font-semibold text-ink-800">Kargo ücretsiz</p>
             <p class="mt-0.5 text-ink-500">

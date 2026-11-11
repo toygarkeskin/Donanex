@@ -50,7 +50,7 @@ onMounted(load);
       v-else-if="!result.items.length"
       title="Henüz destek talebiniz yok"
       description="Bir sorun yaşarsanız destek ekibimize yazabilirsiniz."
-      icon="💬"
+      icon="destek"
     >
       <RouterLink :to="{ name: 'support' }" class="btn-primary">Talep oluştur</RouterLink>
     </EmptyState>

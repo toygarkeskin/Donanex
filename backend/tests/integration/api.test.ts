@@ -1303,7 +1303,13 @@ test("sipariş ve ödeme müşteriye bildirim düşürür, okundu işareti sayac
 
   const verildi = await bildirimBekle(buyer, "/api/me/notifications", buSiparis("order.placed"));
   assert.ok(verildi.bildirim, "sipariş bildirimi yazılır");
-  assert.equal(verildi.bildirim.url, `/hesabim/siparisler/${order.data.orderId}`, "bildirim sipariş detayına gider");
+  // Bağlantı sipariş NUMARASINI taşıyor: bildirime tıklayan kullanıcı adres
+  // çubuğunda okunur bir şey görsün ve bağlantıyı paylaşabilsin.
+  assert.equal(
+    verildi.bildirim.url,
+    `/hesabim/siparisler/${order.data.orderNumber}`,
+    "bildirim sipariş detayına gider"
+  );
   assert.equal(verildi.bildirim.readAt, null, "yeni bildirim okunmamış gelir");
 
   await buyer.post(`/api/orders/${order.data.orderId}/payment`, { outcome: "success" });
@@ -1514,4 +1520,77 @@ test("mağaza panosu on dört günlük seriyi takvim boyunca verir", opts, async
   // Başka mağazanın panosu kapalı kalmaya devam ediyor.
   const yabanci = (await anon.get("/api/storefront/stores")).data.items.find((store: Row) => store.id !== storeId);
   assert.equal((await magazaci.get(`/api/stores/${yabanci.id}/dashboard`)).status, 403);
+});
+
+/* ------------------------------------------------- okunur sipariş adresleri */
+
+test("sipariş detayı hem kimlikle hem sipariş numarasıyla açılır", opts, async () => {
+  const product = await firstProduct(2);
+
+  const buyer = new Client(app.base);
+  assert.ok((await buyer.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+  await buyer.post("/api/cart/items", { productId: product.id, quantity: 1 });
+  const order = await buyer.post("/api/orders", checkout());
+  assert.equal(order.status, 201, JSON.stringify(order.data));
+
+  const kimlikle = await buyer.get(`/api/me/orders/${order.data.orderId}`);
+  const numarayla = await buyer.get(`/api/me/orders/${order.data.orderNumber}`);
+
+  assert.equal(kimlikle.status, 200);
+  assert.equal(numarayla.status, 200, JSON.stringify(numarayla.data));
+  assert.equal(numarayla.data.id, kimlikle.data.id, "iki adres aynı siparişi açar");
+
+  /*
+   * Küçük harfli numara da çalışmalı: kullanıcı adresi elle yazdığında
+   * büyük/küçük harf yüzünden "bulunamadı" görmemeli.
+   */
+  const kucukHarf = await buyer.get(`/api/me/orders/${String(order.data.orderNumber).toLowerCase()}`);
+  assert.equal(kucukHarf.status, 200);
+  assert.equal(kucukHarf.data.id, kimlikle.data.id);
+
+  /*
+   * Numara tahmin edilebilir (sıralı). Bu yüzden sahiplik denetimi
+   * DEĞİŞMEDİ: başkasının numarasını bilmek siparişi açmaya yetmiyor ve
+   * yanıt "yok" ile "senin değil" arasında ayrım yapmıyor.
+   */
+  const baskasi = new Client(app.base);
+  assert.ok((await baskasi.signIn("ahmet@donanex.test", DEMO_PASSWORD)).ok);
+  assert.equal((await baskasi.get(`/api/me/orders/${order.data.orderNumber}`)).status, 404);
+
+  // Serbest metin sorguya hiç ulaşmıyor: biçim denetimi önce çalışıyor.
+  for (const gecersiz of ["abc", "PZ-2026-1005", "..%2F..%2Fetc%2Fpasswd"]) {
+    assert.equal(
+      (await buyer.get(`/api/me/orders/${gecersiz}`)).status,
+      400,
+      `${gecersiz} reddedilmeliydi`
+    );
+  }
+});
+
+test("yönetim ve mağaza panelleri de sipariş numarasıyla açılır", opts, async () => {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const magaza = (await magazaci.get("/api/me")).data.stores?.[0];
+  assert.ok(magaza?.id && magaza?.slug, "mağazanın kimliği ve kısa adı olmalı");
+
+  const liste = await magazaci.get(`/api/stores/${magaza.id}/orders?pageSize=1`);
+  const paket = liste.data.items[0];
+  assert.ok(paket, "mağazanın en az bir paketi olmalı");
+
+  // Paket kimliğiyle ve siparişin numarasıyla aynı paket açılıyor: bir
+  // siparişin bir mağazada yalnızca BİR paketi olabilir.
+  const kimlikle = await magazaci.get(`/api/stores/${magaza.id}/orders/${paket.packageId}`);
+  const numarayla = await magazaci.get(`/api/stores/${magaza.id}/orders/${paket.orderNumber}`);
+  assert.equal(numarayla.status, 200, JSON.stringify(numarayla.data));
+  assert.equal(numarayla.data.packageId, kimlikle.data.packageId);
+
+  // Mağaza kapsamı korunuyor: numara bilinse bile başka mağazanın paketi açılmaz.
+  const yabanci = (await anon.get("/api/storefront/stores")).data.items.find((s: Row) => s.id !== magaza.id);
+  assert.equal((await magazaci.get(`/api/stores/${yabanci.id}/orders/${paket.orderNumber}`)).status, 403);
+
+  const admin = new Client(app.base);
+  assert.ok((await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD)).ok);
+  const yonetim = await admin.get(`/api/admin/orders/${paket.orderNumber}`);
+  assert.equal(yonetim.status, 200, JSON.stringify(yonetim.data));
+  assert.equal(yonetim.data.orderNumber, paket.orderNumber);
 });

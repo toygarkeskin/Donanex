@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, query } from "../../lib/api";
+import { useMagaza } from "../../lib/magaza";
 import { money, formatDate, PACKAGE_STATUS } from "../../lib/format";
 import PageHeader from "../../components/PageHeader.vue";
 import StatusBadge from "../../components/StatusBadge.vue";
@@ -10,6 +11,7 @@ import EmptyState from "../../components/EmptyState.vue";
 import PaginationBar from "../../components/PaginationBar.vue";
 
 const route = useRoute();
+const { id: storeId, params: magazaParams } = useMagaza();
 const router = useRouter();
 
 const result = ref({ items: [], total: 0, page: 1, pages: 1 });
@@ -19,7 +21,7 @@ const filters = reactive({ q: "", status: "", from: "", to: "", page: 1 });
 async function load() {
   loading.value = true;
   try {
-    result.value = await api.get(`/stores/${route.params.storeId}/orders${query(filters)}`);
+    result.value = await api.get(`/stores/${storeId.value}/orders${query(filters)}`);
   } finally {
     loading.value = false;
   }
@@ -45,7 +47,7 @@ watch(() => [filters.status, filters.from, filters.to], () => {
   load();
 });
 watch(() => filters.page, load);
-watch(() => route.params.storeId, load);
+watch(() => storeId.value, load);
 onMounted(load);
 </script>
 
@@ -86,7 +88,7 @@ onMounted(load);
               v-for="pkg in result.items"
               :key="pkg.packageId"
               class="cursor-pointer hover:bg-ink-50"
-              @click="router.push({ name: 'store-order', params: { storeId: route.params.storeId, packageId: pkg.packageId } })"
+              @click="router.push({ name: 'store-order', params: { ...magazaParams, orderNo: pkg.orderNumber } })"
             >
               <td class="font-medium text-ink-800">{{ pkg.orderNumber }}</td>
               <td>{{ pkg.customerName }}</td>

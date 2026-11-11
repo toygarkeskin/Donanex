@@ -2,7 +2,7 @@
 
 import { Query, type Handler } from "../../shared/cqrs/Message";
 import { NotFoundError } from "../../../domain/shared/errors";
-import { requireUuid } from "../../../domain/shared/guards";
+import { orderReference } from "../../../domain/ordering/orderReference";
 import type { OrderReadModel, Row } from "../../shared/contracts";
 
 export class GetMyOrderQuery extends Query {
@@ -23,10 +23,18 @@ export class GetMyOrderHandler implements Handler<GetMyOrderQuery, Row> {
     this.readModel = orderReadModel;
   }
 
+  /**
+   * orderId hem iç kimlik (UUID) hem sipariş numarası olabilir.
+   *
+   * Adres çubuğunda okunur olan numaradır; UUID ise eski bağlantılarda,
+   * e-postalarda ve bildirimlerde duruyor. İkisi de kabul edilmezse ya
+   * okunur adresten vazgeçmek ya da gönderilmiş bağlantıları kırmak
+   * gerekirdi.
+   */
   async handle({ userId, orderId }: GetMyOrderQuery): Promise<Row> {
-    requireUuid(orderId, "Sipariş numarası");
+    const ref = orderReference(orderId);
     // Kullanıcı kimliği sorgunun parçası: başkasının siparişi görülemez.
-    const order = await this.readModel.getForUser(orderId, userId);
+    const order = await this.readModel.getForUser(ref, userId);
     if (!order) throw new NotFoundError("Sipariş bulunamadı.");
     return order;
   }

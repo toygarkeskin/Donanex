@@ -44,7 +44,7 @@ watch(() => route.params.slug, yukle);
     v-else-if="bulunamadi"
     title="Marka bulunamadı"
     description="Aradığınız marka kaldırılmış olabilir."
-    icon="🏷️"
+    icon="etiket"
   >
     <RouterLink :to="{ name: 'products' }" class="btn-primary">Ürünlere dön</RouterLink>
   </EmptyState>

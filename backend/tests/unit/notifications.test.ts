@@ -47,13 +47,19 @@ test("Ödeme alındığında müşteriye ve her mağazaya ayrı bildirim düşer
   const musteri = drafts.find((draft) => draft.scope === "user");
   assert.equal(musteri?.scopeId, MUSTERI);
   assert.match(String(musteri?.title), /Ödemeniz alındı/);
-  assert.equal(musteri?.url, `/hesabim/siparisler/${SIPARIS}`);
+  /*
+   * Bağlantı SİPARİŞ NUMARASINI taşıyor, iç kimliği değil: bildirime tıklayan
+   * kullanıcı adres çubuğunda okunur bir şey görsün ve bağlantıyı
+   * paylaşabilsin.
+   */
+  assert.equal(musteri?.url, "/hesabim/siparisler/PZ-1001");
 
-  // Paket numarası bilinen mağaza paketin kendisine, bilinmeyen listeye gider.
+  // Mağaza bağlantısı da sipariş numarasıyla: bir siparişin bir mağazada
+  // yalnızca BİR paketi olabildiği için numara paketi tek başına gösteriyor.
   const magazalar = drafts.filter((draft) => draft.scope === "store");
   assert.equal(magazalar.length, 2);
-  assert.equal(magazalar[0].url, `/magaza/${MAGAZA}/siparisler/${PAKET}`);
-  assert.equal(magazalar[1].url, `/magaza/${BASKA_MAGAZA}/siparisler`);
+  assert.equal(magazalar[0].url, `/magaza/${MAGAZA}/siparisler/PZ-1001`);
+  assert.equal(magazalar[1].url, `/magaza/${BASKA_MAGAZA}/siparisler/PZ-1001`);
 });
 
 test("Misafir siparişinde müşteri bildirimi yok, mağaza bildirimi var", () => {

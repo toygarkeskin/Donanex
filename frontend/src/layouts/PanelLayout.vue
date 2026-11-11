@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { useMagaza } from "../lib/magaza";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import BrandLogo from "../components/BrandLogo.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -16,8 +17,16 @@ const hesapAcik = ref(false);
 const hesapKutusu = ref(null);
 
 const isAdminPanel = computed(() => route.path.startsWith("/yonetim"));
-const storeId = computed(() => route.params.storeId || auth.stores[0]?.id);
-const activeStore = computed(() => auth.stores.find((store) => store.id === storeId.value));
+
+/*
+ * Adres çubuğunda mağazanın kısa adı duruyor; kimlik ondan çözülüyor.
+ * Panelin kök adresinde ("/magaza") parametre hiç yok, o yüzden kişinin
+ * ilk mağazasına düşülüyor — menü o aralıkta boş kalmasın diye.
+ */
+const { magaza: adresMagazasi, id: adresId, slug: adresSlug } = useMagaza();
+const activeStore = computed(() => adresMagazasi.value ?? auth.stores[0] ?? null);
+const storeId = computed(() => activeStore.value?.id ?? adresId.value);
+const storeSlug = computed(() => activeStore.value?.slug ?? adresSlug.value);
 
 /**
  * Menüde hangi bağlantının vurgulanacağı.
@@ -54,7 +63,7 @@ const adminLinks = [
 ];
 
 const storeLinks = computed(() => {
-  const params = { storeId: storeId.value };
+  const params = { storeSlug: storeSlug.value };
   return [
     { name: "store-dashboard", label: "Genel bakış", icon: "panel", params, tamEslesme: true },
     { name: "store-products", label: "Ürünler", icon: "etiket", params },
@@ -197,7 +206,7 @@ async function signOut() {
           <RouterLink
             v-for="store in auth.stores.filter((s) => s.id !== storeId)"
             :key="store.id"
-            :to="{ name: 'store-dashboard', params: { storeId: store.id } }"
+            :to="{ name: 'store-dashboard', params: { storeSlug: store.slug } }"
             class="mt-1 block truncate rounded-lg px-3 py-2 text-sm text-night-muted hover:bg-white/5 hover:text-white"
             @click="sidebarOpen = false"
           >

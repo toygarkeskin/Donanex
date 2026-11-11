@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { api } from "../../lib/api";
+import { useMagaza } from "../../lib/magaza";
 import { toAmount } from "../../lib/format";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
@@ -10,11 +11,11 @@ import ProductImage from "../../components/ProductImage.vue";
 import AlertBox from "../../components/AlertBox.vue";
 
 const route = useRoute();
+const { id: storeId, params: magazaParams } = useMagaza();
 const router = useRouter();
 const toast = useToastStore();
 
 const isEdit = computed(() => Boolean(route.params.productId));
-const storeId = () => route.params.storeId;
 
 const form = reactive({
   name: "",
@@ -61,7 +62,7 @@ async function gorselSecildi(olay) {
 
   yukleniyor.value = true;
   try {
-    const sonuc = await api.upload(`/stores/${storeId()}/gorseller`, dosya);
+    const sonuc = await api.upload(`/stores/${storeId.value}/gorseller`, dosya);
     form.imageUrl = sonuc.imageUrl;
     toast.success("Görsel yüklendi.");
   } catch (hata) {
@@ -101,7 +102,7 @@ async function galeriSecildi(olay) {
         continue;
       }
       try {
-        const sonuc = await api.upload(`/stores/${storeId()}/gorseller`, dosya);
+        const sonuc = await api.upload(`/stores/${storeId.value}/gorseller`, dosya);
         if (!form.galleryUrls.includes(sonuc.imageUrl)) form.galleryUrls.push(sonuc.imageUrl);
       } catch (hata) {
         toast.error(`${dosya.name} yüklenemedi: ${hata.message ?? ""}`);
@@ -137,7 +138,7 @@ async function load() {
 
     if (isEdit.value) {
       // Panel listesi üzerinden ürünü bul: ayrı bir uç açmadan düzenleme.
-      const result = await api.get(`/stores/${storeId()}/products?pageSize=100`);
+      const result = await api.get(`/stores/${storeId.value}/products?pageSize=100`);
       const product = result.items.find((item) => item.id === route.params.productId);
       if (!product) {
         error.value = "Ürün bulunamadı.";
@@ -167,11 +168,11 @@ async function submit() {
   try {
     const payload = { ...form, categoryId: form.categoryId || null, brandId: form.brandId || null, sku: form.sku || null };
     const result = isEdit.value
-      ? await api.put(`/stores/${storeId()}/products/${route.params.productId}`, payload)
-      : await api.post(`/stores/${storeId()}/products`, payload);
+      ? await api.put(`/stores/${storeId.value}/products/${route.params.productId}`, payload)
+      : await api.post(`/stores/${storeId.value}/products`, payload);
 
     toast.success(result.message);
-    router.push({ name: "store-products", params: { storeId: storeId() } });
+    router.push({ name: "store-products", params: magazaParams });
   } catch (requestError) {
     error.value = requestError.message;
   } finally {
@@ -186,7 +187,7 @@ onMounted(load);
   <div class="max-w-3xl">
     <PageHeader :title="isEdit ? 'Ürünü düzenle' : 'Yeni ürün'">
       <template #actions>
-        <RouterLink :to="{ name: 'store-products', params: { storeId: route.params.storeId } }" class="btn-secondary">
+        <RouterLink :to="{ name: 'store-products', params: magazaParams }" class="btn-secondary">
           ← Ürünler
         </RouterLink>
       </template>
@@ -317,7 +318,7 @@ onMounted(load);
         <button type="submit" class="btn-primary" :disabled="saving">
           {{ saving ? "Kaydediliyor…" : isEdit ? "Değişiklikleri kaydet" : "Ürünü oluştur" }}
         </button>
-        <RouterLink :to="{ name: 'store-products', params: { storeId: route.params.storeId } }" class="btn-secondary">
+        <RouterLink :to="{ name: 'store-products', params: magazaParams }" class="btn-secondary">
           Vazgeç
         </RouterLink>
       </div>

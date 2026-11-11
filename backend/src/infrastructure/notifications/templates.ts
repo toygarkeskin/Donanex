@@ -47,17 +47,33 @@ const PAKET_DURUMU: Record<string, { baslik: string; metin: string }> = {
   refunded: { baslik: "İadeniz işlendi", metin: "Siparişinizin bir paketi iade edildi." }
 };
 
-const siparisYolu = (orderId: string | null) => (orderId ? `/hesabim/siparisler/${orderId}` : "/hesabim/siparisler");
+/*
+ * Bildirim bağlantıları SİPARİŞ NUMARASINI taşıyor, iç kimliği değil.
+ *
+ * Bildirime tıklayan kullanıcı adres çubuğunda "PZ-2026-001005" görüyor;
+ * bağlantıyı kopyalayıp birine gönderdiğinde ya da telefonda okuduğunda
+ * anlamlı. Kimlik yine de kabul ediliyor (eski bildirimler için), ama yeni
+ * yazılanlar okunur biçimi kullanıyor.
+ */
+const siparisYolu = (orderNumber: unknown) =>
+  orderNumber ? `/hesabim/siparisler/${encodeURIComponent(String(orderNumber))}` : "/hesabim/siparisler";
 
 /**
  * Mağaza paketinin yolu.
  *
- * Mağaza panelinde sipariş detayı PAKET numarasıyla açılır (her mağaza
- * yalnızca kendi paketini görür), sipariş numarasıyla değil. Paket numarası
- * olayda yoksa listeye düşülür — var olmayan bir sayfaya göndermekten iyidir.
+ * Mağaza panelinde sipariş detayı sipariş numarasıyla açılıyor: bir siparişin
+ * bir mağazada yalnızca BİR paketi olabildiği için numara mağaza ile birlikte
+ * tek bir paketi gösteriyor.
+ *
+ * Mağaza hâlâ KİMLİKLE yazılıyor, kısa adıyla değil: olay yükü mağazanın
+ * kısa adını taşımıyor ve yalnızca bu bağlantı için oraya yeni bir alan
+ * eklemek olayı şişirirdi. Arayüz adresi açıldığında kimliği kısa ada
+ * çevirip adres çubuğunu düzeltiyor (bkz. router/index.js).
  */
-const paketYolu = (storeId: string, packageId?: string | null) =>
-  packageId ? `/magaza/${storeId}/siparisler/${packageId}` : `/magaza/${storeId}/siparisler`;
+const paketYolu = (storeId: string, orderNumber?: unknown) =>
+  orderNumber
+    ? `/magaza/${storeId}/siparisler/${encodeURIComponent(String(orderNumber))}`
+    : `/magaza/${storeId}/siparisler`;
 
 /** Olaydaki paket listesi; alan hiç yoksa boş dizi. */
 const paketler = (payload: any): { storeId: string; packageId?: string | null }[] =>
@@ -156,7 +172,7 @@ const templates: Record<string, Template> = {
             kind: "order.placed",
             title: "Siparişiniz alındı",
             body: `${payload.orderNumber} numaralı siparişiniz alındı. Tutar: ${payload.total} TL`,
-            url: siparisYolu(aggregateId)
+            url: siparisYolu(payload.orderNumber)
           }
         ]
       : [],
@@ -170,7 +186,7 @@ const templates: Record<string, Template> = {
         kind: "order.paid",
         title: "Ödemeniz alındı",
         body: `${payload.orderNumber} numaralı siparişinizin ödemesi alındı. Mağazalar hazırlamaya başlayacak.`,
-        url: siparisYolu(aggregateId)
+        url: siparisYolu(payload.orderNumber)
       });
     }
     for (const paket of paketler(payload)) {
@@ -180,7 +196,7 @@ const templates: Record<string, Template> = {
         kind: "order.paid",
         title: "Yeni sipariş",
         body: `${payload.orderNumber} siparişinin ödemesi alındı. Paketi hazırlayabilirsiniz.`,
-        url: paketYolu(paket.storeId, paket.packageId)
+        url: paketYolu(paket.storeId, payload.orderNumber)
       });
     }
     return drafts;
@@ -195,7 +211,7 @@ const templates: Record<string, Template> = {
             kind: "order.payment_failed",
             title: "Ödeme tamamlanamadı",
             body: `${payload.orderNumber} numaralı sipariş iptal edildi, ürünler stoğa döndü.`,
-            url: siparisYolu(aggregateId)
+            url: siparisYolu(payload.orderNumber)
           }
         ]
       : [],
@@ -209,7 +225,7 @@ const templates: Record<string, Template> = {
         kind: "order.cancelled",
         title: "Siparişiniz iptal edildi",
         body: `${payload.orderNumber} numaralı siparişiniz iptal edildi.`,
-        url: siparisYolu(aggregateId)
+        url: siparisYolu(payload.orderNumber)
       });
     }
     // Mağaza bunu BİLMEK ZORUNDA: hazırlamaya başlamadan haberi olmalı.
@@ -220,7 +236,7 @@ const templates: Record<string, Template> = {
         kind: "order.cancelled",
         title: "Sipariş iptal edildi",
         body: `${payload.orderNumber} siparişini müşteri iptal etti. Hazırlamaya başlamayın.`,
-        url: paketYolu(paket.storeId, paket.packageId)
+        url: paketYolu(paket.storeId, payload.orderNumber)
       });
     }
     return drafts;
@@ -242,7 +258,7 @@ const templates: Record<string, Template> = {
         kind: `order.package_${payload.status}`,
         title: durum.baslik,
         body: `${payload.orderNumber} — ${durum.metin}`,
-        url: siparisYolu(aggregateId)
+        url: siparisYolu(payload.orderNumber)
       }
     ];
   },

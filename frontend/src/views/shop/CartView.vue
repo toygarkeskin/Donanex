@@ -73,7 +73,7 @@ onMounted(() => cart.load().catch(() => {}));
       v-else-if="!cart.items.length"
       title="Sepetiniz boş"
       description="Ürünleri gezip sepetinize ekleyebilirsiniz. Üye olmanıza gerek yok."
-      icon="🛍️"
+      icon="sepet"
     >
       <RouterLink :to="{ name: 'products' }" class="btn-primary">Ürünlere git</RouterLink>
     </EmptyState>

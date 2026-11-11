@@ -84,7 +84,7 @@ onMounted(load);
       v-else-if="!addresses.length && !editing"
       title="Kayıtlı adresiniz yok"
       description="Adres eklerseniz her siparişte yeniden yazmanız gerekmez."
-      icon="📍"
+      icon="konum"
     >
       <button type="button" class="btn-primary" @click="openNew">Adres ekle</button>
     </EmptyState>

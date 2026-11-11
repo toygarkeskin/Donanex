@@ -36,7 +36,7 @@ onMounted(load);
       v-else-if="!result.items.length"
       title="Henüz siparişiniz yok"
       description="Beğendiğiniz ürünleri sepete ekleyip ilk siparişinizi verebilirsiniz."
-      icon="📦"
+      icon="kargo"
     >
       <RouterLink :to="{ name: 'products' }" class="btn-primary">Alışverişe başla</RouterLink>
     </EmptyState>
@@ -45,7 +45,7 @@ onMounted(load);
       <RouterLink
         v-for="order in result.items"
         :key="order.id"
-        :to="{ name: 'account-order', params: { orderId: order.id } }"
+        :to="{ name: 'account-order', params: { orderNo: order.orderNumber } }"
         class="card flex flex-wrap items-center gap-4 p-4 transition hover:shadow-md"
       >
         <div class="min-w-40 flex-1">

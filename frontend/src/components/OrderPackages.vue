@@ -1,4 +1,5 @@
 <script setup>
+import AppIcon from "./AppIcon.vue";
 import { money, formatDate, safeUrl, PACKAGE_STATUS } from "../lib/format";
 import StatusBadge from "./StatusBadge.vue";
 import ProductImage from "./ProductImage.vue";
@@ -18,7 +19,7 @@ defineProps({
     <section v-for="pkg in packages" :key="pkg.id" class="card overflow-hidden">
       <header class="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 bg-ink-50 px-4 py-3">
         <div class="flex items-center gap-2">
-          <span v-if="showStore" class="text-sm font-semibold text-ink-800">🏪 {{ pkg.storeName }}</span>
+          <span v-if="showStore" class="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-800"><AppIcon name="magaza" :size="16" class="text-ink-400" />{{ pkg.storeName }}</span>
           <StatusBadge :map="PACKAGE_STATUS" :value="pkg.status" />
         </div>
         <span class="text-sm font-bold text-ink-900">{{ money(pkg.subtotal) }}</span>
@@ -39,7 +40,7 @@ defineProps({
 
       <footer v-if="pkg.carrier || pkg.trackingNumber" class="border-t border-ink-100 px-4 py-3 text-sm">
         <p class="text-ink-600">
-          <span aria-hidden="true">🚚</span>
+          <AppIcon name="kargo" :size="16" class="text-ink-400" />
           {{ pkg.carrier || "Kargo" }}
           <span v-if="pkg.trackingNumber" class="font-mono text-ink-800">{{ pkg.trackingNumber }}</span>
         </p>

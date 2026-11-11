@@ -10,7 +10,7 @@ const router = useRouter();
 onMounted(() => {
   const first = auth.stores[0];
   router.replace(
-    first ? { name: "store-dashboard", params: { storeId: first.id } } : { name: "account-store-application" }
+    first ? { name: "store-dashboard", params: { storeSlug: first.slug } } : { name: "account-store-application" }
   );
 });
 </script>

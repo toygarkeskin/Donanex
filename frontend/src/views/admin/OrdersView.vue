@@ -90,7 +90,7 @@ onMounted(load);
               v-for="order in result.items"
               :key="order.id"
               class="cursor-pointer hover:bg-ink-50"
-              @click="router.push({ name: 'admin-order', params: { orderId: order.id } })"
+              @click="router.push({ name: 'admin-order', params: { orderNo: order.orderNumber } })"
             >
               <td class="font-medium text-ink-800">{{ order.orderNumber }}</td>
               <td>

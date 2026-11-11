@@ -169,7 +169,7 @@ const bicim = (deger) => (olcut.value === "revenue" ? money(deger) : `${deger} s
           <ul v-else class="divide-y divide-ink-100">
             <li v-for="order in recent" :key="order.id">
               <RouterLink
-                :to="{ name: 'admin-order', params: { orderId: order.id } }"
+                :to="{ name: 'admin-order', params: { orderNo: order.orderNumber } }"
                 class="flex items-center gap-3 py-2.5 hover:bg-ink-50"
               >
                 <span class="min-w-0 flex-1">

@@ -54,7 +54,7 @@ const routes = [
           { path: "", redirect: { name: "account-orders" } },
           { path: "siparisler", name: "account-orders", component: () => import("../views/account/OrdersView.vue") },
           {
-            path: "siparisler/:orderId",
+            path: "siparisler/:orderNo",
             name: "account-order",
             component: () => import("../views/account/OrderDetailView.vue")
           },
@@ -98,34 +98,34 @@ const routes = [
     meta: { requiresAuth: true, panel: "store" },
     children: [
       { path: "", name: "store-panel", component: () => import("../views/store/StoreRedirect.vue") },
-      { path: ":storeId", name: "store-dashboard", component: () => import("../views/store/DashboardView.vue") },
-      { path: ":storeId/urunler", name: "store-products", component: () => import("../views/store/ProductsView.vue") },
+      { path: ":storeSlug", name: "store-dashboard", component: () => import("../views/store/DashboardView.vue") },
+      { path: ":storeSlug/urunler", name: "store-products", component: () => import("../views/store/ProductsView.vue") },
       {
-        path: ":storeId/urunler/yeni",
+        path: ":storeSlug/urunler/yeni",
         name: "store-product-new",
         component: () => import("../views/store/ProductFormView.vue")
       },
       {
         // ":productId" kuralından ÖNCE gelmeli; yoksa "ice-aktar" bir ürün
         // numarası sanılır ve düzenleme ekranı açılmaya çalışılır.
-        path: ":storeId/urunler/ice-aktar",
+        path: ":storeSlug/urunler/ice-aktar",
         name: "store-product-import",
         component: () => import("../views/store/ProductImportView.vue")
       },
       {
-        path: ":storeId/urunler/:productId",
+        path: ":storeSlug/urunler/:productId",
         name: "store-product-edit",
         component: () => import("../views/store/ProductFormView.vue")
       },
-      { path: ":storeId/siparisler", name: "store-orders", component: () => import("../views/store/OrdersView.vue") },
+      { path: ":storeSlug/siparisler", name: "store-orders", component: () => import("../views/store/OrdersView.vue") },
       {
-        path: ":storeId/siparisler/:packageId",
+        path: ":storeSlug/siparisler/:orderNo",
         name: "store-order",
         component: () => import("../views/store/OrderDetailView.vue")
       },
-      { path: ":storeId/calisanlar", name: "store-members", component: () => import("../views/store/MembersView.vue") },
-      { path: ":storeId/talepler", name: "store-tickets", component: () => import("../views/store/TicketsView.vue") },
-      { path: ":storeId/ayarlar", name: "store-settings", component: () => import("../views/store/SettingsView.vue") }
+      { path: ":storeSlug/calisanlar", name: "store-members", component: () => import("../views/store/MembersView.vue") },
+      { path: ":storeSlug/talepler", name: "store-tickets", component: () => import("../views/store/TicketsView.vue") },
+      { path: ":storeSlug/ayarlar", name: "store-settings", component: () => import("../views/store/SettingsView.vue") }
     ]
   },
 
@@ -139,7 +139,7 @@ const routes = [
       { path: "kullanicilar", name: "admin-users", component: () => import("../views/admin/UsersView.vue") },
       { path: "siparisler", name: "admin-orders", component: () => import("../views/admin/OrdersView.vue") },
       {
-        path: "siparisler/:orderId",
+        path: "siparisler/:orderNo",
         name: "admin-order",
         component: () => import("../views/admin/OrderDetailView.vue")
       },
@@ -265,6 +265,24 @@ router.beforeEach(async (to) => {
   if (to.meta.panel === "store" && !auth.isSystemAdmin && !auth.hasStorePanel) {
     return { name: "account-store-application" };
   }
+
+  /*
+   * Eski panel bağlantıları mağazayı UUID ile taşıyor
+   * ("/magaza/671907fe-…/urunler"). Bunlar e-postalarda, bildirimlerde ve
+   * kayıtlı sekmelerde duruyor; kırmak yerine okunur adrese çeviriyoruz.
+   *
+   * "replace" bilinçli: yönlendirme tarayıcı geçmişine ayrı bir adım olarak
+   * girmemeli, yoksa geri tuşu kullanıcıyı eski adrese geri atar ve o da
+   * tekrar buraya yönlenir — geri tuşu çalışmaz hâle gelirdi.
+   */
+  const anahtar = to.params.storeSlug;
+  if (anahtar) {
+    const magaza = auth.stores.find((store) => store.id === anahtar);
+    if (magaza) {
+      return { ...to, params: { ...to.params, storeSlug: magaza.slug }, replace: true };
+    }
+  }
+
   return true;
 });
 

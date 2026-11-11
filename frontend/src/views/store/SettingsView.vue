@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
 import { api } from "../../lib/api";
+import { useMagaza } from "../../lib/magaza";
 import { STORE_STATUS } from "../../lib/format";
 import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
@@ -12,6 +13,7 @@ import LoadingBlock from "../../components/LoadingBlock.vue";
 import AlertBox from "../../components/AlertBox.vue";
 
 const route = useRoute();
+const { id: storeId, params: magazaParams } = useMagaza();
 const auth = useAuthStore();
 const toast = useToastStore();
 
@@ -23,7 +25,7 @@ const form = reactive({ name: "", description: "", contactEmail: "", phone: "" }
 async function load() {
   loading.value = true;
   try {
-    store.value = await api.get(`/stores/${route.params.storeId}`);
+    store.value = await api.get(`/stores/${storeId.value}`);
     Object.assign(form, {
       name: store.value.name,
       description: store.value.description,
@@ -38,7 +40,7 @@ async function load() {
 async function save() {
   saving.value = true;
   try {
-    const result = await api.put(`/stores/${route.params.storeId}`, { ...form });
+    const result = await api.put(`/stores/${storeId.value}`, { ...form });
     toast.success(result.message);
     await auth.loadUser();
     await load();

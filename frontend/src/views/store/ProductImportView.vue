@@ -2,18 +2,19 @@
 import { computed, ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { api } from "../../lib/api";
+import { useMagaza } from "../../lib/magaza";
 import { csvAyristir, basliklariEsle, fiyatNormalize, ORNEK_CSV } from "../../lib/csv";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
 import AlertBox from "../../components/AlertBox.vue";
 
 const route = useRoute();
+const { id: storeId, params: magazaParams } = useMagaza();
 const router = useRouter();
 const toast = useToastStore();
 
 const EN_FAZLA = 500;
 
-const storeId = () => route.params.storeId;
 
 const dosyaAdi = ref("");
 const satirlar = ref([]); // { no, name, price, stock, sku, category, description, imageUrl, hata }
@@ -124,9 +125,9 @@ async function gonder() {
       category: s.category || undefined
     }));
 
-    const sonuc = await api.post(`/stores/${storeId()}/products/bulk`, { products: yuk });
+    const sonuc = await api.post(`/stores/${storeId.value}/products/bulk`, { products: yuk });
     toast.success(sonuc.message ?? `${sonuc.count} ürün içe aktarıldı.`);
-    router.push({ name: "store-products", params: { storeId: storeId() } });
+    router.push({ name: "store-products", params: magazaParams });
   } catch (hata) {
     toast.error(hata.message ?? "İçe aktarma başarısız oldu.");
   } finally {
@@ -139,7 +140,7 @@ async function gonder() {
   <div>
     <PageHeader title="CSV ile ürün aktar" description="Bir dosyadan toplu ürün ekleyin.">
       <template #actions>
-        <RouterLink :to="{ name: 'store-products', params: { storeId: route.params.storeId } }" class="btn-secondary">
+        <RouterLink :to="{ name: 'store-products', params: magazaParams }" class="btn-secondary">
           Ürünlere dön
         </RouterLink>
       </template>

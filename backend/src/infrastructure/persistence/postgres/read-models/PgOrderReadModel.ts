@@ -3,6 +3,7 @@
 import type { Pool } from "pg";
 import { escapeLike, money, binder, paginate } from "./sql";
 import type { ListFilters, OrderReadModel, Row } from "../../../../application/shared/contracts";
+import type { OrderRef } from "../../../../domain/ordering/orderReference";
 
 /** Bir paketin ürün satırları — alt sorgu olarak JSON üretir. */
 const ITEMS = `
@@ -42,6 +43,23 @@ const SUMMARY = `
   o.id, o.order_number AS "orderNumber", o.status, o.placed_at AS "placedAt",
   ${money("o.total_cents")} AS total`;
 
+/**
+ * Referansla eşleşme koşulu: $1 kimlik (UUID), $2 sipariş numarası.
+ *
+ * İkisinden yalnızca biri dolu gelir ve hangisinin kullanılacağı koşulun
+ * içinde yazılı. Tek alanda taşınıp "önce uuid'ye çevirmeyi dene" deseydik,
+ * numara biçimindeki bir metin uuid'ye çevrilirken veritabanı hata
+ * fırlatırdı — kullanıcıya 500 dönerdi.
+ *
+ * Her iki dal da kendi indeksini kullanabiliyor: birincil anahtar ve
+ * order_number üzerindeki tekillik indeksi.
+ *
+ * @param kimlikSutunu eşleşilecek UUID sütunu (sipariş ya da paket)
+ */
+const REFERANS = (kimlikSutunu: string): string =>
+  `(($1::uuid IS NOT NULL AND ${kimlikSutunu} = $1::uuid)
+     OR ($2::text IS NOT NULL AND o.order_number = $2))`;
+
 export class PgOrderReadModel implements OrderReadModel {
   private readonly db: Pool;
 
@@ -63,14 +81,14 @@ export class PgOrderReadModel implements OrderReadModel {
   }
 
   /** Kullanıcı kimliği sorgunun parçası: başkasının siparişi dönmez. */
-  async getForUser(orderId: string, userId: string): Promise<Row | null> {
+  async getForUser(ref: OrderRef, userId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT ${SUMMARY}, o.shipping_address AS "shippingAddress", o.note,
               o.contact_email AS "contactEmail", o.contact_full_name AS "contactFullName",
               o.contact_phone AS "contactPhone", ${PACKAGES} AS packages
        FROM orders o
-       WHERE o.id = $1 AND o.user_id = $2`,
-      [orderId, userId]
+       WHERE ${REFERANS("o.id")} AND o.user_id = $3`,
+      [ref.id, ref.number, userId]
     );
     return rows[0] || null;
   }
@@ -120,7 +138,7 @@ export class PgOrderReadModel implements OrderReadModel {
   }
 
   /** Paket detayı. Mağaza, müşterinin teslimat bilgisini görür (kargo için gerekli). */
-  async getForStore(packageId: string, storeId: string): Promise<Row | null> {
+  async getForStore(ref: OrderRef, storeId: string): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT op.id AS "packageId", op.status, ${money("op.subtotal_cents")} AS subtotal,
               op.carrier, op.tracking_number AS "trackingNumber", op.tracking_url AS "trackingUrl",
@@ -131,8 +149,8 @@ export class PgOrderReadModel implements OrderReadModel {
               ${ITEMS} AS items
        FROM order_packages op
        JOIN orders o ON o.id = op.order_id
-       WHERE op.id = $1 AND op.store_id = $2`,
-      [packageId, storeId]
+       WHERE ${REFERANS("op.id")} AND op.store_id = $3`,
+      [ref.id, ref.number, storeId]
     );
     return rows[0] || null;
   }
@@ -163,7 +181,7 @@ export class PgOrderReadModel implements OrderReadModel {
     return paginate(rows, count.rows[0].total, filters);
   }
 
-  async getForAdmin(orderId: string): Promise<Row | null> {
+  async getForAdmin(ref: OrderRef): Promise<Row | null> {
     const { rows } = await this.db.query(
       `SELECT ${SUMMARY}, o.shipping_address AS "shippingAddress", o.note,
               o.contact_email AS "contactEmail", o.contact_full_name AS "contactFullName",
@@ -177,8 +195,8 @@ export class PgOrderReadModel implements OrderReadModel {
                 ) ORDER BY pay.created_at)
                 FROM payments pay WHERE pay.order_id = o.id
               ), '[]'::json) AS payments
-       FROM orders o WHERE o.id = $1`,
-      [orderId]
+       FROM orders o WHERE ${REFERANS("o.id")}`,
+      [ref.id, ref.number]
     );
     return rows[0] || null;
   }

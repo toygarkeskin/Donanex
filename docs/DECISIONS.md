@@ -413,3 +413,54 @@ paylaşılabilir kalıyor.
 (📊 🏪 👥 📦 💬 ⚙️). Vitrin için daha önce yazılan gerekçe panel için de geçerliydi: emoji
 her işletim sisteminde başka çiziliyor ve renk almıyor — koyu kenar menüde gri yazının
 yanında rengarenk duruyorlardı. Hepsi `AppIcon` çizimlerine geçti.
+
+## 32. Adreslerde UUID yok: mağaza kısa adı, sipariş numarası
+
+Vitrin adresleri zaten okunurdu (`/urunler/teknoloji-deposu/msi-rtx-4060`). Kötü olan
+PANEL ve HESAP adresleriydi; hepsinin ortak sebebi aynıydı: **UUID**.
+
+```text
+önce   /magaza/671907fe-7860-41a2-8915-f669f513bb38/siparisler/9b2c…
+sonra  /magaza/teknoloji-deposu/siparisler/PZ-2026-001005
+```
+
+**Mağaza kısa adı istemcide çözülüyor, sunucuda değil.** API mağazayı hâlâ kimliğiyle
+tanıyor; çeviriyi `lib/magaza.js` yapıyor ve bunun için ek istek atmıyor — kişinin
+mağazaları kısa adlarıyla birlikte zaten `/api/me` yanıtında geliyor.
+
+Alternatif, API'nin de kısa adı kabul etmesiydi: `/api/stores/:storeId` ucuna bir çözümleme
+ara katmanı konur ve ön uç hiç değişmezdi. Seçilmedi, çünkü o ara katman **yetki
+denetiminin önüne** girerdi: her panel isteği, izin sorulmadan önce fazladan bir sorgu
+çalıştırırdı. Kozmetik bir kazanç için sistemin en hassas yoluna dokunmak doğru değil.
+
+**Sipariş numarası sunucuda çözülüyor**, çünkü numara ile kimlik arasındaki bağ yalnızca
+veritabanında var. Okuma uçları artık ikisini de kabul ediyor (`domain/ordering/
+orderReference`): hangi sütunla eşleşileceği SQL'e açıkça iletiliyor. Tek alanda taşıyıp
+"önce uuid'ye çevirmeyi dene" deseydik, numara biçimindeki metin uuid'ye çevrilirken
+veritabanı hata fırlatır, kullanıcı 500 görürdü.
+
+Numara deseni DAR: `PZ-<yıl>-<6 hane>`. Serbest metni numara sayıp veritabanına göndermek,
+adres çubuğuna yazılan her şeyin sorguya dönmesi demekti; biçim denetimi sorgudan önce
+çalışıp 400 dönüyor.
+
+**Sahiplik denetimi değişmedi.** Sipariş numarası sıralı, yani tahmin edilebilir. Bu yüzden
+numara yalnızca "hangi kayıt" sorusunu yanıtlıyor; "senin mi" sorusunu hâlâ kullanıcı
+kimliği ya da mağaza kapsamı yanıtlıyor ve "yok" ile "senin değil" aynı yanıtı veriyor.
+
+**Eski bağlantılar kırılmadı.** Gönderilmiş e-postalarda, bildirimlerde ve kayıtlı
+sekmelerde UUID'li adresler var. Okuma uçları kimliği kabul etmeyi sürdürüyor; yönlendirici
+ise panel adresindeki kimliği kısa ada çevirip adres çubuğunu `replace` ile düzeltiyor —
+`push` olsaydı geri tuşu kullanıcıyı eski adrese atar, o da tekrar buraya yönlenir ve geri
+tuşu çalışmaz hâle gelirdi.
+
+**İptal gibi komutlar hâlâ yalnızca kimlik alıyor.** Okuma ucunun girdisi geniş olabilir;
+geri alınamaz bir işlemin girdisi dar olmalı. Arayüz iptal isteğini adresteki değerle değil,
+yüklediği siparişin kimliğiyle gönderiyor.
+
+**Değişmeyen iki adres:** `/odeme/:orderId` (ödeme sayfasına yalnızca yönlendirmeyle
+gelinir, elle yazılmaz ya da paylaşılmaz) ve ürün düzenleme `/urunler/:productId` (ürün adı
+değişince kısa ad da değişir ve kayıtlı bağlantı kırılırdı).
+
+**Emoji tamamen kalktı.** Panel menüsünden sonra hesap menüsü, boş durum kutuları, kargo
+rozetleri ve "bulunamadı" sayfası da `AppIcon` çizimlerine geçti — emoji her işletim
+sisteminde başka çiziliyor ve renk almıyor.

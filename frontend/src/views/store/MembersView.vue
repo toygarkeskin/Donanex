@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
 import { api } from "../../lib/api";
+import { useMagaza } from "../../lib/magaza";
 import { formatDate, ROLE_LABELS } from "../../lib/format";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
@@ -11,6 +12,7 @@ import AlertBox from "../../components/AlertBox.vue";
 import ConfirmDialog from "../../components/ConfirmDialog.vue";
 
 const route = useRoute();
+const { id: storeId, params: magazaParams } = useMagaza();
 const toast = useToastStore();
 
 const members = ref([]);
@@ -22,7 +24,7 @@ const removing = ref(null);
 async function load() {
   loading.value = true;
   try {
-    members.value = (await api.get(`/stores/${route.params.storeId}/members`)).items;
+    members.value = (await api.get(`/stores/${storeId.value}/members`)).items;
   } finally {
     loading.value = false;
   }
@@ -31,7 +33,7 @@ async function load() {
 async function add() {
   adding.value = true;
   try {
-    const result = await api.post(`/stores/${route.params.storeId}/members`, { ...form });
+    const result = await api.post(`/stores/${storeId.value}/members`, { ...form });
     toast.success(result.message);
     form.email = "";
     await load();
@@ -44,7 +46,7 @@ async function add() {
 
 async function remove() {
   try {
-    const result = await api.post(`/stores/${route.params.storeId}/members`, {
+    const result = await api.post(`/stores/${storeId.value}/members`, {
       userId: removing.value.id,
       roleCode: removing.value.roleCode,
       remove: true

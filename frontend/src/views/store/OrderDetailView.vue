@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { api } from "../../lib/api";
+import { useMagaza } from "../../lib/magaza";
 import { money, formatDate, safeUrl, PACKAGE_STATUS, ORDER_STATUS, CARRIERS } from "../../lib/format";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
@@ -12,6 +13,7 @@ import FormField from "../../components/FormField.vue";
 import AlertBox from "../../components/AlertBox.vue";
 
 const route = useRoute();
+const { id: storeId, params: magazaParams } = useMagaza();
 const toast = useToastStore();
 
 const pkg = ref(null);
@@ -35,7 +37,7 @@ const nextStatuses = computed(() => NEXT[pkg.value?.status] || []);
 async function load() {
   loading.value = true;
   try {
-    pkg.value = await api.get(`/stores/${route.params.storeId}/orders/${route.params.packageId}`);
+    pkg.value = await api.get(`/stores/${storeId.value}/orders/${route.params.orderNo}`);
     Object.assign(shipping, {
       carrier: pkg.value.carrier || "",
       trackingNumber: pkg.value.trackingNumber || "",
@@ -49,7 +51,7 @@ async function load() {
 async function setStatus(status) {
   savingStatus.value = true;
   try {
-    await api.patch(`/stores/${route.params.storeId}/orders/${route.params.packageId}/status`, { status });
+    await api.patch(`/stores/${storeId.value}/orders/${route.params.orderNo}/status`, { status });
     toast.success("Paket durumu güncellendi.");
     await load();
   } catch (error) {
@@ -62,7 +64,7 @@ async function setStatus(status) {
 async function saveShipping() {
   savingShipping.value = true;
   try {
-    await api.patch(`/stores/${route.params.storeId}/orders/${route.params.packageId}/shipping`, {
+    await api.patch(`/stores/${storeId.value}/orders/${route.params.orderNo}/shipping`, {
       carrier: shipping.carrier || null,
       trackingNumber: shipping.trackingNumber || null,
       trackingUrl: shipping.trackingUrl || null
@@ -85,7 +87,7 @@ onMounted(load);
   <div v-else-if="pkg">
     <PageHeader :title="pkg.orderNumber" :description="formatDate(pkg.placedAt)">
       <template #actions>
-        <RouterLink :to="{ name: 'store-orders', params: { storeId: route.params.storeId } }" class="btn-secondary">
+        <RouterLink :to="{ name: 'store-orders', params: magazaParams }" class="btn-secondary">
           ← Siparişler
         </RouterLink>
       </template>

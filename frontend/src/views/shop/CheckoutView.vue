@@ -101,7 +101,7 @@ onMounted(async () => {
       v-if="cart.loaded && !cart.items.length"
       title="Sepetiniz boş"
       description="Sipariş verebilmek için önce sepetinize ürün ekleyin."
-      icon="🛍️"
+      icon="sepet"
     >
       <RouterLink :to="{ name: 'products' }" class="btn-primary">Ürünlere git</RouterLink>
     </EmptyState>

@@ -14,7 +14,7 @@ const loading = ref(true);
 
 onMounted(async () => {
   try {
-    order.value = await api.get(`/admin/orders/${route.params.orderId}`);
+    order.value = await api.get(`/admin/orders/${route.params.orderNo}`);
   } finally {
     loading.value = false;
   }

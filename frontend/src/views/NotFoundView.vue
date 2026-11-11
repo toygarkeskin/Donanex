@@ -1,10 +1,11 @@
 <script setup>
+import AppIcon from "../components/AppIcon.vue";
 import { RouterLink } from "vue-router";
 </script>
 
 <template>
   <div class="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
-    <p class="text-5xl" aria-hidden="true">🧭</p>
+    <p class="text-ink-300" aria-hidden="true"><AppIcon name="arama" :size="48" /></p>
     <h1 class="text-2xl font-bold text-ink-900">Sayfa bulunamadı</h1>
     <p class="max-w-md text-sm text-ink-500">
       Aradığınız sayfa taşınmış ya da hiç var olmamış olabilir.

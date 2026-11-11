@@ -18,6 +18,7 @@
 import type { RoleAssignment as RoleAssignmentRow } from "../../domain/identity/AccessPolicy";
 import type { DomainEventShape } from "../../domain/shared/DomainEvent";
 import type { CartLine } from "../../domain/ordering/Cart";
+import type { OrderRef } from "../../domain/ordering/orderReference";
 
 /** Veritabanı satırı. */
 export type Row = Record<string, any>;
@@ -345,15 +346,31 @@ export interface CartReadModel {
   findCartId(input: { userId?: string | null; guestCartId?: string | null }): Promise<string | null>;
 }
 
+/**
+ * Sipariş detayı sorguları ARTIK REFERANS ALIYOR, düz kimlik değil.
+ *
+ * Referans ya iç kimliği (UUID) ya da müşteriye gösterilen sipariş
+ * numarasını taşır; hangisiyle eşleşileceği SQL'e açıkça iletilir. Böylece
+ * okunur adresler ("…/siparisler/PZ-2026-001005") eski UUID bağlantılarını
+ * kırmadan çalışıyor. Ayrıntısı: domain/ordering/orderReference.
+ */
 export interface OrderReadModel {
   listForUser(userId: string, filters: ListFilters): Promise<Row>;
-  getForUser(orderId: string, userId: string): Promise<Row | null>;
+  getForUser(ref: OrderRef, userId: string): Promise<Row | null>;
   getByTrackingCode(orderNumber: string, trackingCodeHash: string): Promise<Row | null>;
   listForStore(storeId: string, filters: ListFilters): Promise<Row>;
-  /** Sıra: önce PAKET, sonra mağaza. */
-  getForStore(packageId: string, storeId: string): Promise<Row | null>;
+  /**
+   * Sıra: önce referans, sonra mağaza.
+   *
+   * Burada referansın "id" alanı PAKET kimliğidir, sipariş kimliği değil —
+   * mağaza panelinde görülen birim pakettir. "number" ise siparişin
+   * numarasıdır ve mağaza ile birlikte tek bir paketi gösterir, çünkü bir
+   * siparişin bir mağazada yalnızca BİR paketi olabilir (şemada
+   * UNIQUE (order_id, store_id)).
+   */
+  getForStore(ref: OrderRef, storeId: string): Promise<Row | null>;
   listForAdmin(filters: ListFilters): Promise<Row>;
-  getForAdmin(orderId: string): Promise<Row | null>;
+  getForAdmin(ref: OrderRef): Promise<Row | null>;
 }
 
 export interface UserReadModel {

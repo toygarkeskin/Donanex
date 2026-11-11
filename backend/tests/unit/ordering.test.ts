@@ -17,6 +17,7 @@ import { AccessPolicy } from "../../src/domain/identity/AccessPolicy";
 import { RoleCodes } from "../../src/domain/identity/Role";
 import { createStore, fakeOpaqueTokens, fixedClock, fakeIds, TRACKING_CODE, satir } from "./fakes";
 import { InMemoryCache } from "../../src/infrastructure/cache/RedisCache";
+import { orderReference, isOrderNumber } from "../../src/domain/ordering/orderReference";
 
 /** Kimlikler UUID olarak dogrulandigi icin sahte veriler de UUID kullanir. */
 const P1 = "11111111-1111-4111-8111-111111111111";
@@ -375,4 +376,50 @@ test("Süresi dolmamış sipariş iptal edilmez", async () => {
   const result = await bus.execute<Row>(new ExpireUnpaidOrdersCommand({ olderThanMinutes: 60 }));
   assert.equal(result.expired, 0);
   assert.equal(store.state.orders[0].status, "pending_payment");
+});
+
+/* ------------------------------------------------------- sipariş referansı
+
+   Adres çubuğundaki değer iki biçimde gelebiliyor: iç kimlik (UUID) ya da
+   müşteriye gösterilen sipariş numarası. Hangisiyle eşleşileceği SQL'e
+   açıkça iletiliyor; burada o ayrımın doğru yapıldığı sınanıyor. */
+
+test("Sipariş referansı kimliği ve numarayı ayırır", () => {
+  assert.deepEqual(orderReference(P1), { id: P1, number: null });
+  assert.deepEqual(orderReference("PZ-2026-001005"), { id: null, number: "PZ-2026-001005" });
+
+  // Küçük harfle yazılan numara kabul edilir ve tek doğru hâline çevrilir:
+  // kullanıcı adresi elle yazdığında büyük/küçük harf yüzünden "bulunamadı"
+  // görmesin.
+  assert.deepEqual(orderReference("pz-2026-001005"), { id: null, number: "PZ-2026-001005" });
+  assert.deepEqual(orderReference("  PZ-2026-001005  "), { id: null, number: "PZ-2026-001005" });
+});
+
+test("Sipariş referansı serbest metni kabul etmez", () => {
+  /*
+   * Desen DAR tutuluyor. Serbest metni numara sayıp veritabanına göndermek,
+   * adres çubuğuna yazılan her şeyin sorguya dönmesi demekti; hata sorgudan
+   * ÖNCE veriliyor.
+   */
+  for (const gecersiz of [
+    "",
+    "   ",
+    "PZ-2026-1005", // altı hane değil
+    "PZ-26-001005", // yıl dört hane değil
+    "XX-2026-001005", // başka ön ek
+    "PZ-2026-001005; DROP TABLE orders",
+    "../../etc/passwd",
+    null,
+    undefined,
+    12345
+  ]) {
+    assert.throws(() => orderReference(gecersiz), ValidationError, `kabul edilmemeliydi: ${String(gecersiz)}`);
+  }
+});
+
+test("Sipariş numarası tanıyıcısı yalnızca doğru biçime evet der", () => {
+  assert.equal(isOrderNumber("PZ-2026-001005"), true);
+  assert.equal(isOrderNumber("pz-2026-001005"), true);
+  assert.equal(isOrderNumber(P1), false, "UUID bir sipariş numarası değildir");
+  assert.equal(isOrderNumber("PZ-2026-00100"), false);
 });

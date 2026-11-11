@@ -169,6 +169,12 @@ defineProps({
       <path d="M15.2 16.4 19.6 12l-4.4-4.4M19.6 12H9.4" />
     </template>
 
+    <!-- Adres: harita iğnesi -->
+    <template v-else-if="name === 'konum'">
+      <path d="M19 10.4c0 5.1-7 11-7 11s-7-5.9-7-11a7 7 0 1 1 14 0Z" />
+      <circle cx="12" cy="10.2" r="2.6" />
+    </template>
+
     <!-- Boş durum: açık kapaklı kutu -->
     <template v-else-if="name === 'bos'">
       <path d="M3.6 12.6h4l1.4 2.4h6l1.4-2.4h4" />

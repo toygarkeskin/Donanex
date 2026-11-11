@@ -2,7 +2,7 @@
 
 import { Query, type Handler } from "../../shared/cqrs/Message";
 import { NotFoundError } from "../../../domain/shared/errors";
-import { requireUuid } from "../../../domain/shared/guards";
+import { orderReference } from "../../../domain/ordering/orderReference";
 import { assertCan, type UseCaseContext } from "../../shared/authorize";
 import type { OrderReadModel, Row } from "../../shared/contracts";
 
@@ -25,8 +25,8 @@ export class GetAdminOrderHandler implements Handler<GetAdminOrderQuery, Row, Us
   async handle({ orderId }: GetAdminOrderQuery, context: UseCaseContext = {}): Promise<Row> {
     // Kapsamsız sorulur: bu izin yalnızca sistem geneli bir rolle kazanılır.
     assertCan(context, "order:read");
-    requireUuid(orderId, "Sipariş numarası");
-    const order = await this.readModel.getForAdmin(orderId);
+    // Kimlik ya da sipariş numarası; adres çubuğunda okunur olan ikincisi.
+    const order = await this.readModel.getForAdmin(orderReference(orderId));
     if (!order) throw new NotFoundError("Sipariş bulunamadı.");
     return order;
   }

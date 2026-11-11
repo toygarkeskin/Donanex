@@ -1,14 +1,15 @@
 <script setup>
 import { RouterLink, RouterView } from "vue-router";
 import { useAuthStore } from "../../stores/auth";
+import AppIcon from "../../components/AppIcon.vue";
 
 const auth = useAuthStore();
 
 const links = [
-  { name: "account-orders", label: "Siparişlerim", icon: "📦" },
-  { name: "account-addresses", label: "Adreslerim", icon: "📍" },
-  { name: "account-tickets", label: "Destek Taleplerim", icon: "💬" },
-  { name: "account-profile", label: "Hesap Bilgilerim", icon: "👤" }
+  { name: "account-orders", label: "Siparişlerim", icon: "kargo" },
+  { name: "account-addresses", label: "Adreslerim", icon: "konum" },
+  { name: "account-tickets", label: "Destek Taleplerim", icon: "destek" },
+  { name: "account-profile", label: "Hesap Bilgilerim", icon: "hesap" }
 ];
 </script>
 
@@ -24,7 +25,7 @@ const links = [
           class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-600 hover:bg-ink-100"
           active-class="bg-brand-50 text-brand-700"
         >
-          <span aria-hidden="true">{{ link.icon }}</span> {{ link.label }}
+          <AppIcon :name="link.icon" :size="18" /> {{ link.label }}
         </RouterLink>
 
         <RouterLink
@@ -32,7 +33,7 @@ const links = [
           :to="{ name: 'store-panel' }"
           class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-600 hover:bg-ink-100"
         >
-          <span aria-hidden="true">🏪</span> Mağaza Paneli
+          <AppIcon name="magaza" :size="18" /> Mağaza Paneli
         </RouterLink>
         <RouterLink
           v-else
@@ -40,7 +41,7 @@ const links = [
           class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-600 hover:bg-ink-100"
           active-class="bg-brand-50 text-brand-700"
         >
-          <span aria-hidden="true">🏪</span> Mağaza Aç
+          <AppIcon name="magaza" :size="18" /> Mağaza Aç
         </RouterLink>
       </nav>
     </aside>

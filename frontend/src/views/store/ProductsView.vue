@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { api, query } from "../../lib/api";
+import { useMagaza } from "../../lib/magaza";
 import { money, PRODUCT_STATUS } from "../../lib/format";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
@@ -13,6 +14,7 @@ import PaginationBar from "../../components/PaginationBar.vue";
 import ConfirmDialog from "../../components/ConfirmDialog.vue";
 
 const route = useRoute();
+const { id: storeId, params: magazaParams } = useMagaza();
 const toast = useToastStore();
 
 const result = ref({ items: [], total: 0, page: 1, pages: 1 });
@@ -21,12 +23,11 @@ const filters = reactive({ q: "", status: "", page: 1 });
 const removing = ref(null);
 const busy = ref(false);
 
-const storeId = () => route.params.storeId;
 
 async function load() {
   loading.value = true;
   try {
-    result.value = await api.get(`/stores/${storeId()}/products${query(filters)}`);
+    result.value = await api.get(`/stores/${storeId.value}/products${query(filters)}`);
   } finally {
     loading.value = false;
   }
@@ -34,7 +35,7 @@ async function load() {
 
 async function setStatus(product, status) {
   try {
-    await api.patch(`/stores/${storeId()}/products/${product.id}/status`, { status });
+    await api.patch(`/stores/${storeId.value}/products/${product.id}/status`, { status });
     toast.success(status === "active" ? "Ürün yayına alındı." : "Ürün durumu güncellendi.");
     await load();
   } catch (error) {
@@ -45,7 +46,7 @@ async function setStatus(product, status) {
 async function remove() {
   busy.value = true;
   try {
-    const result = await api.delete(`/stores/${storeId()}/products/${removing.value.id}`);
+    const result = await api.delete(`/stores/${storeId.value}/products/${removing.value.id}`);
     toast.success(result.message);
     removing.value = null;
     await load();
@@ -68,7 +69,7 @@ watch(
   }
 );
 watch(() => [filters.status, filters.page], load);
-watch(() => route.params.storeId, load);
+watch(() => storeId.value, load);
 onMounted(load);
 </script>
 
@@ -77,12 +78,12 @@ onMounted(load);
     <PageHeader title="Ürünler" description="Mağazanızın kataloğu.">
       <template #actions>
         <RouterLink
-          :to="{ name: 'store-product-import', params: { storeId: route.params.storeId } }"
+          :to="{ name: 'store-product-import', params: magazaParams }"
           class="btn-secondary"
         >
           CSV ile aktar
         </RouterLink>
-        <RouterLink :to="{ name: 'store-product-new', params: { storeId: route.params.storeId } }" class="btn-primary">
+        <RouterLink :to="{ name: 'store-product-new', params: magazaParams }" class="btn-primary">
           + Yeni ürün
         </RouterLink>
       </template>
@@ -104,9 +105,9 @@ onMounted(load);
       v-else-if="!result.items.length"
       title="Ürün bulunamadı"
       description="İlk ürününüzü ekleyerek satışa başlayın."
-      icon="🏷️"
+      icon="etiket"
     >
-      <RouterLink :to="{ name: 'store-product-new', params: { storeId: route.params.storeId } }" class="btn-primary">
+      <RouterLink :to="{ name: 'store-product-new', params: magazaParams }" class="btn-primary">
         Ürün ekle
       </RouterLink>
     </EmptyState>
@@ -146,7 +147,7 @@ onMounted(load);
               <td>
                 <div class="flex justify-end gap-1">
                   <RouterLink
-                    :to="{ name: 'store-product-edit', params: { storeId: route.params.storeId, productId: product.id } }"
+                    :to="{ name: 'store-product-edit', params: { ...magazaParams, productId: product.id } }"
                     class="btn-ghost text-xs"
                   >
                     Düzenle

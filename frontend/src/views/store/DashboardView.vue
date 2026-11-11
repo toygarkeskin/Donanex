@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { api } from "../../lib/api";
+import { useMagaza } from "../../lib/magaza";
 import { money, formatDate, PACKAGE_STATUS, STORE_STATUS } from "../../lib/format";
 import { seri, egilim, sonHafta } from "../../lib/gosterge";
 import PageHeader from "../../components/PageHeader.vue";
@@ -12,6 +13,7 @@ import AlertBox from "../../components/AlertBox.vue";
 import CizgiGrafik from "../../components/CizgiGrafik.vue";
 
 const route = useRoute();
+const { id: storeId, params } = useMagaza();
 const summary = ref(null);
 const store = ref(null);
 const recent = ref([]);
@@ -21,11 +23,11 @@ const olcut = ref("orders");
 async function load() {
   loading.value = true;
   try {
-    const storeId = route.params.storeId;
+    const kimlik = storeId.value;
     const [dashboard, storeInfo, orders] = await Promise.all([
-      api.get(`/stores/${storeId}/dashboard`),
-      api.get(`/stores/${storeId}`),
-      api.get(`/stores/${storeId}/orders?pageSize=6`)
+      api.get(`/stores/${kimlik}/dashboard`),
+      api.get(`/stores/${kimlik}`),
+      api.get(`/stores/${kimlik}/orders?pageSize=6`)
     ]);
     summary.value = dashboard;
     store.value = storeInfo;
@@ -36,9 +38,8 @@ async function load() {
 }
 
 onMounted(load);
-watch(() => route.params.storeId, load);
+watch(() => storeId.value, load);
 
-const params = computed(() => ({ storeId: route.params.storeId }));
 const gunler = computed(() => summary.value?.last14Days ?? []);
 const grafikSerisi = computed(() => seri(gunler.value, olcut.value));
 
@@ -169,7 +170,7 @@ const bicim = (deger) => (olcut.value === "revenue" ? money(deger) : `${deger} p
           <ul v-else class="divide-y divide-ink-100">
             <li v-for="pkg in recent" :key="pkg.packageId">
               <RouterLink
-                :to="{ name: 'store-order', params: { ...params, packageId: pkg.packageId } }"
+                :to="{ name: 'store-order', params: { ...params, orderNo: pkg.orderNumber } }"
                 class="flex items-center gap-3 py-2.5 hover:bg-ink-50"
               >
                 <span class="min-w-0 flex-1">

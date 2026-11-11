@@ -108,7 +108,7 @@ Tutar **sunucuda** hesaplanır; gövdede gönderilen fiyat ve toplam yok sayıl�
 | `GET /api/me` | Profil, roller, mağazalar |
 | `PUT /api/me/profile` · `PUT /api/me/password` | Profil ve parola |
 | `GET/POST /api/me/addresses` · `PUT/DELETE /api/me/addresses/:addressId` | Adres defteri |
-| `GET /api/me/orders` · `GET /api/me/orders/:orderId` | Sipariş geçmişi (sahiplik sorgunun parçası) |
+| `GET /api/me/orders` · `GET /api/me/orders/:siparis` | Sipariş geçmişi (sahiplik sorgunun parçası). `:siparis` ya iç kimlik ya da sipariş numarasıdır (`PZ-2026-001005`, büyük/küçük harf farketmez); aynı kural mağaza ve yönetim sipariş uçlarında da geçerli. Başka biçim 400 döner — serbest metin sorguya hiç ulaşmaz |
 | `GET /api/me/tickets` · `GET /api/me/tickets/:ticketId` | Destek talepleri |
 | `POST /api/me/store-application` | Mağaza açma başvurusu (onaya düşer) |
 | `POST /api/support/tickets` | Destek talebi; misafir de açabilir |

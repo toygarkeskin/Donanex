@@ -25,7 +25,7 @@ const CANCELLABLE = ["pending", "preparing"];
 async function load() {
   loading.value = true;
   try {
-    order.value = await api.get(`/me/orders/${route.params.orderId}`);
+    order.value = await api.get(`/me/orders/${route.params.orderNo}`);
   } finally {
     loading.value = false;
   }
@@ -34,7 +34,13 @@ async function load() {
 async function cancel() {
   cancelling.value = true;
   try {
-    const result = await api.post(`/me/orders/${route.params.orderId}/cancel`);
+    /*
+     * İptal, adresteki değeri DEĞİL yüklenen siparişin kimliğini kullanıyor.
+     * Okuma ucu iki biçimi de kabul ediyor (numara ya da UUID), komut ucu
+     * ise yalnızca kimliği — iptal gibi geri alınamaz bir işlemde girdiyi
+     * dar tutmak doğru.
+     */
+    const result = await api.post(`/me/orders/${order.value.id}/cancel`);
     toast.success(result.message);
     confirming.value = false;
     await load();

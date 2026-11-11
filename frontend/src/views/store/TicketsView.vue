@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
 import { api, query } from "../../lib/api";
+import { useMagaza } from "../../lib/magaza";
 import { formatDate, TICKET_STATUS } from "../../lib/format";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
@@ -12,6 +13,7 @@ import PaginationBar from "../../components/PaginationBar.vue";
 import FormField from "../../components/FormField.vue";
 
 const route = useRoute();
+const { id: storeId, params: magazaParams } = useMagaza();
 const toast = useToastStore();
 
 const result = ref({ items: [], total: 0, page: 1, pages: 1 });
@@ -21,7 +23,7 @@ const selected = ref(null);
 const reply = reactive({ body: "", status: "answered" });
 const saving = ref(false);
 
-const base = () => `/stores/${route.params.storeId}/tickets`;
+const base = () => `/stores/${storeId.value}/tickets`;
 
 async function load() {
   loading.value = true;
