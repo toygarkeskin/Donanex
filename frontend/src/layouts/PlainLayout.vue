@@ -61,10 +61,13 @@ const maddeler = [
     </aside>
 
     <main class="flex items-center justify-center px-4 py-8 lg:px-8">
+      <!--
+        Kutu BURADA ÇİZİLMİYOR: giriş, kayıt, parola sayfalarının her biri
+        zaten kendi "card" kutusunu çiziyor. İkisi birden olunca iç içe iki
+        çerçeve çıkıyordu.
+      -->
       <div class="w-full max-w-md">
-        <div class="card p-5 sm:p-7">
-          <RouterView />
-        </div>
+        <RouterView />
 
         <p class="mt-5 text-center text-xs text-ink-400">
           Donanex — demo ortamı. Giden e-postalar Mailpit arayüzünde görünür.
