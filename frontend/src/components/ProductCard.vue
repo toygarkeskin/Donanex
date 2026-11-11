@@ -1,29 +1,23 @@
 <script setup>
-import { ref } from "vue";
 import { RouterLink } from "vue-router";
 import { money } from "../lib/format";
-import { useCartStore } from "../stores/cart";
-import { useToastStore } from "../stores/toast";
 import ProductImage from "./ProductImage.vue";
 
-const props = defineProps({ product: { type: Object, required: true } });
-
-const cart = useCartStore();
-const toast = useToastStore();
-const adding = ref(false);
-
-async function addToCart() {
-  adding.value = true;
-  try {
-    await cart.add(props.product.id, 1);
-    // Kayıtsız kullanıcı da sepete ekleyebilir; sepet sunucuda saklanır.
-    toast.success(`${props.product.name} sepete eklendi.`);
-  } catch (error) {
-    toast.error(error.message);
-  } finally {
-    adding.value = false;
-  }
-}
+/*
+ * Ürün kartı.
+ *
+ * SEPETE EKLE DÜĞMESİ YOK — bilinçli.
+ *
+ * Listedeki kart ürünün adını, fotoğrafını ve fiyatını gösterir; stok
+ * durumu, açıklaması, satıcısının kargo koşulu ve kaç adet alınacağı ürün
+ * sayfasındadır. Listeden tek tıkla sepete atmak, kullanıcıyı neyi
+ * aldığını görmeden karar vermeye itiyordu. Trendyol da dahil büyük
+ * pazar yerleri kartı bir DAVET olarak kullanır, bir kasa olarak değil.
+ *
+ * Yan faydası: kart artık yalnızca bağlantılardan oluşuyor; sepete ekleme
+ * tek bir yerde (ürün sayfası) yaşıyor.
+ */
+defineProps({ product: { type: Object, required: true } });
 </script>
 
 <template>
@@ -32,10 +26,6 @@ async function addToCart() {
     yanlarda boşluk kalıyordu. Kare oran kartı bir miktar UZATIR; ekran başına
     düşen ürün sayısındaki artış orandan değil, ızgaranın 4 sütuna çıkması ve
     iç boşlukların daralmasından geliyor.
-
-    Kutunun içi ProductImage'a bırakıldı: katalogdaki oranlar 0.67 ile 2.44
-    arasında değiştiği için düz contain, geniş fotoğraflarda kutunun yarısını
-    boş gri bantla dolduruyordu.
   -->
   <article class="card group flex flex-col overflow-hidden transition hover:shadow-md">
     <RouterLink
@@ -59,21 +49,17 @@ async function addToCart() {
         </RouterLink>
       </h3>
 
-      <p class="text-lg font-bold leading-tight text-ink-900">{{ money(product.price) }}</p>
+      <!--
+        Fiyat kartın en güçlü öğesi: düğme gittiği için kullanıcının aradığı
+        bilgi bu. Marka mavisiyle yazılıyor, böylece ızgarada göz fiyattan
+        fiyata atlayabiliyor.
+      -->
+      <p class="mt-1 text-lg font-bold leading-tight text-brand-600">{{ money(product.price) }}</p>
 
       <p v-if="product.stock > 0 && product.stock <= 5" class="text-xs font-medium text-amber-700">
         Son {{ product.stock }} ürün
       </p>
       <p v-else-if="product.stock <= 0" class="text-xs font-medium text-red-600">Stokta yok</p>
-
-      <button
-        type="button"
-        class="btn-primary mt-1 w-full py-1.5 text-sm"
-        :disabled="product.stock <= 0 || adding"
-        @click="addToCart"
-      >
-        {{ product.stock <= 0 ? "Stokta yok" : adding ? "Ekleniyor…" : "Sepete ekle" }}
-      </button>
     </div>
   </article>
 </template>

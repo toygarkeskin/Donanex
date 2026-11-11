@@ -38,6 +38,18 @@
   --color-night: #1a1e25;
   --color-night-muted: #b1b8c6;
   --color-night-accent: #bfd3fe;
+
+  /*
+   * Ürün fotoğrafının arkasındaki zemin. "night" gibi, bu da iki temada
+   * AYNI kalır ve aşağıdaki koyu tema bloğunda yeniden tanımlanmaz.
+   *
+   * Neden açık: ürün fotoğrafları beyaz fonda çekiliyor. Koyu bir kutuya
+   * konduklarında fotoğrafın kendi beyaz fonu kutunun içinde ayrı bir
+   * dikdörtgen gibi duruyor ve her kart başka türlü görünüyordu. Açık ve
+   * her yerde aynı olan bir zeminde fotoğraf kutuyla kaynaşıyor, liste
+   * tek elden çıkmış gibi duruyor.
+   */
+  --color-urun: #f3f4f6;
 }
 
 @layer base {

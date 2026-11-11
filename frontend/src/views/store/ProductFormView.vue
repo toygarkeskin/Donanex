@@ -237,7 +237,7 @@ onMounted(load);
 
       <div v-if="form.imageUrl" class="flex items-center gap-3">
         <div class="h-24 w-24 overflow-hidden rounded-lg border border-ink-200">
-          <ProductImage :src="form.imageUrl" alt="Önizleme" padding="p-2" blur-class="blur-lg" :lazy="false" />
+          <ProductImage :src="form.imageUrl" alt="Önizleme" padding="p-2" :lazy="false" />
         </div>
         <span class="text-xs text-ink-500">Kapak önizlemesi — vitrinde böyle görünür</span>
       </div>
@@ -271,7 +271,7 @@ onMounted(load);
       <ul v-if="form.galleryUrls.length" class="flex flex-wrap gap-3">
         <li v-for="adres in form.galleryUrls" :key="adres" class="w-28">
           <div class="h-24 w-28 overflow-hidden rounded-lg border border-ink-200">
-            <ProductImage :src="adres" padding="p-2" blur-class="blur-lg" />
+            <ProductImage :src="adres" padding="p-2" />
           </div>
           <div class="mt-1 flex justify-between gap-1 text-xs">
             <button type="button" class="text-brand-600 hover:underline" @click="kapakYap(adres)">Kapak yap</button>

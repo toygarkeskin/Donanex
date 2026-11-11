@@ -91,7 +91,7 @@ onMounted(() => cart.load().catch(() => {}));
           :class="{ 'border-amber-400 bg-amber-400/10': !item.available }"
         >
           <div v-if="item.imageUrl" class="h-20 w-20 shrink-0 overflow-hidden rounded-lg">
-            <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-1.5" blur-class="blur-lg" />
+            <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-1.5" />
           </div>
           <div v-else class="h-20 w-20 shrink-0 rounded-lg bg-ink-100" />
 

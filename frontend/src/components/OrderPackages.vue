@@ -27,7 +27,7 @@ defineProps({
       <ul class="divide-y divide-ink-100">
         <li v-for="item in pkg.items" :key="item.productId" class="flex items-center gap-3 px-4 py-3">
           <div v-if="item.imageUrl" class="h-12 w-12 shrink-0 overflow-hidden rounded-lg">
-            <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-1" blur-class="blur-md" />
+            <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-1" />
           </div>
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-ink-800">{{ item.name }}</p>

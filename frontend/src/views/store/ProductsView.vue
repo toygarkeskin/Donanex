@@ -129,7 +129,7 @@ onMounted(load);
               <td>
                 <div class="flex items-center gap-3">
                   <div class="h-10 w-10 shrink-0 overflow-hidden rounded-lg">
-                    <ProductImage :src="product.imageUrl" :alt="product.name" padding="p-0.5" blur-class="blur-md" />
+                    <ProductImage :src="product.imageUrl" :alt="product.name" padding="p-0.5" />
                   </div>
                   <div class="min-w-0">
                     <p class="truncate font-medium text-ink-800">{{ product.name }}</p>

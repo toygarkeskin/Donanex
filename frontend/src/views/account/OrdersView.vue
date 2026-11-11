@@ -59,7 +59,7 @@ onMounted(load);
             :key="item.productId"
             class="h-10 w-10 overflow-hidden rounded-lg border-2 border-white"
           >
-            <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-0.5" blur-class="blur-md" />
+            <ProductImage :src="item.imageUrl" :alt="item.name" padding="p-0.5" />
           </div>
         </div>
 
