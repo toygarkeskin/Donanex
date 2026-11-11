@@ -116,5 +116,15 @@ defineProps({
       <path d="M3.8 7.6 12 3.6l8.2 4v8.8l-8.2 4-8.2-4V7.6Z" />
       <path d="M3.8 7.6 12 11.7l8.2-4.1M12 11.7v8.7" />
     </template>
+
+    <!--
+      Bildirim zili. Gövde logodaki yuvarlatılmış dili sürdürüyor; tokmak
+      ayrı bir yay olarak çizildi çünkü tek parça çizgide 18px'te zil ile
+      tokmak birbirine giriyor ve simge "tanınmaz bir leke" oluyordu.
+    -->
+    <template v-else-if="name === 'zil'">
+      <path d="M18.3 16.2V11a6.3 6.3 0 1 0-12.6 0v5.2l-1.3 2.1h15.2l-1.3-2.1Z" />
+      <path d="M9.9 18.3a2.1 2.1 0 0 0 4.2 0" />
+    </template>
   </svg>
 </template>

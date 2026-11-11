@@ -108,12 +108,22 @@ export class ProcessPaymentHandler implements Handler<ProcessPaymentCommand, Pay
 
       if (succeeded) {
         await repos.orders.setStatus(order.id, OrderStatus.PAID);
+        /*
+         * Mağazalar "yeni sipariş" bildirimini BURADA alıyor, sipariş
+         * verildiğinde değil: ödemesi gelmeyen sipariş kendiliğinden iptal
+         * oluyor, o yüzden mağazaya ancak hazırlanabilir hâle gelince haber
+         * veriliyor. Olay kendi kendine yeterli olmalı, bu yüzden paket
+         * listesi içine konuyor — tüketici veritabanına geri dönmez.
+         */
+        const paketler = await repos.orders.listPackages(order.id);
         await repos.outbox.add(
           domainEvent(EventTypes.ORDER_PAID, "order", order.id, {
             orderNumber: order.orderNumber,
+            userId: order.userId,
             email: order.contactEmail,
             fullName: order.contactFullName,
-            total: order.total
+            total: order.total,
+            packages: paketler.map((pkg) => ({ storeId: pkg.storeId, packageId: pkg.id }))
           })
         );
       } else {
@@ -126,6 +136,7 @@ export class ProcessPaymentHandler implements Handler<ProcessPaymentCommand, Pay
         await repos.outbox.add(
           domainEvent(EventTypes.ORDER_PAYMENT_FAILED, "order", order.id, {
             orderNumber: order.orderNumber,
+            userId: order.userId,
             email: order.contactEmail,
             fullName: order.contactFullName
           })

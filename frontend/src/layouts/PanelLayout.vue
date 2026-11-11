@@ -5,6 +5,7 @@ import { useAuthStore } from "../stores/auth";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import BrandLogo from "../components/BrandLogo.vue";
 import GeriTusu from "../components/GeriTusu.vue";
+import BildirimZili from "../components/BildirimZili.vue";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -68,6 +69,22 @@ const storeLinks = computed(() => {
 });
 
 const links = computed(() => (isAdminPanel.value ? adminLinks : storeLinks.value));
+
+/*
+ * Panelin bildirim kutusu.
+ *
+ * Kişisel kutudan AYRI: mağaza panelindeki zil mağazanın kutusunu gösterir,
+ * başlıktaki zil kişinin kendi kutusunu. "Siparişiniz kargoya verildi" ile
+ * "yeni sipariş geldi" aynı kutuda karışsaydı, mağaza sahibi müşteri
+ * bildirimleri arasında kendi işini kaybederdi.
+ *
+ * Mağaza henüz belli değilken (panelin kök adresi, yönlendirme bekliyor)
+ * kutu yok ve zil çizilmiyor.
+ */
+const bildirimKutusu = computed(() => {
+  if (isAdminPanel.value) return "admin";
+  return storeId.value ? `store:${storeId.value}` : null;
+});
 const title = computed(() => (isAdminPanel.value ? "Yönetim Paneli" : activeStore.value?.name || "Mağaza Paneli"));
 
 async function signOut() {
@@ -144,11 +161,16 @@ async function signOut() {
     <div v-if="sidebarOpen" class="fixed inset-0 z-30 bg-night/40 lg:hidden" @click="sidebarOpen = false" />
 
     <div class="flex min-w-0 flex-1 flex-col">
-      <header class="flex h-16 items-center gap-3 border-b border-ink-200 bg-surface px-4">
+      <!-- "relative": bildirim paneli telefonda BU başlığa göre konumlanıyor.
+           Başlık konumlandırılmamış olsaydı panel sayfanın tamamını kapsayan
+           ilk kapsayıcı bloğa bağlanır ve "top-full" onu ekranın bir boy
+           aşağısına atardı. -->
+      <header class="relative flex h-16 items-center gap-3 border-b border-ink-200 bg-surface px-4">
         <button type="button" class="btn-ghost lg:hidden" aria-label="Menü" @click="sidebarOpen = true">☰</button>
         <p class="truncate text-sm font-semibold text-ink-800">{{ title }}</p>
         <div class="ml-auto flex items-center gap-2">
           <span class="hidden text-sm text-ink-500 sm:inline">{{ auth.displayName }}</span>
+          <BildirimZili v-if="bildirimKutusu" :kutu="bildirimKutusu" />
           <ThemeToggle />
           <button type="button" class="btn-secondary" @click="signOut">Çıkış</button>
         </div>

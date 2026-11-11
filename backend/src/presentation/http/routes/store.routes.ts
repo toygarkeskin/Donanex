@@ -27,6 +27,12 @@ import {
   ManageStoreMemberCommand
 } from "../../../application/stores";
 import { ListTicketsQuery, GetTicketQuery, ReplyToTicketCommand } from "../../../application/support";
+import {
+  ListNotificationsQuery,
+  CountUnreadNotificationsQuery,
+  MarkNotificationReadCommand,
+  MarkAllNotificationsReadCommand
+} from "../../../application/notifications";
 import { GetDashboardQuery } from "../../../application/system";
 import { requireAuth, requirePermission } from "../middleware/authenticate";
 
@@ -250,6 +256,52 @@ export function storePanelRoutes({ commands, queries }: Pick<RouteContext, "comm
       req.context()
     );
     res.json({ ...result, message: "Talep güncellendi." });
+  });
+
+  /* ----- bildirimler -----
+     Mağazanın kutusu; o mağazanın paneline erişen herkes aynı kutuyu görür
+     ve okundu işareti de ortaktır. Bilinçli: iki çalışan aynı siparişi iki
+     kez hazırlamaya başlamasın diye bildirim "biri ilgilendi" bilgisini
+     taşıyor. */
+
+  router.get("/:storeId/notifications", may("notification:read"), async (req, res) => {
+    res.json(
+      await queries.ask(
+        new ListNotificationsQuery({ feed: "store", storeId: yol(req, "storeId"), filters: req.query }),
+        req.context()
+      )
+    );
+  });
+
+  router.get("/:storeId/notifications/unread-count", may("notification:read"), async (req, res) => {
+    res.json(
+      await queries.ask(
+        new CountUnreadNotificationsQuery({ feed: "store", storeId: yol(req, "storeId") }),
+        req.context()
+      )
+    );
+  });
+
+  router.post("/:storeId/notifications/:notificationId/read", may("notification:read"), async (req, res) => {
+    res.json(
+      await commands.execute(
+        new MarkNotificationReadCommand({
+          feed: "store",
+          storeId: yol(req, "storeId"),
+          notificationId: yol(req, "notificationId")
+        }),
+        req.context()
+      )
+    );
+  });
+
+  router.post("/:storeId/notifications/read-all", may("notification:read"), async (req, res) => {
+    res.json(
+      await commands.execute(
+        new MarkAllNotificationsReadCommand({ feed: "store", storeId: yol(req, "storeId") }),
+        req.context()
+      )
+    );
   });
 
   return router;

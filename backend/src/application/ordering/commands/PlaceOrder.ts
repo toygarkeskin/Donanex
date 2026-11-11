@@ -112,6 +112,10 @@ export class PlaceOrderHandler implements Handler<PlaceOrderCommand, PlacedOrder
       await repos.outbox.add(
         domainEvent(EventTypes.ORDER_PLACED, "order", order.id, {
           orderNumber: order.orderNumber,
+          // Bildirim hangi hesabın kutusuna düşeceğini buradan öğrenir;
+          // e-posta adresinden kullanıcıyı ARAMAK zorunda kalmaz. Misafir
+          // siparişinde null — gösterilecek bir hesap kutusu yok.
+          userId,
           email: validated.contact.email,
           fullName: validated.contact.fullName,
           total: draft.total.toDecimalString(),

@@ -325,3 +325,48 @@ buna düşmediği için ayarı compose'tan geçirmek varsayılanı sessizce sile
 
 **Bunun bedeli:** geliştirme ortamında `localhost`'a dönen iki redirect_uri kayıtlı duruyor.
 Üretimde durmadığı ve açık istemcinin PKCE zorunluluğu kalktığı için kabul edildi.
+
+## 30. Bildirimler e-postayla aynı olaydan beslenir; metin yazılırken üretilir
+
+Site içi bildirim ve e-posta **aynı domain olayından** doğuyor: outbox'a yazılan olay
+RabbitMQ'da iki ayrı kuyruğa düşüyor (`donanex.email`, `donanex.notifications`) ve her
+kuyruğun kendi tüketicisi var. Tek kuyruğu iki tüketiciye paylaştırmak mesajları
+BÖLERDİ — olayların yarısı e-postaya, yarısı zile giderdi. Ayrı kuyruk ayrıca kanalları
+birbirinden yalıtıyor: SMTP çökmüşken zil çalışmayı sürdürüyor.
+
+Kazancı şu: "e-posta gitti ama zilde yok" (ya da tersi) durumu yapısal olarak oluşmuyor.
+Entegrasyon testi iki kanalı birlikte doğruluyor.
+
+**Metin yazılırken üretiliyor, görüntülenirken değil.** Alternatifi olayı saklayıp her
+açılışta metne çevirmekti; o zaman bir yıl önceki bildirimin metni bugünün koduna göre
+değişirdi ve kullanıcı "bana bu yazmamıştı" derdi. Bedeli: metin düzeltmesi eski satırlara
+yansımıyor.
+
+**Alıcı tek eksende:** `scope` + `scope_id` (`user` / `store` / `admin`). Polimorfik olduğu
+için yabancı anahtar konulamıyor — bedeli bu. Karşılığında tek indeks, tek sorgu biçimi ve
+yeni alıcı türü için şema değişikliği gerekmemesi var. Bugün hiçbir akış kullanıcıyı ya da
+mağazayı silmiyor (ikisi de durum alanıyla pasifleşiyor), bu yüzden eksik yabancı anahtar
+şu an tutarsızlık üretmiyor.
+
+**Tekilleştirme kuyruk yüzünden şart.** Teslim en-az-bir-kez: tüketici işledikten sonra onay
+gönderemezse mesaj yeniden gelir. `(source_event_id, scope, scope_id)` üzerinde `UNIQUE …
+NULLS NOT DISTINCT` kısmi indeksi var; `NULLS NOT DISTINCT` olmadan yönetim bildirimleri
+(scope_id NULL) hiç tekilleşmezdi, çünkü PostgreSQL iki NULL'u varsayılan olarak farklı sayar.
+
+**Gerçek zamanlı iletim: Redis yayınla/abone ol + SSE.** Bildirimi worker yazıyor, tarayıcıya
+iten açık bağlantı API sürecinde duruyor; iki süreci Redis kanalı bağlıyor. API süreç başına
+TEK abonelik kuruyor ve açık bağlantılara alıcı anahtarına göre dağıtıyor. Redis yoksa akış
+ucu 503 dönüyor ve istemci dakikalık yoklamaya düşüyor — sessizce boş bir bağlantı açmak,
+istemciyi "çalışıyor" sanıp hiç yoklamamaya iterdi.
+
+İstemci tarafında `EventSource` değil `fetch` kullanılıyor: `EventSource` başlık eklemeye
+izin vermiyor, erişim jetonu ise `Authorization` başlığında taşınıyor (bellekte durur,
+çereze yazılmaz). Jetonu adrese koymak sunucu günlüklerine ve `Referer` başlığına jeton
+düşürmek olurdu. Bedeli: yeniden bağlanmayı elle yazmak.
+
+**Arayüzde yakalanan tuzak:** panel önce telefonda aşağıdan açılan bir tabaka olarak
+yazıldı ve çalışmadı. Zil, `backdrop-blur` taşıyan yapışkan başlığın içinde duruyor; arka
+plan süzgeci olan bir öğe içindeki `position: fixed` öğeler için yeni bir kapsayıcı blok
+kuruyor, yani tabaka ekranın altına değil **başlığın** altına yapışıyordu. Panel her boyutta
+açılır kutuya çevrildi; sarmalayıcı telefonda `static` (kapsayıcı başlık olsun, panel
+sayfanın kenar boşluğuna hizalansın), `sm`'den sonra `relative` (zile hizalansın).

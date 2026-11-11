@@ -19,6 +19,8 @@ import {
   REDIRECT_URI
 } from "./helpers";
 
+import { RecordNotificationsCommand } from "../../src/application/notifications";
+
 import type { Row } from "../../src/application/shared/contracts";
 import type { ApiResponse } from "./helpers";
 import crypto from "crypto";
@@ -1212,4 +1214,226 @@ test("görsel yükleme sahte dosyayı ve yabancı mağazayı reddeder", opts, as
   // Uydurma dosya adı diske hiç gitmez.
   const yok = await fetch(`${app.base}/yuklenen/..%2F..%2Fetc%2Fpasswd`);
   assert.equal(yok.status, 404);
+});
+
+/* -------------------------------------------------------------- bildirimler */
+
+/**
+ * Bildirim bekler.
+ *
+ * Bildirim İSTEĞİN İÇİNDE yazılmıyor: olay outbox'a düşüyor, aktarıcı onu
+ * tüketiciye veriyor ve bildirim ancak orada yazılıyor. Yani sipariş yanıtı
+ * döndüğünde bildirim henüz yoktur — e-postada olduğu gibi beklemek gerekir.
+ */
+async function bildirimBekle(
+  client: Client,
+  yol: string,
+  kosul: (bildirim: Row) => boolean,
+  timeoutMs = 5000
+): Promise<{ bildirim: Row | null; sayfa: Row }> {
+  const bitis = Date.now() + timeoutMs;
+  let sayfa: Row = {};
+  while (Date.now() < bitis) {
+    sayfa = (await client.get(yol)).data;
+    const bulunan = (sayfa.items ?? []).find(kosul);
+    if (bulunan) return { bildirim: bulunan, sayfa };
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return { bildirim: null, sayfa };
+}
+
+test("sipariş ve ödeme müşteriye bildirim düşürür, okundu işareti sayacı azaltır", opts, async () => {
+  const product = await firstProduct(2);
+
+  const buyer = new Client(app.base);
+  assert.ok((await buyer.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+
+  // Önceki testlerden kalan bildirimler sayacı bulandırmasın.
+  await buyer.post("/api/me/notifications/read-all");
+
+  await buyer.post("/api/cart/items", { productId: product.id, quantity: 1 });
+  const order = await buyer.post("/api/orders", checkout());
+  assert.equal(order.status, 201, JSON.stringify(order.data));
+
+  /*
+   * Koşul SİPARİŞ NUMARASINI da içeriyor, yalnızca türü değil: bu demo
+   * müşterisi önceki testlerde de sipariş verdiği için kutuda eski
+   * "order.placed" satırları var ve tür tek başına eskisini yakalıyordu.
+   */
+  const buSiparis = (kind: string) => (b: Row) =>
+    b.kind === kind && String(b.body).includes(order.data.orderNumber);
+
+  const verildi = await bildirimBekle(buyer, "/api/me/notifications", buSiparis("order.placed"));
+  assert.ok(verildi.bildirim, "sipariş bildirimi yazılır");
+  assert.equal(verildi.bildirim.url, `/hesabim/siparisler/${order.data.orderId}`, "bildirim sipariş detayına gider");
+  assert.equal(verildi.bildirim.readAt, null, "yeni bildirim okunmamış gelir");
+
+  await buyer.post(`/api/orders/${order.data.orderId}/payment`, { outcome: "success" });
+  const odendi = await bildirimBekle(buyer, "/api/me/notifications", buSiparis("order.paid"));
+  assert.ok(odendi.bildirim, "ödeme bildirimi yazılır");
+  assert.ok(odendi.sayfa.unread >= 2, "okunmamış sayacı listeyle birlikte döner");
+
+  // Aynı bildirimi e-posta da anlatıyor: iki kanal aynı olaydan besleniyor.
+  assert.ok(
+    await app.outbox.waitFor((mail) => mail.subject.includes(order.data.orderNumber)),
+    "aynı olay e-posta da üretir"
+  );
+
+  const sayacOnce = (await buyer.get("/api/me/notifications/unread-count")).data.unread;
+  assert.equal((await buyer.post(`/api/me/notifications/${odendi.bildirim.id}/read`)).status, 200);
+  const sayacSonra = (await buyer.get("/api/me/notifications/unread-count")).data.unread;
+  assert.equal(sayacSonra, sayacOnce - 1, "okundu işareti sayacı bir azaltır");
+
+  // İkinci kez işaretlemek hata değil; sayaç da düşmez.
+  assert.equal((await buyer.post(`/api/me/notifications/${odendi.bildirim.id}/read`)).status, 200);
+  assert.equal((await buyer.get("/api/me/notifications/unread-count")).data.unread, sayacSonra);
+
+  const tumu = await buyer.post("/api/me/notifications/read-all");
+  assert.equal(tumu.status, 200);
+  assert.ok(tumu.data.marked > 0);
+  assert.equal((await buyer.get("/api/me/notifications/unread-count")).data.unread, 0);
+  // Boşa basmak da hata değil.
+  assert.equal((await buyer.post("/api/me/notifications/read-all")).data.marked, 0);
+});
+
+test("ödeme alınınca mağazanın kutusuna düşer, müşterininkine karışmaz", opts, async () => {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await magazaci.get("/api/me")).data.stores?.[0]?.id;
+  assert.ok(storeId, "mağaza sahibinin paneli olmalı");
+
+  // O mağazanın bir ürünü: paket mutlaka bu mağazaya düşsün.
+  const urunler = (await magazaci.get(`/api/stores/${storeId}/products?pageSize=60`)).data.items ?? [];
+  const urun = urunler.find((item: Row) => item.stock >= 1 && item.status === "active");
+  assert.ok(urun, "satışta ürünü olmalı");
+
+  await magazaci.post(`/api/stores/${storeId}/notifications/read-all`);
+
+  const buyer = new Client(app.base);
+  assert.ok((await buyer.signIn("ahmet@donanex.test", DEMO_PASSWORD)).ok);
+  await buyer.post("/api/cart/items", { productId: urun.id, quantity: 1 });
+  const order = await buyer.post("/api/orders", checkout());
+  assert.equal(order.status, 201, JSON.stringify(order.data));
+
+  // Koşul bu siparişin numarasına bakıyor: kutuda önceki testlerden kalan
+  // satırlar var ve tür tek başına eskisini yakalıyor.
+  const buSiparis = (kind: string) => (b: Row) =>
+    b.kind === kind && String(b.body).includes(order.data.orderNumber);
+
+  // Sipariş verildiğinde mağazaya HENÜZ bildirim gitmiyor: ödeme bekleniyor.
+  const siparisBildirimi = await bildirimBekle(buyer, "/api/me/notifications", buSiparis("order.placed"), 3000);
+  assert.ok(siparisBildirimi.bildirim, "müşteri sipariş bildirimini alır");
+  const magazaKutusu = (await magazaci.get(`/api/stores/${storeId}/notifications`)).data;
+  assert.equal(
+    (magazaKutusu.items ?? []).some(buSiparis("order.paid")),
+    false,
+    "ödeme gelmeden mağaza bildirimi yazılmaz"
+  );
+
+  await buyer.post(`/api/orders/${order.data.orderId}/payment`, { outcome: "success" });
+
+  const magazaya = await bildirimBekle(magazaci, `/api/stores/${storeId}/notifications`, buSiparis("order.paid"));
+  assert.ok(magazaya.bildirim, "ödeme alınınca mağaza haber alır");
+  // Geri çağrının İÇİNDE kullanılacak: TypeScript kapanış içinde daraltmayı
+  // (narrowing) koruyamıyor, bu yüzden değer yerel bir sabite alınıyor.
+  const magazaBildirimi = magazaya.bildirim;
+  assert.match(String(magazaBildirimi.title), /Yeni sipariş/);
+  assert.match(String(magazaBildirimi.url), new RegExp(`^/magaza/${storeId}/siparisler/`));
+
+  // Mağazanın kutusu müşterinin kutusu değil.
+  const magazacininKisisel = (await magazaci.get("/api/me/notifications")).data.items ?? [];
+  assert.equal(
+    magazacininKisisel.some((b: Row) => b.id === magazaBildirimi.id),
+    false,
+    "mağaza bildirimi kişisel kutuda görünmez"
+  );
+});
+
+test("bildirim kutusu sahibinden başkasına kapalıdır", opts, async () => {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await magazaci.get("/api/me")).data.stores?.[0]?.id;
+
+  const buyer = new Client(app.base);
+  assert.ok((await buyer.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+
+  // Müşteri ne mağazanın ne yönetimin kutusunu okuyabilir.
+  assert.equal((await buyer.get(`/api/stores/${storeId}/notifications`)).status, 403);
+  assert.equal((await buyer.get("/api/admin/notifications")).status, 403);
+  // Mağaza sahibi de yönetimin kutusunu okuyamaz: izin mağaza kapsamında.
+  assert.equal((await magazaci.get("/api/admin/notifications")).status, 403);
+
+  // Giriş yapılmamışsa hiçbiri açılmaz.
+  assert.equal((await anon.get("/api/me/notifications")).status, 401);
+
+  // Başkasının bildirimi okundu işaretlenemez ve varlığı ele verilmez.
+  const { bildirim } = await bildirimBekle(magazaci, "/api/me/notifications", () => true, 1000);
+  if (bildirim) {
+    assert.equal((await buyer.post(`/api/me/notifications/${bildirim.id}/read`)).status, 404);
+  }
+});
+
+test("yönetim kutusu mağaza başvurusunu toplar", opts, async () => {
+  const admin = new Client(app.base);
+  assert.ok((await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD)).ok);
+  await admin.post("/api/admin/notifications/read-all");
+
+  const email = `bildirim${Date.now()}@example.com`;
+  const aday = new Client(app.base);
+  await aday.post("/api/auth/register", { fullName: "Bildirim Adayı", email, password: "AdaySatici1" });
+  assert.ok((await aday.signIn(email, "AdaySatici1")).ok);
+
+  const magazaAdi = `Bildirim Mağaza ${Date.now()}`;
+  const basvuru = await aday.post("/api/me/store-application", {
+    name: magazaAdi,
+    description: "Bildirim testinde açıldı.",
+    contactEmail: email,
+    phone: "0555 111 22 33"
+  });
+  assert.equal(basvuru.status, 201, JSON.stringify(basvuru.data));
+
+  const yonetime = await bildirimBekle(
+    admin,
+    "/api/admin/notifications",
+    (b) => b.kind === "store.applied" && String(b.body).includes(magazaAdi)
+  );
+  assert.ok(yonetime.bildirim, "başvuru yönetimin kutusuna düşer");
+  assert.equal(yonetime.bildirim.url, "/yonetim/magazalar");
+
+  // Aynı olay başvuru sahibine de ayrı bir bildirim yazar.
+  const adaya = await bildirimBekle(aday, "/api/me/notifications", (b) => b.kind === "store.applied");
+  assert.ok(adaya.bildirim, "başvuru sahibi de haber alır");
+  assert.notEqual(adaya.bildirim.id, yonetime.bildirim.id, "iki ayrı kutu, iki ayrı satır");
+});
+
+test("aynı olay iki kez teslim edilse bildirim bir kez yazılır", opts, async () => {
+  // Kuyruk en-az-bir-kez teslim ediyor: tüketici aynı olayı iki kez görebilir.
+  // Burada o durum doğrudan kurgulanıyor, çünkü testte gerçek kuyruk yok.
+  const kullanici = (await app.pool.query("SELECT id FROM users WHERE email = $1", ["musteri@donanex.test"])).rows[0];
+  assert.ok(kullanici, "demo müşterisi olmalı");
+
+  const olayId = `tekrar-${Date.now()}`;
+  const taslak = {
+    scope: "user" as const,
+    scopeId: kullanici.id,
+    kind: "order.paid",
+    title: "Tekilleştirme denemesi",
+    body: "Bu bildirim bir kez yazılmalı.",
+    url: "/hesabim/siparisler"
+  };
+
+  const ilk = await app.commands.execute<{ items: Row[] }>(
+    new RecordNotificationsCommand({ sourceEventId: olayId, drafts: [taslak] })
+  );
+  const ikinci = await app.commands.execute<{ items: Row[] }>(
+    new RecordNotificationsCommand({ sourceEventId: olayId, drafts: [taslak] })
+  );
+
+  assert.equal(ilk.items.length, 1, "ilk teslim yazar");
+  assert.equal(ikinci.items.length, 0, "ikinci teslim hiçbir şey yazmaz");
+
+  const sayim = await app.pool.query("SELECT COUNT(*)::int AS n FROM notifications WHERE source_event_id = $1", [
+    olayId
+  ]);
+  assert.equal(sayim.rows[0].n, 1);
 });

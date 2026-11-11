@@ -198,6 +198,47 @@ export interface SupportRepository {
   setTicketStatus(ticketId: string, status: string): Promise<Row | null>;
 }
 
+/**
+ * Bildirimin alıcısı.
+ *
+ * Üç tür alıcı var ve hepsi aynı eksende duruyor: kişi, mağaza ve yönetim.
+ * Yazma ve okuma tarafı AYNI şekli kullanır, böylece "mağaza bildirimini
+ * kullanıcı kapsamıyla sorgulamak" gibi bir karışma derlemede yakalanır.
+ */
+export type NotificationScope = "user" | "store" | "admin";
+
+export interface NotificationTarget {
+  readonly scope: NotificationScope;
+  /** Kullanıcı ya da mağaza numarası; yönetim bildirimlerinde null. */
+  readonly scopeId: string | null;
+}
+
+/** Yazılacak bildirim. Metin ÜRETİLİP yazılır, görüntülemede türetilmez. */
+export interface NewNotification extends NotificationTarget {
+  readonly id: string;
+  /** Olay tipi ("order.paid"); arayüz simgeyi buna göre seçer. */
+  readonly kind: string;
+  readonly title: string;
+  readonly body?: string;
+  /** Site içi yol; tam adres değil. */
+  readonly url?: string | null;
+}
+
+export interface NotificationRepository {
+  /**
+   * Toplu yazar ve GERÇEKTEN eklenen satırları döndürür.
+   *
+   * sourceEventId verilirse aynı olay ikinci kez geldiğinde hiçbir şey
+   * yazılmaz (kuyruk en-az-bir-kez teslim eder). Dönen listenin boş olması
+   * "zaten yazılmıştı" demektir — çağıran gerçek zamanlı bildirimi de buna
+   * göre yalnızca bir kez yayınlar.
+   */
+  addMany(input: { sourceEventId?: string | null; items: readonly NewNotification[] }): Promise<Row[]>;
+  /** Alıcı sorgunun parçası: başkasının bildirimi okundu işaretlenemez. */
+  markRead(target: NotificationTarget, notificationId: string): Promise<boolean>;
+  markAllRead(target: NotificationTarget): Promise<number>;
+}
+
 export interface OutboxRepository {
   /** Olay, onu doğuran veriyle AYNI transaction'da yazılır. */
   add(event: DomainEventShape): Promise<void>;
@@ -253,6 +294,7 @@ export interface Repositories {
   readonly carts: CartRepository;
   readonly orders: OrderRepository;
   readonly support: SupportRepository;
+  readonly notifications: NotificationRepository;
   readonly outbox: OutboxRepository;
   readonly audit: AuditRepository;
 }
@@ -328,6 +370,12 @@ export interface SupportReadModel {
   listForStore(storeId: string, filters: ListFilters): Promise<Row>;
   listForAdmin(filters: ListFilters): Promise<Row>;
   get(ticketId: string, scope: Row): Promise<Row | null>;
+}
+
+export interface NotificationReadModel {
+  list(target: NotificationTarget, paging: ListFilters): Promise<Row>;
+  /** Zilin yanındaki sayı; her sayfada çalışır, bu yüzden tek COUNT. */
+  countUnread(target: NotificationTarget): Promise<number>;
 }
 
 export interface DashboardReadModel {
@@ -452,6 +500,7 @@ export interface Services {
   readonly orderReadModel: OrderReadModel;
   readonly userReadModel: UserReadModel;
   readonly supportReadModel: SupportReadModel;
+  readonly notificationReadModel: NotificationReadModel;
   readonly dashboardReadModel: DashboardReadModel;
   readonly healthReadModel: HealthReadModel;
 

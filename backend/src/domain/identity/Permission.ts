@@ -35,6 +35,14 @@ export const PERMISSIONS = {
   "support:read": { scope: Scope.BOTH, label: "Destek taleplerini görüntüle" },
   "support:respond": { scope: Scope.BOTH, label: "Destek talebini yanıtla" },
 
+  /*
+   * Panel bildirimleri. Kişinin KENDİ bildirimleri bu izne tabi değildir —
+   * onların kapsamı jetondaki kullanıcı numarasıdır, sorulacak bir şey yok.
+   * Bu izin "başkası adına bir kutuyu okumak" içindir: mağazanın ya da
+   * yönetimin bildirim kutusu.
+   */
+  "notification:read": { scope: Scope.BOTH, label: "Panel bildirimlerini görüntüle" },
+
   "user:read": { scope: Scope.GLOBAL, label: "Kullanıcıları görüntüle" },
   "user:write": { scope: Scope.GLOBAL, label: "Kullanıcıları düzenle veya askıya al" },
   "role:assign": { scope: Scope.GLOBAL, label: "Rol ata" },

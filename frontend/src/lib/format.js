@@ -19,6 +19,40 @@ export function formatDate(value, withTime = true) {
   return (withTime ? dateTime : dateOnly).format(date);
 }
 
+const geceli = new Intl.RelativeTimeFormat("tr-TR", { numeric: "auto" });
+
+/*
+ * Birimler BÜYÜKTEN KÜÇÜĞE sıralı: ilk eşleşen kullanılıyor. Ters sırada
+ * olsaydı iki günlük bir tarih "48 saat önce" diye yazılırdı.
+ */
+const SURE_BIRIMLERI = [
+  ["year", 365 * 24 * 60 * 60],
+  ["month", 30 * 24 * 60 * 60],
+  ["day", 24 * 60 * 60],
+  ["hour", 60 * 60],
+  ["minute", 60]
+];
+
+/**
+ * "3 dakika önce", "dün" gibi göreli zaman.
+ *
+ * Bildirim listesinde tam tarih yerine bu kullanılıyor: "12.11.2026 14:03"
+ * okuyucuyu hesap yapmaya zorluyor, oysa bir bildirimde önemli olan "ne kadar
+ * yeni" sorusu. Tam tarih başlık (title) olarak duruyor, fareyle üzerine
+ * gelince görünüyor.
+ */
+export function gecenSure(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  const saniye = Math.round((date.getTime() - Date.now()) / 1000);
+  for (const [birim, uzunluk] of SURE_BIRIMLERI) {
+    if (Math.abs(saniye) >= uzunluk) return geceli.format(Math.round(saniye / uzunluk), birim);
+  }
+  // Bir dakikanın altı: "15 saniye önce" gereksiz kesinlik.
+  return "az önce";
+}
+
 /** Yalnızca http/https adresini döndürür; aksi halde boş metin. */
 export function safeUrl(value) {
   try {

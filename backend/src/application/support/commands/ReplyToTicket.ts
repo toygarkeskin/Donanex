@@ -64,6 +64,8 @@ export class ReplyToTicketHandler implements Handler<ReplyToTicketCommand, Reply
         await repos.outbox.add(
           domainEvent(EventTypes.SUPPORT_TICKET_ANSWERED, "support_ticket", ticketId, {
             reference: ticket.reference,
+            userId: ticket.userId,
+            storeId: ticket.storeId,
             email: ticket.email,
             fullName: ticket.fullName,
             subject: ticket.subject,

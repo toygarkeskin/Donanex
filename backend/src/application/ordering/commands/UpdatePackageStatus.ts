@@ -63,6 +63,7 @@ export class UpdatePackageStatusHandler implements Handler<UpdatePackageStatusCo
           packageId,
           storeId,
           status,
+          userId: order.userId,
           email: order.contactEmail,
           fullName: order.contactFullName
         })

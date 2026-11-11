@@ -17,9 +17,11 @@ import { RedisCache } from "./infrastructure/cache/RedisCache";
 import { SeqLogger } from "./infrastructure/logging/SeqLogger";
 import { RabbitMqBroker } from "./infrastructure/messaging/RabbitMqBroker";
 import { OutboxRelay } from "./infrastructure/messaging/OutboxRelay";
+import { RedisNotificationStream } from "./infrastructure/notifications/RedisNotificationStream";
 import { buildContainer } from "./bootstrap/container";
 import { startScheduler } from "./bootstrap/scheduler";
 import { startEmailConsumer } from "./bootstrap/emailConsumer";
+import { startNotificationConsumer } from "./bootstrap/notificationConsumer";
 
 async function start(): Promise<void> {
   const config = loadConfig();
@@ -44,6 +46,15 @@ async function start(): Promise<void> {
   logger.info("RabbitMQ bağlantısı kuruldu");
 
   await startEmailConsumer({ broker, mailer: services.mailer, config, logger });
+
+  /*
+   * Site içi bildirimler. Gerçek zamanlı kanal Redis'e bağlı: yoksa bildirim
+   * yine veritabanına yazılır, yalnızca ekrana düşmesi istemcinin yoklamasını
+   * bekler.
+   */
+  const stream = cache.available ? new RedisNotificationStream(cache.client, logger) : null;
+  if (!stream) logger.warn("Redis yok: bildirimler yazılır ama anında iletilmez");
+  await startNotificationConsumer({ broker, commands, stream, logger });
 
   const relay = new OutboxRelay({ unitOfWork: services.unitOfWork, broker, logger });
   relay.start();

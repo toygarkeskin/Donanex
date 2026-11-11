@@ -101,14 +101,14 @@ kullanıcı ve rol yönetimi, tüm siparişler, tüm destek talepleri
                  Postgres      Redis      RabbitMQ    Seq
                     ▲                        ▲
                     │   outbox ──────────────┘
-                    └───────── worker (olay aktarımı, e-posta, bakım)
+                    └───────── worker (olay aktarımı, e-posta, bildirim, bakım)
 ```
 
 **Bağımlılık yönü içeri doğrudur.** `domain` hiçbir şeye bağımlı değildir; `application` yalnızca
 `domain`'e ve port sözleşmelerine bakar; somut altyapı (PostgreSQL, Redis, RabbitMQ, SMTP) yalnızca
 `bootstrap/container.js` içinde bağlanır.
 
-**CQRS:** 38 komut, 26 sorgu — toplam **64 kullanım senaryosu**, her biri kendi dosyasında.
+**CQRS:** 42 komut, 30 sorgu — toplam **72 kullanım senaryosu**, her biri kendi dosyasında.
 Komut handler'ı read model'e, sorgu handler'ı unit of work'e dokunamaz.
 
 Bu kuralların hiçbiri yalnızca belgede yazmaz: `tests/architecture` kuralı çiğneyen kodda kırılır.
@@ -135,11 +135,11 @@ backend/src/
 ├── infrastructure/      portların somut karşılıkları
 │   ├── persistence/postgres/   UnitOfWork, repository'ler, read model'ler, migration'lar
 │   ├── security/        RS256 jeton, scrypt, PKCE, opak jetonlar
-│   ├── cache/  messaging/  logging/  mail/  support/
+│   ├── cache/  messaging/  logging/  mail/  notifications/  support/
 ├── presentation/http/   Express uygulaması, rotalar, ara katmanlar
 ├── bootstrap/           composition root, ilk kurulum, zamanlanmış işler
 ├── main.js              API süreci
-└── worker.js            outbox aktarımı, e-posta tüketicisi, bakım
+└── worker.js            outbox aktarımı, e-posta ve bildirim tüketicileri, bakım
 
 frontend/src/
 ├── lib/                 api istemcisi, OAuth/PKCE, biçimlendirme

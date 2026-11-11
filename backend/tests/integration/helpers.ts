@@ -22,6 +22,8 @@ import { seedDemoData, DEMO_PASSWORD } from "../../src/bootstrap/demoSeed";
 import { createApp } from "../../src/presentation/http/app";
 import { OutboxRelay } from "../../src/infrastructure/messaging/OutboxRelay";
 import { renderEmail } from "../../src/infrastructure/mail/templates";
+import { renderNotifications } from "../../src/infrastructure/notifications/templates";
+import { RecordNotificationsCommand } from "../../src/application/notifications";
 
 import type { Server } from "node:net";
 import type { AppConfig } from "../../src/config/env";
@@ -174,14 +176,28 @@ async function startHarness() {
 
   /**
    * Testte RabbitMQ yoktur. Gerçek OutboxRelay, yayınladığı olayı doğrudan
-   * e-posta tüketicisine veren bir broker ile çalıştırılır: outbox -> olay ->
-   * e-posta zinciri uçtan uca sınanır, yalnızca AMQP atlaması atlanır.
+   * iki tüketiciye veren bir broker ile çalıştırılır: outbox -> olay ->
+   * e-posta ve bildirim zinciri uçtan uca sınanır, yalnızca AMQP atlaması
+   * atlanır.
+   *
+   * İki kanal AYNI olaydan besleniyor — üretimde de böyle. Bu yüzden test
+   * "e-posta gitti ama bildirim yazılmadı" türü bir kaymayı yakalayabilir.
    */
   const directBroker = {
     async publish(type: string, message: Row) {
       const email = renderEmail(type, message.payload, { publicUrl: config.publicUrl });
       if (email && message.payload.email) {
         await outbox.mailer.send({ to: message.payload.email, ...email });
+      }
+
+      const drafts = renderNotifications(type, {
+        aggregateId: (message.aggregateId ?? null) as string | null,
+        payload: message.payload
+      });
+      if (drafts.length) {
+        await commands.execute(
+          new RecordNotificationsCommand({ sourceEventId: message.id ? String(message.id) : null, drafts })
+        );
       }
     }
   };

@@ -8,6 +8,7 @@ import BrandLogo from "../components/BrandLogo.vue";
 import AppIcon from "../components/AppIcon.vue";
 import SiteSearch from "../components/SiteSearch.vue";
 import GeriTusu from "../components/GeriTusu.vue";
+import BildirimZili from "../components/BildirimZili.vue";
 import FooterBolumu from "../components/FooterBolumu.vue";
 import { BILGI_ROTALARI, BILGI_SAYFALARI, ILETISIM } from "../content/bilgiSayfalari";
 
@@ -211,6 +212,15 @@ async function signOut() {
                 {{ cart.itemCount > 99 ? "99+" : cart.itemCount }}
               </span>
             </RouterLink>
+
+            <!--
+              Zil sepetin yanında ve TELEFONDA DA GÖRÜNÜR — sepet simgesinin
+              aksine. Sepetin telefonda gizlenmesinin sebebi alt çubukta
+              rozetiyle birlikte zaten durması; zilin alt çubukta karşılığı
+              yok, oraya beşinci bir sekme koymak dört sekmeyi de daraltırdı.
+              Giriş yapılmamışken hiç çizilmiyor: gösterilecek bir kutu yok.
+            -->
+            <BildirimZili v-if="auth.isSignedIn" kutu="mine" />
 
             <ThemeToggle />
 

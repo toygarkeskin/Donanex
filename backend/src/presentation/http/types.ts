@@ -36,6 +36,23 @@ export interface RouteContext {
   readonly limiters: RateLimiters;
 }
 
+/**
+ * Gerçek zamanlı bildirim kanalının bu katmana BAKAN yüzü.
+ *
+ * Somut sınıf (Redis yayınla/abone ol) infrastructure altındadır ve rotalar
+ * onu tanımaz — bağımlılık yönü içeri doğru. Burada yalnızca "dinleyebilirim"
+ * ve "çalışıyor muyum" soruları var; composition root yapısal olarak uyan
+ * nesneyi geçirir.
+ *
+ * available önemli: kanal kurulamıyorsa uç 503 döner ve istemci YOKLAMAYA
+ * düşer. Sessizce boş bir bağlantı açmak, hiç açmamaktan kötüdür — istemci
+ * gerçek zamanlı çalıştığını sanıp hiç yoklamaz ve bildirimler görünmez.
+ */
+export interface NotificationStreamPort {
+  readonly available: boolean;
+  listen(handler: (notification: { key: string; item: Row }) => void): Promise<void>;
+}
+
 /** Jetondan çözülmüş kimlik. Giriş yapılmamışsa req.auth null olur. */
 export interface AuthContext {
   /** Makineden makineye jetonlarda (client_credentials) null. */

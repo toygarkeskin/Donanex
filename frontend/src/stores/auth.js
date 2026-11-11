@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { api, setAccessToken, refreshAccessToken, setUnauthorizedHandler } from "../lib/api";
 import { startLogin } from "../lib/oauth";
+import { useBildirimStore } from "./bildirim";
 
 /**
  * Oturum durumu.
@@ -40,9 +41,18 @@ export const useAuthStore = defineStore("auth", {
       }
     },
 
+    /*
+     * Kullanıcı yüklenince bildirim akışı da kurulur.
+     *
+     * Burada, girişin iki ayrı yolunda değil: oturum ya formla kuruluyor
+     * (completeSignIn) ya da sayfa yenilendikten sonra sessizce geri
+     * alınıyor (restore). İkisi de buraya uğruyor, bu yüzden akışı kurmanın
+     * tek doğru yeri bu.
+     */
     async loadUser() {
       try {
         this.user = await api.get("/me");
+        useBildirimStore().baslat();
       } catch {
         this.user = null;
       }
@@ -58,12 +68,16 @@ export const useAuthStore = defineStore("auth", {
       await api.post("/auth/sign-out", {}).catch(() => {});
       setAccessToken(null);
       this.user = null;
+      // Açık bildirim bağlantısı kapanmalı: aksi halde çıkış yapmış bir
+      // tarayıcı sekmesi jetonu olmadan yeniden bağlanmayı denemeyi sürdürür.
+      useBildirimStore().durdur();
     },
 
     /** Oturum düşerse durumu temizle; yönlendirmeyi router halleder. */
     clear() {
       setAccessToken(null);
       this.user = null;
+      useBildirimStore().durdur();
     },
 
     login(returnTo) {

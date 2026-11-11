@@ -15,6 +15,7 @@ import { buildContainer } from "./bootstrap/container";
 import { syncRolesAndPermissions, ensureSystemAdmin } from "./bootstrap/syncAccessControl";
 import { syncOAuthClients } from "./bootstrap/syncOAuthClients";
 import { seedDemoData } from "./bootstrap/demoSeed";
+import { RedisNotificationStream } from "./infrastructure/notifications/RedisNotificationStream";
 import { createApp } from "./presentation/http/app";
 
 async function start(): Promise<void> {
@@ -62,7 +63,11 @@ async function start(): Promise<void> {
     // eskiden container'ın ürettiği servis torbasına sonradan ekleniyordu, ama
     // redisClient bir port değil — yalnızca HTTP katmanının sınırlayıcısı
     // kullanır. Bağlantı yoksa sayaçlar sürecin içinde tutulur.
-    redisClient: cache.available ? cache.client : null
+    redisClient: cache.available ? cache.client : null,
+    // Bildirimi worker yazıyor, tarayıcıya iten bağlantı burada duruyor;
+    // ikisini Redis kanalı bağlıyor. Redis yoksa akış ucu 503 döner ve
+    // istemci yoklamaya düşer.
+    notificationStream: cache.available ? new RedisNotificationStream(cache.client, logger) : null
   });
 
   const server = app.listen(config.port, () => {

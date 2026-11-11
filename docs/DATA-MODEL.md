@@ -102,6 +102,7 @@ edilmiş bir paket yeniden aktif bir duruma alınamaz; aksi halde aynı stok iki
 |---|---|
 | `outbox_messages` | Olaylar veriyle aynı transaction'da yazılır; worker `SKIP LOCKED` ile aktarır. Kısmi indeks yalnızca yayınlanmamışları tarar |
 | `audit_log` | Kim, ne zaman, neyi değiştirdi. İş transaction'ının parçasıdır: işlem geri alınırsa kayıt da geri alınır |
+| `notifications` | Site içi bildirimler. Alıcı tek eksende: `scope` (`user`/`store`/`admin`) + `scope_id`. Polimorfik olduğu için **yabancı anahtar yok** — bedeli bu, karşılığı tek indeks ve tek sorgu biçimi. Metin yazılırken üretilir, görüntülenirken değil: eski bir bildirimin yazısı bugünün koduna göre değişmesin. `(source_event_id, scope, scope_id)` üzerindeki `UNIQUE … NULLS NOT DISTINCT` kısmi indeksi, kuyruğun en-az-bir-kez teslimine karşı tekilleştirir |
 
 ## Silme davranışları
 
@@ -119,7 +120,9 @@ edilmiş bir paket yeniden aktif bir duruma alınamaz; aksi halde aynı stok iki
 Sorgu desenlerine göre: sipariş listeleri `(user_id, placed_at DESC)` ve
 `(store_id, created_at DESC)`, takip `(order_number, tracking_code_hash)`, vitrin
 `(status, created_at DESC)` ve `price_cents`, süresi dolan siparişler `(status, created_at)`,
-outbox için yalnızca yayınlanmamışları kapsayan kısmi indeks.
+outbox için yalnızca yayınlanmamışları kapsayan kısmi indeks, bildirimler için
+`(scope, scope_id, created_at DESC)` ve yalnızca okunmamışları kapsayan kısmi indeks — zilin
+yanındaki sayaç her sayfada çalışıyor, okunmuşlar biriktikçe o indeks büyümesin.
 
 ## Numaralandırma
 

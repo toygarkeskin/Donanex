@@ -1,6 +1,7 @@
 "use strict";
 
 import type { RouteContext } from "../types";
+import type { BildirimDagitici } from "../support/bildirimAkisi";
 import type { ChangePasswordResult, Sonuc } from "../support/results";
 
 import { kullanici, yol } from "../support/params";
@@ -20,11 +21,25 @@ import {
 } from "../../../application/ordering";
 import { ApplyForStoreCommand } from "../../../application/stores";
 import { ListTicketsQuery, GetTicketQuery } from "../../../application/support";
+import {
+  ListNotificationsQuery,
+  CountUnreadNotificationsQuery,
+  MarkNotificationReadCommand,
+  MarkAllNotificationsReadCommand
+} from "../../../application/notifications";
 import { requireAuth } from "../middleware/authenticate";
 import { COOKIES, buildCookie, appendCookie } from "../support/cookies";
 
 /** Kullanıcının kendi hesabı. Tüm uçlar yalnızca kendi verisine erişir. */
-export function accountRoutes({ commands, queries, config, limiters }: Pick<RouteContext, "commands" | "queries" | "config" | "limiters">): Router {
+export function accountRoutes({
+  commands,
+  queries,
+  config,
+  limiters,
+  bildirimler
+}: Pick<RouteContext, "commands" | "queries" | "config" | "limiters"> & {
+  bildirimler?: BildirimDagitici | null;
+}): Router {
   const router = Router();
   router.use(requireAuth);
 
@@ -127,6 +142,75 @@ export function accountRoutes({ commands, queries, config, limiters }: Pick<Rout
     res.json(
       await queries.ask(
         new GetTicketQuery({ scope: "mine", userId: kullanici(req), ticketId: yol(req, "ticketId") }),
+        req.context()
+      )
+    );
+  });
+
+  /* ----- bildirimler ----- */
+
+  router.get("/notifications", async (req, res) => {
+    res.json(
+      await queries.ask(new ListNotificationsQuery({ feed: "mine", userId: kullanici(req), filters: req.query }))
+    );
+  });
+
+  router.get("/notifications/unread-count", async (req, res) => {
+    res.json(await queries.ask(new CountUnreadNotificationsQuery({ feed: "mine", userId: kullanici(req) })));
+  });
+
+  /**
+   * Gerçek zamanlı bildirim akışı (Server-Sent Events).
+   *
+   * TEK bağlantı, kişinin görebildiği bütün kutuları taşır: kendi
+   * bildirimleri, yetkili olduğu mağazaların ve —sistem yöneticisiyse—
+   * yönetimin. Kutu başına ayrı bağlantı açmak aynı veriyi birden çok kez
+   * taşımak ve her panel geçişinde bağlantıyı yeniden kurmak olurdu.
+   *
+   * İzin listesi JETONDAN değil, her istekte sunucuda çözülen yetkiden
+   * (req.auth.policy) çıkar: bir kişinin mağaza yetkisi alındıktan sonra
+   * bağlantısını yenilediğinde o mağazanın bildirimleri artık gelmez.
+   *
+   * Kanal kurulamazsa 503: istemci bunu görüp yoklamaya düşüyor.
+   */
+  router.get("/notifications/stream", async (req, res) => {
+    const userId = kullanici(req);
+    if (!bildirimler?.available) {
+      res.status(503).json({ error: "stream_unavailable", message: "Gerçek zamanlı bildirim şu an kapalı." });
+      return;
+    }
+
+    const policy = req.auth?.policy;
+    const keys = new Set<string>([`user:${userId}`]);
+    for (const storeId of policy?.storeIds ?? []) keys.add(`store:${storeId}`);
+    if (policy?.isSystemAdmin()) keys.add("admin:");
+
+    try {
+      await bildirimler.aboneOl();
+    } catch {
+      res.status(503).json({ error: "stream_unavailable", message: "Gerçek zamanlı bildirim şu an kapalı." });
+      return;
+    }
+    bildirimler.bagla(res, keys);
+  });
+
+  router.post("/notifications/:notificationId/read", async (req, res) => {
+    res.json(
+      await commands.execute(
+        new MarkNotificationReadCommand({
+          feed: "mine",
+          userId: kullanici(req),
+          notificationId: yol(req, "notificationId")
+        }),
+        req.context()
+      )
+    );
+  });
+
+  router.post("/notifications/read-all", async (req, res) => {
+    res.json(
+      await commands.execute(
+        new MarkAllNotificationsReadCommand({ feed: "mine", userId: kullanici(req) }),
         req.context()
       )
     );

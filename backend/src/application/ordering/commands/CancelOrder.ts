@@ -62,9 +62,13 @@ export class CancelOrderHandler implements Handler<CancelOrderCommand, CancelRes
       await repos.outbox.add(
         domainEvent(EventTypes.ORDER_CANCELLED, "order", order.id, {
           orderNumber: order.orderNumber,
+          userId: order.userId,
           email: order.contactEmail,
           fullName: order.contactFullName,
-          cancelledPackages: cancellable.length
+          cancelledPackages: cancellable.length,
+          // İptal edilen paketlerin mağazaları: hazırlamaya başlamasınlar diye
+          // bildirim onların kutusuna da düşüyor.
+          packages: cancellable.map((pkg) => ({ storeId: pkg.storeId, packageId: pkg.id }))
         })
       );
       await repos.audit.record({

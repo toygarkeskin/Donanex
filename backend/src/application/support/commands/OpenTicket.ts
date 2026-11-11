@@ -36,6 +36,10 @@ export class OpenTicketHandler implements Handler<OpenTicketCommand, Row, UseCas
       await repos.outbox.add(
         domainEvent(EventTypes.SUPPORT_TICKET_OPENED, "support_ticket", created.id, {
           reference: created.reference,
+          // Bildirimin düşeceği kutular: müşterinin hesabı ve talebin
+          // muhatabı (mağaza varsa o, yoksa yönetim).
+          userId: created.userId,
+          storeId: created.storeId,
           email: ticket.email,
           fullName: ticket.fullName,
           subject: ticket.subject

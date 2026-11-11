@@ -112,6 +112,9 @@ Tutar **sunucuda** hesaplanır; gövdede gönderilen fiyat ve toplam yok sayıl�
 | `GET /api/me/tickets` · `GET /api/me/tickets/:ticketId` | Destek talepleri |
 | `POST /api/me/store-application` | Mağaza açma başvurusu (onaya düşer) |
 | `POST /api/support/tickets` | Destek talebi; misafir de açabilir |
+| `GET /api/me/notifications` · `…/unread-count` | Bildirimler; liste okunmamış sayısını da döndürür |
+| `POST /api/me/notifications/:notificationId/read` · `…/read-all` | Okundu işareti (başkasınınki 404) |
+| `GET /api/me/notifications/stream` | Gerçek zamanlı akış (SSE). Kişinin görebildiği **bütün** kutuları tek bağlantıda taşır: kendi bildirimleri, mağazalarının, yöneticiyse yönetimin. Kanal kurulamazsa 503 — istemci yoklamaya düşsün diye |
 
 ## Mağaza paneli — `/api/stores/:storeId/...`
 
@@ -130,6 +133,7 @@ Her uç izni **`{ storeId }` kapsamıyla** sorar: başka mağazanın kimliği 40
 | `PATCH …/orders/:packageId/status` · `…/shipping` | `order:fulfil` |
 | `GET/POST …/members` | `store:member:manage` |
 | `GET …/tickets` · `PUT …/tickets/:ticketId` | `support:read` / `support:respond` |
+| `GET …/notifications` · `…/unread-count` · `POST …/notifications/:id/read` · `…/read-all` | `notification:read` (mağazanın ORTAK kutusu: okundu işareti de ortak) |
 
 Mağaza panelinde görülen sipariş birimi **pakettir** (`order_packages`), sipariş değil: kargo ve
 hazırlık durumu paket üzerindedir. Neden: [DATA-MODEL.md](DATA-MODEL.md#siparişin-iki-seviyesi).
@@ -148,6 +152,7 @@ Bu izinlerin kapsamı `global`'dir: mağazaya bağlı bir rol bunları **asla** 
 | `POST /api/admin/categories` | `catalog:category:manage` |
 | `GET /api/admin/orders` · `/:orderId` | `order:read` |
 | `GET /api/admin/tickets` · `PUT /api/admin/tickets/:ticketId` | `support:read` / `support:respond` |
+| `GET /api/admin/notifications` · `…/unread-count` · `POST …/notifications/:id/read` · `…/read-all` | `notification:read` |
 
 ## OAuth 2.1 / OIDC
 

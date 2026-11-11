@@ -58,7 +58,8 @@ export const SYSTEM_ROLES: readonly SystemRole[] = Object.freeze([
       "order:fulfil",
       "order:refund",
       "support:read",
-      "support:respond"
+      "support:respond",
+      "notification:read"
     ]
   },
   {
@@ -73,7 +74,8 @@ export const SYSTEM_ROLES: readonly SystemRole[] = Object.freeze([
       "order:read",
       "order:fulfil",
       "support:read",
-      "support:respond"
+      "support:respond",
+      "notification:read"
     ]
   },
   {

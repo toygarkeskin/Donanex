@@ -31,6 +31,7 @@ export const PORTS = {
   ],
   userReadModel: ["getProfile", "listForAdmin", "getAccessPolicy", "getSessionVersion", "listAddresses"],
   supportReadModel: ["listForUser", "listForStore", "listForAdmin", "get"],
+  notificationReadModel: ["list", "countUnread"],
   dashboardReadModel: ["adminSummary", "storeSummary"],
   healthReadModel: ["ping"],
 

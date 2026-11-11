@@ -17,6 +17,12 @@ import {
 import { CreateCategoryCommand } from "../../../application/catalog";
 import { ListAdminOrdersQuery, GetAdminOrderQuery } from "../../../application/ordering";
 import { ListTicketsQuery, GetTicketQuery, ReplyToTicketCommand } from "../../../application/support";
+import {
+  ListNotificationsQuery,
+  CountUnreadNotificationsQuery,
+  MarkNotificationReadCommand,
+  MarkAllNotificationsReadCommand
+} from "../../../application/notifications";
 import { GetDashboardQuery } from "../../../application/system";
 import { requireAuth, requirePermission } from "../middleware/authenticate";
 
@@ -105,6 +111,31 @@ export function adminRoutes({ commands, queries }: Pick<RouteContext, "commands"
       req.context()
     );
     res.json({ ...result, message: "Talep güncellendi." });
+  });
+
+  /* ----- bildirimler -----
+     Yönetimin ortak kutusu: kimseye bağlı değil, "notification:read" iznini
+     sistem genelinde taşıyan herkes aynı kutuyu görür. */
+
+  router.get("/notifications", requirePermission("notification:read"), async (req, res) => {
+    res.json(await queries.ask(new ListNotificationsQuery({ feed: "admin", filters: req.query }), req.context()));
+  });
+
+  router.get("/notifications/unread-count", requirePermission("notification:read"), async (req, res) => {
+    res.json(await queries.ask(new CountUnreadNotificationsQuery({ feed: "admin" }), req.context()));
+  });
+
+  router.post("/notifications/:notificationId/read", requirePermission("notification:read"), async (req, res) => {
+    res.json(
+      await commands.execute(
+        new MarkNotificationReadCommand({ feed: "admin", notificationId: yol(req, "notificationId") }),
+        req.context()
+      )
+    );
+  });
+
+  router.post("/notifications/read-all", requirePermission("notification:read"), async (req, res) => {
+    res.json(await commands.execute(new MarkAllNotificationsReadCommand({ feed: "admin" }), req.context()));
   });
 
   return router;

@@ -22,7 +22,9 @@ import { adminRoutes } from "./routes/admin.routes";
 import { supportRoutes } from "./routes/support.routes";
 import { uploadRoutes } from "./routes/uploads.routes";
 
-import type { RouteContext } from "./types";
+import { bildirimDagitici } from "./support/bildirimAkisi";
+
+import type { NotificationStreamPort, RouteContext } from "./types";
 import type { Services } from "../../application/shared/contracts";
 import type { CommandBus, QueryBus } from "../../application/shared/cqrs/bus";
 import type { UseCaseContext } from "../../application/shared/authorize";
@@ -43,6 +45,14 @@ export interface CreateAppOptions {
    * Verilmezse sayaçlar sürecin içinde tutulur.
    */
   readonly redisClient?: RateLimitRedisClient | null;
+  /**
+   * Gerçek zamanlı bildirim kanalı.
+   *
+   * redisClient gibi bir PORT DEĞİL: yalnızca bu katmanın akış ucu kullanır.
+   * Verilmezse uç 503 döner ve istemci yoklamaya düşer — bildirimler yine
+   * görünür, sadece anında değil.
+   */
+  readonly notificationStream?: NotificationStreamPort | null;
   /** Testler sınırları kapatır; açık bırakılırsa testler birbirini sınıra takar. */
   readonly rateLimits?: boolean;
 }
@@ -60,6 +70,7 @@ export function createApp({
   services,
   config,
   redisClient = null,
+  notificationStream = null,
   rateLimits = true
 }: CreateAppOptions): Express {
   const app = express();
@@ -123,7 +134,7 @@ export function createApp({
   api.use(catalogRoutes(context));
   api.use("/cart", cartRoutes(context));
   api.use(orderRoutes(context));
-  api.use("/me", accountRoutes(context));
+  api.use("/me", accountRoutes({ ...context, bildirimler: bildirimDagitici(notificationStream) }));
   api.use("/stores", storePanelRoutes(context));
   api.use("/admin", adminRoutes(context));
   api.use(supportRoutes(context));
