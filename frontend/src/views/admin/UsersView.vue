@@ -98,7 +98,7 @@ onMounted(load);
     </div>
 
     <LoadingBlock v-if="loading" :rows="4" />
-    <EmptyState v-else-if="!result.items.length" title="Kullanıcı bulunamadı" icon="👥" />
+    <EmptyState v-else-if="!result.items.length" title="Kullanıcı bulunamadı" icon="kullanicilar" />
 
     <template v-else>
       <div class="table-wrap">

@@ -2,33 +2,50 @@
 import { computed, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { api } from "../../lib/api";
-import { money } from "../../lib/format";
+import { money, formatDate, ORDER_STATUS } from "../../lib/format";
+import { seri, egilim, sonHafta } from "../../lib/gosterge";
 import PageHeader from "../../components/PageHeader.vue";
 import StatCard from "../../components/StatCard.vue";
+import StatusBadge from "../../components/StatusBadge.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 import AlertBox from "../../components/AlertBox.vue";
+import CizgiGrafik from "../../components/CizgiGrafik.vue";
 
 const summary = ref(null);
+const recent = ref([]);
 const loading = ref(true);
+
+/*
+ * Ölçüt değiştiğinde SUNUCUYA GİDİLMİYOR: on dört günlük seri hem sipariş
+ * sayısını hem ciroyu birlikte taşıyor, iki ölçüt de aynı yanıttan çiziliyor.
+ */
+const olcut = ref("orders");
 
 onMounted(async () => {
   try {
-    summary.value = await api.get("/admin/dashboard");
+    const [dashboard, orders] = await Promise.all([
+      api.get("/admin/dashboard"),
+      api.get("/admin/orders?pageSize=6")
+    ]);
+    summary.value = dashboard;
+    recent.value = orders.items ?? [];
   } finally {
     loading.value = false;
   }
 });
 
-/** Basit sütun grafiği: günlük sipariş sayısı, en yüksek güne göre ölçeklenir. */
-const chart = computed(() => {
-  const days = summary.value?.last14Days ?? [];
-  const peak = Math.max(1, ...days.map((day) => day.orders));
-  return days.map((day) => ({
-    ...day,
-    height: Math.round((day.orders / peak) * 100),
-    label: new Date(day.date).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" })
-  }));
+const gunler = computed(() => summary.value?.last14Days ?? []);
+const grafikSerisi = computed(() => seri(gunler.value, olcut.value));
+
+/** Grafiğin üstündeki özet: seçili ölçütün son 7 günlük toplamı. */
+const haftalikToplam = computed(() => {
+  const toplam = sonHafta(gunler.value, olcut.value);
+  return olcut.value === "revenue" ? money(toplam) : `${toplam} sipariş`;
 });
+
+const haftalikEgilim = computed(() => egilim(gunler.value, olcut.value));
+
+const bicim = (deger) => (olcut.value === "revenue" ? money(deger) : `${deger} sipariş`);
 </script>
 
 <template>
@@ -45,52 +62,129 @@ const chart = computed(() => {
         </RouterLink>
       </AlertBox>
 
+      <!--
+        Kutular tıklanabilir: sayıyı görüp "peki bunlar hangileri?" diye
+        menüden ilgili sayfayı aramak gerekmiyor.
+      -->
       <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <StatCard label="Aktif kullanıcı" :value="summary.activeUsers" />
-        <StatCard label="Aktif mağaza" :value="summary.activeStores" />
         <StatCard
-          label="Onay bekleyen mağaza"
-          :value="summary.pendingStores"
-          :tone="summary.pendingStores > 0 ? 'warn' : 'neutral'"
+          label="Ödenen hacim"
+          :value="money(summary.paidVolume)"
+          tone="good"
+          icon="panel"
+          :trend="egilim(gunler, 'revenue')"
+          trend-hint="son 7 gün"
         />
-        <StatCard label="Yayındaki ürün" :value="summary.activeProducts" />
-        <StatCard label="Toplam sipariş" :value="summary.totalOrders" />
+        <StatCard
+          label="Toplam sipariş"
+          :value="summary.totalOrders"
+          icon="kargo"
+          :trend="egilim(gunler, 'orders')"
+          trend-hint="son 7 gün"
+          :to="{ name: 'admin-orders' }"
+        />
         <StatCard
           label="Ödeme bekleyen"
           :value="summary.pendingPayment"
           :tone="summary.pendingPayment > 0 ? 'warn' : 'neutral'"
+          icon="sepet"
+          :to="{ name: 'admin-orders', query: { durum: 'pending_payment' } }"
         />
-        <StatCard label="Ödenen hacim" :value="money(summary.paidVolume)" tone="good" />
         <StatCard
           label="Açık destek talebi"
           :value="summary.openTickets"
           :tone="summary.openTickets > 0 ? 'warn' : 'neutral'"
+          icon="destek"
+          :to="{ name: 'admin-tickets' }"
         />
+        <StatCard label="Aktif kullanıcı" :value="summary.activeUsers" icon="kullanicilar" :to="{ name: 'admin-users' }" />
+        <StatCard label="Aktif mağaza" :value="summary.activeStores" icon="magaza" :to="{ name: 'admin-stores' }" />
+        <StatCard
+          label="Onay bekleyen mağaza"
+          :value="summary.pendingStores"
+          :tone="summary.pendingStores > 0 ? 'warn' : 'neutral'"
+          icon="onay"
+          :to="{ name: 'admin-stores', query: { durum: 'pending' } }"
+        />
+        <StatCard label="Yayındaki ürün" :value="summary.activeProducts" icon="etiket" />
       </div>
 
-      <section class="card mt-8 p-5">
-        <h2 class="text-base font-semibold text-ink-900">Son 14 gün</h2>
-        <p class="text-sm text-ink-500">Günlük sipariş sayısı</p>
-
-        <div class="mt-6 flex h-40 items-end gap-2">
-          <div v-for="day in chart" :key="day.date" class="flex h-full min-w-0 flex-1 flex-col items-center gap-2">
-            <span class="text-xs font-medium text-ink-600">{{ day.orders || "" }}</span>
-            <!--
-              Çubuğun yüzde yüksekliği, ancak saran kutunun yüksekliği BELİRLİ
-              olduğunda çözülür. Bu aradaki "flex-1" kutu o yüksekliği verir;
-              olmadığında yüzde otomatik yüksekliğe çözülüp çubuk kayboluyordu.
-            -->
-            <div class="flex w-full flex-1 items-end">
-              <div
-                class="w-full rounded-t bg-brand-500 transition-all"
-                :style="{ height: `${Math.max(day.height, day.orders ? 6 : 2)}%` }"
-                :title="`${day.label}: ${day.orders} sipariş`"
-              />
+      <div class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <section class="card min-w-0 p-4 sm:p-5">
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <h2 class="text-base font-semibold text-ink-900">Son 14 gün</h2>
+              <p class="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-ink-500">
+                <span class="font-semibold text-ink-900">{{ haftalikToplam }}</span>
+                <span
+                  v-if="haftalikEgilim !== null"
+                  class="rounded-full px-1.5 py-0.5 text-[11px] font-semibold"
+                  :class="haftalikEgilim >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'"
+                >
+                  {{ haftalikEgilim >= 0 ? "+" : "−" }}%{{ Math.abs(Math.round(haftalikEgilim)) }}
+                </span>
+                <span class="text-xs text-ink-400">son 7 gün</span>
+              </p>
             </div>
-            <span class="truncate text-[10px] text-ink-400">{{ day.label }}</span>
+
+            <!-- Ölçüt seçici: iki değer de aynı yanıtta geldiği için geçiş anında. -->
+            <div class="flex shrink-0 rounded-lg bg-ink-100 p-0.5" role="group" aria-label="Ölçüt">
+              <button
+                v-for="secenek in [
+                  { deger: 'orders', etiket: 'Sipariş' },
+                  { deger: 'revenue', etiket: 'Ciro' }
+                ]"
+                :key="secenek.deger"
+                type="button"
+                class="rounded-md px-3 py-1 text-xs font-medium transition"
+                :class="olcut === secenek.deger ? 'bg-surface text-ink-900 shadow-sm' : 'text-ink-500 hover:text-ink-800'"
+                :aria-pressed="olcut === secenek.deger"
+                @click="olcut = secenek.deger"
+              >
+                {{ secenek.etiket }}
+              </button>
+            </div>
           </div>
-        </div>
-      </section>
+
+          <CizgiGrafik :seri="grafikSerisi" :bicim="bicim" />
+        </section>
+
+        <section class="card min-w-0 p-4 sm:p-5">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <h2 class="text-base font-semibold text-ink-900">Son siparişler</h2>
+            <RouterLink
+              :to="{ name: 'admin-orders' }"
+              class="shrink-0 text-sm font-medium text-brand-600 hover:text-brand-700"
+            >
+              Tümünü gör →
+            </RouterLink>
+          </div>
+
+          <p v-if="!recent.length" class="py-8 text-center text-sm text-ink-500">Henüz sipariş yok.</p>
+
+          <!--
+            Tablo değil liste: bu kutu geniş ekranda bile dar (sağ sütun) ve
+            beş sütunlu bir tablo orada yatay kaydırma çubuğu üretiyordu.
+          -->
+          <ul v-else class="divide-y divide-ink-100">
+            <li v-for="order in recent" :key="order.id">
+              <RouterLink
+                :to="{ name: 'admin-order', params: { orderId: order.id } }"
+                class="flex items-center gap-3 py-2.5 hover:bg-ink-50"
+              >
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium text-ink-800">{{ order.orderNumber }}</span>
+                  <span class="block truncate text-xs text-ink-500">
+                    {{ order.customerName }} · {{ formatDate(order.placedAt, false) }}
+                  </span>
+                </span>
+                <StatusBadge :map="ORDER_STATUS" :value="order.status" />
+                <span class="shrink-0 text-sm font-medium text-ink-800">{{ money(order.total) }}</span>
+              </RouterLink>
+            </li>
+          </ul>
+        </section>
+      </div>
     </template>
   </div>
 </template>

@@ -40,7 +40,7 @@ onMounted(load);
 
     <LoadingBlock v-if="loading" :rows="3" />
 
-    <EmptyState v-else-if="!stores.length" title="Mağaza bulunamadı" icon="🏪" />
+    <EmptyState v-else-if="!stores.length" title="Mağaza bulunamadı" icon="magaza" />
 
     <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <RouterLink

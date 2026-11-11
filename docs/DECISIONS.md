@@ -370,3 +370,46 @@ plan süzgeci olan bir öğe içindeki `position: fixed` öğeler için yeni bir
 kuruyor, yani tabaka ekranın altına değil **başlığın** altına yapışıyordu. Panel her boyutta
 açılır kutuya çevrildi; sarmalayıcı telefonda `static` (kapsayıcı başlık olsun, panel
 sayfanın kenar boşluğuna hizalansın), `sm`'den sonra `relative` (zile hizalansın).
+
+## 31. Panel: koyu kenar menü, elle çizilmiş grafik, uydurulmayan eğilim
+
+Panelin görünüşü için örnek alınan şey Mosaic-lite: **koyu kenar menü, açık içerik
+alanı**. Koyu menü içeriği çerçeveliyor ve gözün ilk gittiği yeri (asıl iş alanı) açık
+bırakıyor. Menü `night` belirteçlerini kullanıyor; bunlar iki temada da aynı kalan
+yüzeyler için tanımlı, yani koyu temada ters çevrilip beyaza dönmüyorlar.
+
+**Grafik kütüphanesi eklenmedi.** Tek bir grafik türü için Chart.js ~200 KB paket, kendi
+renk/yazı tipi sistemi ve koyu temada ayrıca ayarlanacak renkler demekti.
+`CizgiGrafik.vue` elle çizilmiş SVG: renkleri tema değişkenlerinden okuyor, yani açık/koyu
+geçişinde kendiliğinden doğru.
+
+İki ayrıntı ölçümle çıktı:
+
+- SVG yatayda esniyor (`preserveAspectRatio="none"`), bu da çizgi kalınlığını bozardı.
+  `vector-effect="non-scaling-stroke"` kalınlığı her genişlikte sabit tutuyor.
+- **Yazı SVG'nin içinde değil.** Esneme metni de bozardı; eksen etiketleri altta normal
+  HTML. Etiketler iki kademeli: masaüstünde ikisinde biri, telefonda dörtte biri. Telefon
+  kademesinde son etiketin komşusu eleniyor — onsuz 12. ve 13. gün üst üste biniyordu
+  (sütun 22px, etiket 34px).
+
+**Eğilim (trend) rozeti uydurulmuyor.** Son 7 gün / önceki 7 gün karşılaştırması AYRI BİR
+SORGU DEĞİL, panonun zaten döndürdüğü on dört günlük serinin içinden hesaplanıyor. Önceki
+hafta sıfırsa rozet HİÇ çizilmiyor: sıfırdan artışın yüzdesi tanımsızdır ve "%100 artış"
+diye yazılsaydı yeni açılmış her mağazanın panelinde yanıltıcı biçimde parlardı.
+
+**Seride boş günler var.** `generate_series` ile önce günler üretiliyor, veri sola
+ekleniyor. Yalnızca var olan satırlar gruplansaydı sipariş alınmayan günler listeden düşer
+ve grafik takvim boyunca değil "hareket olan günler" boyunca uzardı — iki sakin hafta,
+yoğun bir hafta gibi görünürdü. Gün sınırı Europe/Istanbul'a göre: sunucu UTC çalışıyor ve
+saat 02:00'de verilen sipariş UTC'de önceki güne düşerdi. Mağaza serisi PAKET üzerinden
+sayılıyor, sipariş üzerinden değil: bir sipariş birden çok mağazaya bölünebiliyor.
+
+**Gösterge kutuları tıklanabilir.** "4 onay bekleyen mağaza" yazan bir kutuya basmak o
+listeye gitmenin en doğal yolu; önceden sayıyı görüp menüden ilgili sayfayı aramak
+gerekiyordu. Süzgeç adres çubuğundan geçiyor (`?durum=pending_payment`), böylece bağlantı
+paylaşılabilir kalıyor.
+
+**Emoji kaldırıldı.** Panel menüsü, boş durum kutuları ve kenar menü emoji kullanıyordu
+(📊 🏪 👥 📦 💬 ⚙️). Vitrin için daha önce yazılan gerekçe panel için de geçerliydi: emoji
+her işletim sisteminde başka çiziliyor ve renk almıyor — koyu kenar menüde gri yazının
+yanında rengarenk duruyorlardı. Hepsi `AppIcon` çizimlerine geçti.

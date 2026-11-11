@@ -63,7 +63,7 @@ onMounted(load);
     </div>
 
     <LoadingBlock v-if="loading" :rows="3" />
-    <EmptyState v-else-if="!result.items.length" title="Destek talebi yok" icon="💬" />
+    <EmptyState v-else-if="!result.items.length" title="Destek talebi yok" icon="destek" />
 
     <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div>

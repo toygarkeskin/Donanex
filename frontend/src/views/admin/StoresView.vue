@@ -77,7 +77,7 @@ onMounted(load);
     </div>
 
     <LoadingBlock v-if="loading" :rows="4" />
-    <EmptyState v-else-if="!result.items.length" title="Mağaza bulunamadı" icon="🏪" />
+    <EmptyState v-else-if="!result.items.length" title="Mağaza bulunamadı" icon="magaza" />
 
     <template v-else>
       <div class="table-wrap">

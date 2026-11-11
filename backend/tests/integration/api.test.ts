@@ -1437,3 +1437,43 @@ test("aynı olay iki kez teslim edilse bildirim bir kez yazılır", opts, async 
   ]);
   assert.equal(sayim.rows[0].n, 1);
 });
+
+test("mağaza panosu on dört günlük seriyi takvim boyunca verir", opts, async () => {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await magazaci.get("/api/me")).data.stores?.[0]?.id;
+  assert.ok(storeId, "mağaza sahibinin paneli olmalı");
+
+  const pano = await magazaci.get(`/api/stores/${storeId}/dashboard`);
+  assert.equal(pano.status, 200);
+
+  const seri = pano.data.last14Days;
+  assert.equal(seri.length, 14, "sipariş alınmayan günler de seride yer alır");
+
+  /*
+   * Takvim sürekliliği: seri bugünde biter ve günler ardışıktır. Boş günler
+   * elenseydi grafik takvim boyunca değil "hareket olan günler" boyunca
+   * uzardı — iki sakin hafta, yoğun bir hafta gibi görünürdü.
+   */
+  const gun = 24 * 60 * 60 * 1000;
+  for (let i = 1; i < seri.length; i += 1) {
+    const fark = Date.parse(`${seri[i].date}T00:00:00Z`) - Date.parse(`${seri[i - 1].date}T00:00:00Z`);
+    assert.equal(fark, gun, `${seri[i - 1].date} ile ${seri[i].date} arasında boşluk var`);
+  }
+
+  // Ciro kuruş cinsinden ve sayıya çevrilebilir olmalı (sürücü BIGINT'i
+  // metin veriyor; arayüz Number() ile çeviriyor).
+  for (const nokta of seri) {
+    assert.equal(typeof nokta.orders, "number");
+    assert.ok(Number.isFinite(Number(nokta.revenueCents)), `${nokta.date}: ciro sayıya çevrilemiyor`);
+  }
+
+  // Serideki toplam ciro, panonun toplam cirosunu AŞAMAZ: seri son on dört
+  // günü, toplam ise bütün zamanı kapsıyor.
+  const seriToplam = seri.reduce((toplam: number, nokta: Row) => toplam + Number(nokta.revenueCents), 0);
+  assert.ok(seriToplam <= pano.data.revenue.cents, "son 14 günün cirosu toplam ciroyu aşamaz");
+
+  // Başka mağazanın panosu kapalı kalmaya devam ediyor.
+  const yabanci = (await anon.get("/api/storefront/stores")).data.items.find((store: Row) => store.id !== storeId);
+  assert.equal((await magazaci.get(`/api/stores/${yabanci.id}/dashboard`)).status, 403);
+});

@@ -122,7 +122,7 @@ Her uç izni **`{ storeId }` kapsamıyla** sorar: başka mağazanın kimliği 40
 
 | Uç | İzin |
 |---|---|
-| `GET /api/stores/:storeId` · `GET …/dashboard` | `store:read` |
+| `GET /api/stores/:storeId` · `GET …/dashboard` | `store:read` — pano, son 14 günün günlük serisini de verir (`last14Days`); boş günler dahil, gün sınırı Europe/Istanbul |
 | `PUT /api/stores/:storeId` | `store:write` |
 | `GET …/products` | `catalog:product:read` |
 | `POST …/products` · `PUT …/products/:productId` · `PATCH …/products/:productId/status` | `catalog:product:write` |

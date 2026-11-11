@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { api, query } from "../../lib/api";
 import { money, formatDate, ORDER_STATUS } from "../../lib/format";
 import PageHeader from "../../components/PageHeader.vue";
@@ -9,11 +9,18 @@ import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import PaginationBar from "../../components/PaginationBar.vue";
 
+const route = useRoute();
 const router = useRouter();
 
 const result = ref({ items: [], total: 0, page: 1, pages: 1 });
 const loading = ref(true);
-const filters = reactive({ q: "", status: "", from: "", to: "", page: 1 });
+/*
+ * Durum adresten okunuyor: genel bakıştaki "Ödeme bekleyen" kutusu buraya
+ * süzülmüş olarak geliyor. Adresten gelmesi ayrıca bağlantının
+ * paylaşılabilir olmasını sağlıyor — mağazalar sayfası da aynı kuralı
+ * kullanıyor ("durum").
+ */
+const filters = reactive({ q: "", status: route.query.durum || "", from: "", to: "", page: 1 });
 
 async function load() {
   loading.value = true;
@@ -63,7 +70,7 @@ onMounted(load);
     </div>
 
     <LoadingBlock v-if="loading" :rows="4" />
-    <EmptyState v-else-if="!result.items.length" title="Sipariş bulunamadı" icon="📦" />
+    <EmptyState v-else-if="!result.items.length" title="Sipariş bulunamadı" icon="kargo" />
 
     <template v-else>
       <div class="table-wrap">

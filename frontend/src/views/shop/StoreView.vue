@@ -41,7 +41,7 @@ onMounted(load);
 <template>
   <LoadingBlock v-if="loading && !store" :rows="4" />
 
-  <EmptyState v-else-if="notFound" title="Mağaza bulunamadı" icon="🏪">
+  <EmptyState v-else-if="notFound" title="Mağaza bulunamadı" icon="magaza">
     <RouterLink :to="{ name: 'stores' }" class="btn-primary">Mağazalara dön</RouterLink>
   </EmptyState>
 
@@ -61,7 +61,7 @@ onMounted(load);
     </header>
 
     <LoadingBlock v-if="loading" :rows="3" />
-    <EmptyState v-else-if="!result.items.length" title="Bu mağazada henüz ürün yok" icon="🏷️" />
+    <EmptyState v-else-if="!result.items.length" title="Bu mağazada henüz ürün yok" icon="etiket" />
     <div v-else class="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <ProductCard v-for="product in result.items" :key="product.id" :product="product" />
     </div>

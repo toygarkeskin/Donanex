@@ -126,5 +126,53 @@ defineProps({
       <path d="M18.3 16.2V11a6.3 6.3 0 1 0-12.6 0v5.2l-1.3 2.1h15.2l-1.3-2.1Z" />
       <path d="M9.9 18.3a2.1 2.1 0 0 0 4.2 0" />
     </template>
+
+    <!-- ----------------------------------------------------- panel simgeleri
+
+         Panel menüsü eskiden emoji kullanıyordu (📊 🏪 👥 📦 💬 ⚙️ 🏷️).
+         Vitrin için yazılmış gerekçe (dosyanın başı) panel için de geçerliydi:
+         emoji her işletim sisteminde başka çiziliyor, renk almıyor ve koyu
+         kenar menüde gri yazının yanında rengarenk duruyordu. -->
+
+    <!-- Genel bakış: çubuk grafik -->
+    <template v-else-if="name === 'panel'">
+      <path d="M4.2 20.2h15.6" />
+      <rect x="5.6" y="12.4" width="3.4" height="5.6" rx="1.2" />
+      <rect x="10.3" y="8.2" width="3.4" height="9.8" rx="1.2" />
+      <rect x="15" y="4.6" width="3.4" height="13.4" rx="1.2" />
+    </template>
+
+    <!-- Kullanıcılar: iki kişi -->
+    <template v-else-if="name === 'kullanicilar'">
+      <circle cx="9.6" cy="8.4" r="3.2" />
+      <path d="M3.4 19.4a6.2 6.2 0 0 1 12.4 0" />
+      <path d="M16.2 5.6a3.2 3.2 0 0 1 0 5.9M17.6 13.6a5.4 5.4 0 0 1 3 4.6" />
+    </template>
+
+    <!-- Destek: konuşma balonu -->
+    <template v-else-if="name === 'destek'">
+      <path d="M20.4 13.4a6.8 6.8 0 0 1-6.8 6.8H8.3l-4 2.3.9-4.1a6.8 6.8 0 0 1 3.2-12.8h5.2a6.8 6.8 0 0 1 6.8 6.8Z" />
+      <path d="M9.4 12.2h.01M12.6 12.2h.01M15.8 12.2h.01" />
+    </template>
+
+    <!-- Ayarlar: dişli -->
+    <template v-else-if="name === 'ayarlar'">
+      <circle cx="12" cy="12" r="2.9" />
+      <path
+        d="M19.2 14.6a1.6 1.6 0 0 0 .32 1.76l.06.06a1.9 1.9 0 1 1-2.7 2.7l-.06-.06a1.6 1.6 0 0 0-1.76-.32 1.6 1.6 0 0 0-.97 1.46v.17a1.9 1.9 0 1 1-3.8 0v-.09a1.6 1.6 0 0 0-1.05-1.46 1.6 1.6 0 0 0-1.76.32l-.06.06a1.9 1.9 0 1 1-2.7-2.7l.06-.06a1.6 1.6 0 0 0 .32-1.76 1.6 1.6 0 0 0-1.46-.97h-.17a1.9 1.9 0 1 1 0-3.8h.09a1.6 1.6 0 0 0 1.46-1.05 1.6 1.6 0 0 0-.32-1.76l-.06-.06a1.9 1.9 0 1 1 2.7-2.7l.06.06a1.6 1.6 0 0 0 1.76.32h.08a1.6 1.6 0 0 0 .97-1.46v-.17a1.9 1.9 0 1 1 3.8 0v.09a1.6 1.6 0 0 0 .97 1.46 1.6 1.6 0 0 0 1.76-.32l.06-.06a1.9 1.9 0 1 1 2.7 2.7l-.06.06a1.6 1.6 0 0 0-.32 1.76v.08a1.6 1.6 0 0 0 1.46.97h.17a1.9 1.9 0 1 1 0 3.8h-.09a1.6 1.6 0 0 0-1.46.97Z"
+      />
+    </template>
+
+    <!-- Çıkış: kapıdan dışarı ok -->
+    <template v-else-if="name === 'cikis'">
+      <path d="M9.4 20.4H5.8a1.8 1.8 0 0 1-1.8-1.8V5.4a1.8 1.8 0 0 1 1.8-1.8h3.6" />
+      <path d="M15.2 16.4 19.6 12l-4.4-4.4M19.6 12H9.4" />
+    </template>
+
+    <!-- Boş durum: açık kapaklı kutu -->
+    <template v-else-if="name === 'bos'">
+      <path d="M3.6 12.6h4l1.4 2.4h6l1.4-2.4h4" />
+      <path d="M5.6 4.6h12.8l2 8v5.2a1.8 1.8 0 0 1-1.8 1.8H5.4a1.8 1.8 0 0 1-1.8-1.8v-5.2l2-8Z" />
+    </template>
   </svg>
 </template>
