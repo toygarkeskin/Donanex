@@ -84,7 +84,7 @@ edilmiş bir paket yeniden aktif bir duruma alınamaz; aksi halde aynı stok iki
 |---|---|
 | `stores` | `status`: pending/active/suspended. Sahibi silinemez (`RESTRICT`) |
 | `categories` | Kendine referanslı (`parent_id`), silinirse alt kategori köksüz kalır (`SET NULL`) |
-| `products` | `(store_id, slug)` benzersiz — iki mağaza aynı adresi kullanabilir. Mağaza silinirse ürünleri gider (`CASCADE`) |
+| `products` | `(store_id, slug)` benzersiz — iki mağaza aynı adresi kullanabilir. Mağaza silinirse ürünleri gider (`CASCADE`). `image_url` **kapak** görselidir (kart, sepet, sipariş kaydı onu kullanır); `gallery_urls` kapağın yanındaki en fazla 5 ek görsel — dizi kolonu, çünkü galeri küçük, hep ürünle birlikte okunur ve kendi başına sorgulanmaz |
 
 ### Sepet ve sipariş
 
