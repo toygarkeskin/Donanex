@@ -28,14 +28,14 @@ import type { FileStorage } from "../../application/shared/contracts";
 
 export const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 
-interface GorselTuru {
+export interface GorselTuru {
   readonly uzanti: string;
   readonly mime: string;
   readonly esle: (b: Buffer) => boolean;
 }
 
 // Sihirli sayı → uzantı. Sıra önemli değil; eşleşen ilk kayıt kullanılır.
-const TURLER: readonly GorselTuru[] = [
+export const TURLER: readonly GorselTuru[] = [
   {
     uzanti: ".png",
     mime: "image/png",

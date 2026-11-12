@@ -8,6 +8,7 @@ import StatusBadge from "../../components/StatusBadge.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import PaginationBar from "../../components/PaginationBar.vue";
+import TalepEkleri from "../../components/TalepEkleri.vue";
 
 const result = ref({ items: [], total: 0, page: 1, pages: 1 });
 const loading = ref(true);
@@ -85,6 +86,18 @@ onMounted(load);
             </div>
           </div>
           <p v-else class="mt-3 text-sm text-ink-500">Henüz yanıt verilmedi.</p>
+
+          <!-- Ekler. Kapatılmış talebe yeni ek eklenemiyor (sunucu da reddediyor);
+               düğme o durumda hiç çizilmiyor. -->
+          <div class="mt-4">
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">Ekler</p>
+            <TalepEkleri
+              :ekler="detail.attachments || []"
+              :yukleme-yolu="detail.status === 'closed' ? '' : `/me/tickets/${detail.id}/ekler`"
+              :indirme-yolu="(ekId) => `/me/tickets/${detail.id}/ekler/${ekId}`"
+              @eklendi="(ek) => detail.attachments = [...(detail.attachments || []), ek]"
+            />
+          </div>
         </div>
       </article>
 

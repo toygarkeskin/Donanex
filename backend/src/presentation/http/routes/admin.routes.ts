@@ -16,7 +16,14 @@ import {
 } from "../../../application/stores";
 import { CreateCategoryCommand } from "../../../application/catalog";
 import { ListAdminOrdersQuery, GetAdminOrderQuery } from "../../../application/ordering";
-import { ListTicketsQuery, GetTicketQuery, ReplyToTicketCommand } from "../../../application/support";
+import {
+  ListTicketsQuery,
+  GetTicketQuery,
+  ReplyToTicketCommand,
+  AddTicketAttachmentCommand,
+  GetTicketAttachmentQuery
+} from "../../../application/support";
+import { ekGovdesi, ekGovdesiYoksa, dosyaAdi, ekiGonder } from "../support/ekler";
 import {
   ListNotificationsQuery,
   CountUnreadNotificationsQuery,
@@ -111,6 +118,34 @@ export function adminRoutes({ commands, queries }: Pick<RouteContext, "commands"
       req.context()
     );
     res.json({ ...result, message: "Talep güncellendi." });
+  });
+
+  router.post("/tickets/:ticketId/ekler", requirePermission("support:respond"), ekGovdesi, async (req, res) => {
+    if (ekGovdesiYoksa(req, res)) return;
+    const ek = await commands.execute(
+      new AddTicketAttachmentCommand({
+        scope: "admin",
+        ticketId: yol(req, "ticketId"),
+        originalName: dosyaAdi(req),
+        content: req.body
+      }),
+      req.context()
+    );
+    res.status(201).json(ek);
+  });
+
+  router.get("/tickets/:ticketId/ekler/:ekId", requirePermission("support:read"), async (req, res) => {
+    ekiGonder(
+      res,
+      await queries.ask(
+        new GetTicketAttachmentQuery({
+          scope: "admin",
+          ticketId: yol(req, "ticketId"),
+          attachmentId: yol(req, "ekId")
+        }),
+        req.context()
+      )
+    );
   });
 
   /* ----- bildirimler -----

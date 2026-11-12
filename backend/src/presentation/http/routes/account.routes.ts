@@ -20,7 +20,13 @@ import {
   CancelOrderCommand
 } from "../../../application/ordering";
 import { ApplyForStoreCommand } from "../../../application/stores";
-import { ListTicketsQuery, GetTicketQuery } from "../../../application/support";
+import {
+  ListTicketsQuery,
+  GetTicketQuery,
+  AddTicketAttachmentCommand,
+  GetTicketAttachmentQuery
+} from "../../../application/support";
+import { ekGovdesi, ekGovdesiYoksa, dosyaAdi, ekiGonder } from "../support/ekler";
 import {
   ListNotificationsQuery,
   CountUnreadNotificationsQuery,
@@ -142,6 +148,40 @@ export function accountRoutes({
     res.json(
       await queries.ask(
         new GetTicketQuery({ scope: "mine", userId: kullanici(req), ticketId: yol(req, "ticketId") }),
+        req.context()
+      )
+    );
+  });
+
+  /* ----- talep ekleri -----
+     Yalnızca talebin SAHİBİ ekleyip indirebilir; sahiplik handler'da ve
+     read model sorgusunda ayrıca soruluyor. */
+
+  router.post("/tickets/:ticketId/ekler", limiters.support, ekGovdesi, async (req, res) => {
+    if (ekGovdesiYoksa(req, res)) return;
+    const ek = await commands.execute(
+      new AddTicketAttachmentCommand({
+        scope: "mine",
+        userId: kullanici(req),
+        ticketId: yol(req, "ticketId"),
+        originalName: dosyaAdi(req),
+        content: req.body
+      }),
+      req.context()
+    );
+    res.status(201).json(ek);
+  });
+
+  router.get("/tickets/:ticketId/ekler/:ekId", async (req, res) => {
+    ekiGonder(
+      res,
+      await queries.ask(
+        new GetTicketAttachmentQuery({
+          scope: "mine",
+          userId: kullanici(req),
+          ticketId: yol(req, "ticketId"),
+          attachmentId: yol(req, "ekId")
+        }),
         req.context()
       )
     );

@@ -1761,3 +1761,188 @@ test("destek talepleri aranır, önceliklenir ve öncelik sırasına girer", opt
   assert.ok(oncelikSirasi.indexOf(kargo) < oncelikSirasi.indexOf(iade), "acil, yüksekten önce gelmeli");
   assert.ok(oncelikSirasi.indexOf(iade) < oncelikSirasi.indexOf(fatura), "yüksek, normalden önce gelmeli");
 });
+
+/* ------------------------------------------------------------ talep ekleri */
+
+/** En küçük geçerli PNG (1x1, şeffaf). Gerçek imza: ilk 8 bayt PNG başlığı. */
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  "base64"
+);
+const KUCUK_PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n", "ascii");
+
+/** Ham gövdeli ek yükleme; dosya adı başlıkta, URL kodlu. */
+async function ekYukle(client: Client, yol: string, icerik: Buffer, tur: string, ad: string) {
+  const cookie = Object.entries(client.cookies)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("; ");
+  const yanit = await fetch(`${client.base}${yol}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": tur,
+      "X-Dosya-Adi": encodeURIComponent(ad),
+      ...(cookie ? { Cookie: cookie } : {}),
+      ...(client.accessToken ? { Authorization: `Bearer ${client.accessToken}` } : {})
+    },
+    body: icerik
+  });
+  const metin = await yanit.text();
+  let data: Row = {};
+  try {
+    data = JSON.parse(metin);
+  } catch {
+    data = { raw: metin.slice(0, 200) };
+  }
+  return { status: yanit.status, data };
+}
+
+async function ekIndir(client: Client, yol: string) {
+  const yanit = await fetch(`${client.base}${yol}`, {
+    headers: client.accessToken ? { Authorization: `Bearer ${client.accessToken}` } : {}
+  });
+  return { status: yanit.status, headers: yanit.headers, body: Buffer.from(await yanit.arrayBuffer()) };
+}
+
+test("talebe ek yüklenir, yalnızca talebe erişen indirir", opts, async () => {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await magazaci.get("/api/me")).data.stores?.[0]?.id;
+
+  const musteri = new Client(app.base);
+  assert.ok((await musteri.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+
+  const acilan = await musteri.post("/api/support/tickets", {
+    email: "musteri@donanex.test",
+    fullName: "Ayşe Yılmaz",
+    subject: `Ek denemesi ${Date.now()}`,
+    message: "Ekran görüntüsü ekliyorum.",
+    storeId
+  });
+  assert.equal(acilan.status, 201, JSON.stringify(acilan.data));
+  const ticketId = acilan.data.id;
+
+  // Türkçe ad başlıkta kodlu taşınıyor ve bozulmadan geri geliyor.
+  const ek = await ekYukle(musteri, `/api/me/tickets/${ticketId}/ekler`, PNG_1X1, "image/png", "Ekran_Görüntüsü.png");
+  assert.equal(ek.status, 201, JSON.stringify(ek.data));
+  assert.equal(ek.data.originalName, "Ekran_Görüntüsü.png");
+  assert.equal(ek.data.contentType, "image/png");
+  assert.equal(ek.data.isStaff, false);
+  assert.equal(ek.data.fileName, undefined, "diskteki ad istemciye ASLA gönderilmez");
+
+  // Mağaza aynı talebe PDF ekleyebiliyor; ek "ekip" olarak işaretleniyor.
+  const pdf = await ekYukle(
+    magazaci,
+    `/api/stores/${storeId}/tickets/${ticketId}/ekler`,
+    KUCUK_PDF,
+    "application/pdf",
+    "Fatura.pdf"
+  );
+  assert.equal(pdf.status, 201, JSON.stringify(pdf.data));
+  assert.equal(pdf.data.isStaff, true);
+
+  // Talep ayrıntısı iki eki de listeliyor, diskteki adı göstermeden.
+  const ayrinti = await musteri.get(`/api/me/tickets/${ticketId}`);
+  assert.equal(ayrinti.data.attachments.length, 2);
+  assert.ok(ayrinti.data.attachments.every((a: Row) => a.fileName === undefined));
+
+  // İndirme: içerik birebir, başlıklar güvenli.
+  const indirilen = await ekIndir(musteri, `/api/me/tickets/${ticketId}/ekler/${ek.data.id}`);
+  assert.equal(indirilen.status, 200);
+  assert.ok(indirilen.body.equals(PNG_1X1), "indirilen dosya yüklenenle aynı");
+  assert.match(String(indirilen.headers.get("content-disposition")), /^attachment;/, "tarayıcıda açılmaz, indirilir");
+  assert.match(String(indirilen.headers.get("content-disposition")), /filename\*=UTF-8''Ekran_G%C3%B6r%C3%BCnt%C3%BCs%C3%BC\.png/);
+  assert.equal(indirilen.headers.get("x-content-type-options"), "nosniff");
+  assert.match(String(indirilen.headers.get("cache-control")), /no-store/);
+
+  /*
+   * ERİŞİM: talebi göremeyen eki de göremez. Başka bir müşteri ek kimliğini
+   * bilse bile 404 alıyor; "yok" ile "senin değil" aynı yanıt.
+   */
+  const yabanci = new Client(app.base);
+  assert.ok((await yabanci.signIn("ahmet@donanex.test", DEMO_PASSWORD)).ok);
+  assert.equal((await ekIndir(yabanci, `/api/me/tickets/${ticketId}/ekler/${ek.data.id}`)).status, 404);
+  assert.equal(
+    (await ekYukle(yabanci, `/api/me/tickets/${ticketId}/ekler`, PNG_1X1, "image/png", "x.png")).status,
+    404,
+    "başkasının talebine ek yüklenemez"
+  );
+  assert.equal((await ekIndir(anon, `/api/me/tickets/${ticketId}/ekler/${ek.data.id}`)).status, 401);
+
+  // Ekler "/yuklenen" altından herkese açık sunulmuyor: o uç ek klasörüne ulaşamıyor.
+  const herkeseAcik = await fetch(`${app.base}/yuklenen/..%2Fekler%2F${ek.data.id}.png`);
+  assert.equal(herkeseAcik.status, 404);
+
+  // Yönetim her talebin ekine ulaşabiliyor (sistem geneli izin).
+  const admin = new Client(app.base);
+  assert.ok((await admin.signIn(ADMIN_EMAIL, ADMIN_PASSWORD)).ok);
+  const yonetim = await ekIndir(admin, `/api/admin/tickets/${ticketId}/ekler/${pdf.data.id}`);
+  assert.equal(yonetim.status, 200);
+  assert.ok(yonetim.body.equals(KUCUK_PDF));
+
+  // Başka mağaza bu talebin ekine ulaşamıyor.
+  const baskaMagaza = (await anon.get("/api/storefront/stores")).data.items.find((s: Row) => s.id !== storeId);
+  assert.equal((await ekIndir(magazaci, `/api/stores/${baskaMagaza.id}/tickets/${ticketId}/ekler/${ek.data.id}`)).status, 403);
+});
+
+test("ek türü baytlardan doğrulanır, boyut ve sayı sınırlıdır", opts, async () => {
+  const musteri = new Client(app.base);
+  assert.ok((await musteri.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+
+  const acilan = await musteri.post("/api/support/tickets", {
+    email: "musteri@donanex.test",
+    fullName: "Ayşe Yılmaz",
+    subject: `Sınır denemesi ${Date.now()}`,
+    message: "Sınırları deniyorum."
+  });
+  const yol = `/api/me/tickets/${acilan.data.id}/ekler`;
+
+  // "image/png" diyor ama içerik HTML: imza tutmadığı için reddediliyor.
+  const sahte = await ekYukle(musteri, yol, Buffer.from("<script>alert(1)</script>"), "image/png", "zararsiz.png");
+  assert.equal(sahte.status, 400, "tür istemcinin beyanından değil baytlardan okunur");
+
+  // İzin verilmeyen tür kapıda duruyor.
+  assert.equal((await ekYukle(musteri, yol, Buffer.from("merhaba"), "text/html", "a.html")).status, 415);
+
+  // 5 MB'ı aşan dosya: anlaşılır bir 400 (nginx/Express'in kuru 413'ü değil).
+  const buyuk = Buffer.concat([PNG_1X1, Buffer.alloc(5 * 1024 * 1024)]);
+  assert.equal((await ekYukle(musteri, yol, buyuk, "image/png", "buyuk.png")).status, 400);
+
+  // Dosya adındaki yol parçaları ve kontrol karakterleri temizleniyor.
+  const yollu = await ekYukle(musteri, yol, PNG_1X1, "image/png", "..\\..\\Windows\\gizli\r\n.png");
+  assert.equal(yollu.status, 201);
+  assert.equal(yollu.data.originalName, "gizli.png");
+
+  // Sayı sınırı: toplam 5. Biri zaten yüklendi, 4 tane daha sığar, 6.sı sığmaz.
+  for (let i = 0; i < 4; i += 1) {
+    assert.equal((await ekYukle(musteri, yol, PNG_1X1, "image/png", `ek${i}.png`)).status, 201);
+  }
+  const fazla = await ekYukle(musteri, yol, PNG_1X1, "image/png", "fazla.png");
+  assert.equal(fazla.status, 409);
+  assert.match(String(fazla.data.message), /en fazla 5/);
+
+  // Reddedilen yüklemeler diskte sahipsiz dosya bırakmıyor.
+  const kayit = await app.pool.query("SELECT COUNT(*)::int AS n FROM support_attachments WHERE ticket_id = $1", [
+    acilan.data.id
+  ]);
+  assert.equal(kayit.rows[0].n, 5);
+});
+
+test("kapatılmış talebe müşteri ek ekleyemez", opts, async () => {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await magazaci.get("/api/me")).data.stores?.[0]?.id;
+
+  const musteri = new Client(app.base);
+  assert.ok((await musteri.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+  const acilan = await musteri.post("/api/support/tickets", {
+    email: "musteri@donanex.test",
+    fullName: "Ayşe Yılmaz",
+    subject: `Kapanan talep ${Date.now()}`,
+    message: "Kapanacak.",
+    storeId
+  });
+
+  await magazaci.put(`/api/stores/${storeId}/tickets/${acilan.data.id}`, { status: "closed" });
+  const yanit = await ekYukle(musteri, `/api/me/tickets/${acilan.data.id}/ekler`, PNG_1X1, "image/png", "geç.png");
+  assert.equal(yanit.status, 409);
+});

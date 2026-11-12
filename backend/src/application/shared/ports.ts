@@ -30,7 +30,7 @@ export const PORTS = {
     "getForAdmin"
   ],
   userReadModel: ["getProfile", "listForAdmin", "getAccessPolicy", "getSessionVersion", "listAddresses"],
-  supportReadModel: ["listForUser", "listForStore", "listForAdmin", "get"],
+  supportReadModel: ["listForUser", "listForStore", "listForAdmin", "get", "getAttachment"],
   notificationReadModel: ["list", "countUnread"],
   dashboardReadModel: ["adminSummary", "storeSummary"],
   healthReadModel: ["ping"],
@@ -50,6 +50,8 @@ export const PORTS = {
   mailer: ["send"],
   // Yüklenen ürün görselleri; ad sunucuda üretilir, tür baytlardan doğrulanır
   fileStorage: ["save", "read"],
+  // Talep ekleri; herkese açık görsellerden ayrı klasörde, yetkiyle sunulur
+  attachmentStorage: ["save", "read", "remove"],
   clock: ["now"],
   ids: ["uuid"],
   logger: ["debug", "info", "warn", "error"]

@@ -67,6 +67,46 @@ export class PgSupportRepository implements SupportRepository {
     );
   }
 
+  /** findTicket ile aynı kapsam, ama satırı kilitleyerek (ek sayısı sınırı için). */
+  async lockTicket(ticketId: string, storeId: string | null = null): Promise<Row | null> {
+    const { rows } = await this.db.query(
+      `SELECT ${TICKET} FROM support_tickets
+       WHERE id = $1 AND ($2::uuid IS NULL OR store_id = $2::uuid)
+       FOR UPDATE`,
+      [ticketId, storeId]
+    );
+    return rows[0] || null;
+  }
+
+  async countAttachments(ticketId: string): Promise<number> {
+    const { rows } = await this.db.query(
+      "SELECT COUNT(*)::int AS n FROM support_attachments WHERE ticket_id = $1",
+      [ticketId]
+    );
+    return rows[0].n;
+  }
+
+  async addAttachment(ek: {
+    id: string;
+    ticketId: string;
+    uploadedBy: string | null;
+    isStaff: boolean;
+    fileName: string;
+    originalName: string;
+    contentType: string;
+    sizeBytes: number;
+  }): Promise<Row> {
+    const { rows } = await this.db.query(
+      `INSERT INTO support_attachments
+         (id, ticket_id, uploaded_by, is_staff, file_name, original_name, content_type, size_bytes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, original_name AS "originalName", content_type AS "contentType",
+                 size_bytes AS "size", is_staff AS "isStaff", created_at AS "createdAt"`,
+      [ek.id, ek.ticketId, ek.uploadedBy, ek.isStaff, ek.fileName, ek.originalName, ek.contentType, ek.sizeBytes]
+    );
+    return rows[0];
+  }
+
   /**
    * Durumu — ve verilmişse önceliği — günceller.
    *

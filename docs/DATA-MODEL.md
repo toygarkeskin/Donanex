@@ -102,6 +102,7 @@ edilmiş bir paket yeniden aktif bir duruma alınamaz; aksi halde aynı stok iki
 |---|---|
 | `outbox_messages` | Olaylar veriyle aynı transaction'da yazılır; worker `SKIP LOCKED` ile aktarır. Kısmi indeks yalnızca yayınlanmamışları tarar |
 | `audit_log` | Kim, ne zaman, neyi değiştirdi. İş transaction'ının parçasıdır: işlem geri alınırsa kayıt da geri alınır |
+| `support_attachments` | Talep ekleri. Dosyanın kendisi diskte (yükleme klasörünün `ekler` alt klasörü), burada kaydı. `file_name` sunucuda üretilir ve istemciye gönderilmez; `original_name` yalnızca gösterim içindir. Talep silinirse ekler de gider (`CASCADE`) |
 | `notifications` | Site içi bildirimler. Alıcı tek eksende: `scope` (`user`/`store`/`admin`) + `scope_id`. Polimorfik olduğu için **yabancı anahtar yok** — bedeli bu, karşılığı tek indeks ve tek sorgu biçimi. Metin yazılırken üretilir, görüntülenirken değil: eski bir bildirimin yazısı bugünün koduna göre değişmesin. `(source_event_id, scope, scope_id)` üzerindeki `UNIQUE … NULLS NOT DISTINCT` kısmi indeksi, kuyruğun en-az-bir-kez teslimine karşı tekilleştirir |
 
 ## Silme davranışları

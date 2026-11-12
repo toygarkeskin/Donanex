@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { renderNotifications } from "../../src/infrastructure/notifications/templates";
 import { bildirimAlicisi } from "../../src/application/notifications/alici";
 import { AccessPolicy } from "../../src/domain/identity/AccessPolicy";
+import { displayFileName } from "../../src/domain/support/Attachment";
 
 const SIPARIS = "11111111-1111-4111-8111-111111111111";
 const MUSTERI = "22222222-2222-4222-8222-222222222222";
@@ -183,4 +184,26 @@ test("Mağaza kutusu yalnızca o mağazada yetkili olana açılır", () => {
 test("Yönetim kutusu mağaza yetkisiyle açılmaz", () => {
   assert.throws(() => bildirimAlicisi("admin", {}, { policy: magazaPolicy(MAGAZA) }), /yetkiniz yok/);
   assert.deepEqual(bildirimAlicisi("admin", {}, { policy: yoneticiPolicy() }), { scope: "admin", scopeId: null });
+});
+
+/* ------------------------------------------------------- ek dosya adları
+
+   Kullanıcının verdiği ad diskte HİÇBİR YERDE kullanılmıyor (diskteki ad
+   sunucuda üretiliyor); yalnızca gösteriliyor ve indirmede öneriliyor. Yine
+   de başlığa ve ekrana gideceği için temizleniyor. */
+
+test("Ek adı yol parçalarından ve kontrol karakterlerinden arınır", () => {
+  assert.equal(displayFileName("fatura.pdf"), "fatura.pdf");
+  assert.equal(displayFileName("C:\\Users\\ayse\\Masaüstü\\fatura.pdf"), "fatura.pdf");
+  assert.equal(displayFileName("../../etc/passwd"), "passwd");
+  // Satır sonu başlığa sızarsa yanıt bölünebilirdi (header injection).
+  assert.equal(displayFileName("ek\r\nSet-Cookie: x=1.png"), "ekSet-Cookie: x=1.png");
+  assert.equal(displayFileName('a"b.png'), "ab.png");
+  // Türkçe karakterler korunuyor.
+  assert.equal(displayFileName("Görüntü_Şubat.png"), "Görüntü_Şubat.png");
+  // Geriye bir şey kalmazsa ya da ad hiç yoksa "ek".
+  assert.equal(displayFileName(""), "ek");
+  assert.equal(displayFileName("/"), "ek");
+  assert.equal(displayFileName(undefined), "ek");
+  assert.equal(displayFileName("a".repeat(500)).length, 120);
 });

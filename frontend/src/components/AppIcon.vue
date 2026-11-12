@@ -169,6 +169,24 @@ defineProps({
       <path d="M15.2 16.4 19.6 12l-4.4-4.4M19.6 12H9.4" />
     </template>
 
+    <!-- Ek: ataş -->
+    <template v-else-if="name === 'ek'">
+      <path d="m20.2 11.4-8.1 8.1a5.2 5.2 0 0 1-7.4-7.4l8.4-8.4a3.5 3.5 0 0 1 4.9 4.9l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" />
+    </template>
+
+    <!-- Belge: köşesi kıvrık sayfa (PDF eki) -->
+    <template v-else-if="name === 'belge'">
+      <path d="M14 3.6H7.4a1.8 1.8 0 0 0-1.8 1.8v13.2a1.8 1.8 0 0 0 1.8 1.8h9.2a1.8 1.8 0 0 0 1.8-1.8V8L14 3.6Z" />
+      <path d="M14 3.6V8h4.4M9 13h6M9 16.4h4" />
+    </template>
+
+    <!-- Görsel: çerçeve içinde dağ ve güneş (görsel eki) -->
+    <template v-else-if="name === 'gorsel'">
+      <rect x="3.8" y="4.6" width="16.4" height="14.8" rx="2.2" />
+      <circle cx="9" cy="9.6" r="1.6" />
+      <path d="m20.2 15.4-4.6-4.6-8.4 8.6" />
+    </template>
+
     <!-- Adres: harita iğnesi -->
     <template v-else-if="name === 'konum'">
       <path d="M19 10.4c0 5.1-7 11-7 11s-7-5.9-7-11a7 7 0 1 1 14 0Z" />

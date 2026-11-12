@@ -109,7 +109,8 @@ Tutar **sunucuda** hesaplanır; gövdede gönderilen fiyat ve toplam yok sayıl�
 | `PUT /api/me/profile` · `PUT /api/me/password` | Profil ve parola |
 | `GET/POST /api/me/addresses` · `PUT/DELETE /api/me/addresses/:addressId` | Adres defteri |
 | `GET /api/me/orders` · `GET /api/me/orders/:siparis` | Sipariş geçmişi (sahiplik sorgunun parçası). `:siparis` ya iç kimlik ya da sipariş numarasıdır (`PZ-2026-001005`, büyük/küçük harf farketmez); aynı kural mağaza ve yönetim sipariş uçlarında da geçerli. Başka biçim 400 döner — serbest metin sorguya hiç ulaşmaz |
-| `GET /api/me/tickets` · `GET /api/me/tickets/:ticketId` | Destek talepleri |
+| `GET /api/me/tickets` · `GET /api/me/tickets/:ticketId` | Destek talepleri (ayrıntı ekleri de listeler) |
+| `POST /api/me/tickets/:ticketId/ekler` · `GET …/ekler/:ekId` | Talep eki: ham gövde (PNG/JPEG/WebP/PDF, en fazla 5 MB, talep başına 5), dosya adı `X-Dosya-Adi` başlığında URL kodlu. Tür baytlardan doğrulanır. İndirme `attachment` olarak, yalnızca talebi görebilene. Mağaza (`/api/stores/:storeId/tickets/:id/ekler`) ve yönetim (`/api/admin/tickets/:id/ekler`) için aynı uçlar var |
 | `POST /api/me/store-application` | Mağaza açma başvurusu (onaya düşer) |
 | `POST /api/support/tickets` | Destek talebi; misafir de açabilir |
 | `GET /api/me/notifications` · `…/unread-count` | Bildirimler; liste okunmamış sayısını da döndürür |

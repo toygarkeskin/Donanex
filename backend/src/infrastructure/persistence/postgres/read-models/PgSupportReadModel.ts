@@ -17,6 +17,19 @@ const MESSAGES = `
   ), '[]'::json)`;
 
 /*
+ * Talebin ekleri. Diskteki ad (file_name) BİLİNÇLİ OLARAK yok: istemci eki
+ * yalnızca kimliğiyle ister, ad sunucuda kalır.
+ */
+const EKLER = `
+  COALESCE((
+    SELECT json_agg(json_build_object(
+      'id', a.id, 'originalName', a.original_name, 'contentType', a.content_type,
+      'size', a.size_bytes, 'isStaff', a.is_staff, 'createdAt', a.created_at
+    ) ORDER BY a.created_at)
+    FROM support_attachments a WHERE a.ticket_id = t.id
+  ), '[]'::json)`;
+
+/*
  * Panelin varsayılan sırası: önce ilgilenilmemiş talepler, sonra öncelik,
  * sonra en yeni.
  *
@@ -126,11 +139,33 @@ export class PgSupportReadModel implements SupportReadModel {
     return paginate(rows, count.rows[0].total, filters);
   }
 
+  /**
+   * Tek bir ekin kaydı (diskteki adıyla birlikte).
+   *
+   * Kapsam sorgunun içinde: ek kimliği tahmin edilse bile, talebe erişimi
+   * olmayan kişi için satır dönmüyor. Diskteki ad yalnızca BURADAN çıkıyor ve
+   * istemciye hiçbir yanıtta gönderilmiyor.
+   */
+  async getAttachment(ticketId: string, attachmentId: string, scope: Row = {}): Promise<Row | null> {
+    const { userId = null, storeId = null } = scope;
+    const { rows } = await this.db.query(
+      `SELECT a.id, a.file_name AS "fileName", a.original_name AS "originalName",
+              a.content_type AS "contentType", a.size_bytes AS "size"
+       FROM support_attachments a
+       JOIN support_tickets t ON t.id = a.ticket_id
+       WHERE a.id = $1 AND a.ticket_id = $2
+         AND ($3::uuid IS NULL OR t.user_id = $3::uuid)
+         AND ($4::uuid IS NULL OR t.store_id = $4::uuid)`,
+      [attachmentId, ticketId, userId, storeId]
+    );
+    return rows[0] || null;
+  }
+
   /** Kapsam filtresi sorgunun içindedir: başkasının talebi dönmez. */
   async get(ticketId: string, scope: Row = {}): Promise<Row | null> {
     const { userId = null, storeId = null } = scope;
     const { rows } = await this.db.query(
-      `SELECT ${SUMMARY}, t.message, t.order_id AS "orderId", ${MESSAGES} AS messages
+      `SELECT ${SUMMARY}, t.message, t.order_id AS "orderId", ${MESSAGES} AS messages, ${EKLER} AS attachments
        FROM support_tickets t
        WHERE t.id = $1
          AND ($2::uuid IS NULL OR t.user_id = $2::uuid)

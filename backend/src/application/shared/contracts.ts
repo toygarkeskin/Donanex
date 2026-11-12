@@ -198,6 +198,23 @@ export interface SupportRepository {
   }): Promise<void>;
   /** priority null ise mevcut öncelik korunur — "dokunma" demektir. */
   setTicketStatus(ticketId: string, status: string, priority?: string | null): Promise<Row | null>;
+  /**
+   * Talebi kilitler (SELECT … FOR UPDATE). Ek eklerken sayı sınırı bu kilit
+   * altında sayılıyor: kilit olmasa aynı anda gelen iki yükleme ikisi de
+   * "4 ek var" görüp sınırı aşabilirdi.
+   */
+  lockTicket(ticketId: string, storeId?: string | null): Promise<Row | null>;
+  countAttachments(ticketId: string): Promise<number>;
+  addAttachment(attachment: {
+    id: string;
+    ticketId: string;
+    uploadedBy: string | null;
+    isStaff: boolean;
+    fileName: string;
+    originalName: string;
+    contentType: string;
+    sizeBytes: number;
+  }): Promise<Row>;
 }
 
 /**
@@ -388,6 +405,8 @@ export interface SupportReadModel {
   listForStore(storeId: string, filters: ListFilters): Promise<Row>;
   listForAdmin(filters: ListFilters): Promise<Row>;
   get(ticketId: string, scope: Row): Promise<Row | null>;
+  /** Kapsam sorgunun içinde: başka talebin ya da başkasının talebinin eki dönmez. */
+  getAttachment(ticketId: string, attachmentId: string, scope: Row): Promise<Row | null>;
 }
 
 export interface NotificationReadModel {
@@ -481,6 +500,17 @@ export interface FileStorage {
   read(fileName: string): Promise<{ content: Buffer; contentType: string }>;
 }
 
+/**
+ * Destek talebi ekleri. Ürün görsellerinden AYRI bir depo: görseller herkese
+ * açık sunuluyor, ekler ise yalnızca talebe erişimi olana.
+ */
+export interface AttachmentStorage {
+  save(content: Buffer): Promise<{ fileName: string; contentType: string; size: number }>;
+  read(fileName: string): Promise<{ content: Buffer; contentType: string }>;
+  /** Kayıt yazılamazsa diskte sahipsiz dosya kalmasın diye. */
+  remove(fileName: string): Promise<void>;
+}
+
 export interface Clock {
   now(): Date;
 }
@@ -534,6 +564,7 @@ export interface Services {
   readonly cache: Cache;
   readonly mailer: Mailer;
   readonly fileStorage: FileStorage;
+  readonly attachmentStorage: AttachmentStorage;
   readonly clock: Clock;
   readonly ids: IdGenerator;
   readonly logger: LoggerPort;

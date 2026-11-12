@@ -109,6 +109,55 @@ api.post = (path, body, options) => api(path, { ...options, method: "POST", body
  * ve türü Content-Type başlığıyla bildirilir.
  */
 api.upload = (path, file) => api(path, { method: "POST", raw: file, headers: { "Content-Type": file.type } });
+/*
+ * Dosya ADIYLA birlikte yükleme (talep ekleri).
+ *
+ * Ham gövdede dosyanın adı taşınamıyor; "X-Dosya-Adi" başlığında URL kodlu
+ * gidiyor. Başlıklar yalnızca ASCII taşıyabildiği için kodlama şart —
+ * "Fatura_Şubat.pdf" kodlanmadan gönderilse istek tarayıcıda reddedilirdi.
+ */
+api.uploadNamed = (path, file) =>
+  api(path, {
+    method: "POST",
+    raw: file,
+    headers: { "Content-Type": file.type, "X-Dosya-Adi": encodeURIComponent(file.name) }
+  });
+
+/**
+ * Korumalı bir dosyayı indirir (talep ekleri).
+ *
+ * Neden <a href> değil: erişim jetonu bellekte, çerezde değil. Düz bir bağlantı
+ * jetonsuz gider ve 401 alır. Dosya burada jetonla çekiliyor, tarayıcıya geçici
+ * bir adresle (blob:) veriliyor ve adres hemen geri bırakılıyor.
+ */
+api.download = async (path, fileName) => {
+  const getir = (token) =>
+    fetch(`${BASE}${path}`, {
+      credentials: "same-origin",
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+
+  let yanit = await getir(accessToken);
+  if (yanit.status === 401) {
+    const yeni = await refreshAccessToken();
+    if (yeni) yanit = await getir(yeni);
+  }
+  if (!yanit.ok) {
+    const data = await yanit.json().catch(() => ({}));
+    throw new ApiError(data.message || "Dosya indirilemedi.", yanit.status, data.error);
+  }
+
+  const adres = URL.createObjectURL(await yanit.blob());
+  const baglanti = document.createElement("a");
+  baglanti.href = adres;
+  baglanti.download = fileName;
+  document.body.appendChild(baglanti);
+  baglanti.click();
+  baglanti.remove();
+  // Tarayıcı indirmeyi başlatana kadar adres yaşasın, sonra bellek geri alınsın.
+  setTimeout(() => URL.revokeObjectURL(adres), 30_000);
+};
+
 api.put = (path, body, options) => api(path, { ...options, method: "PUT", body: body ?? {} });
 api.patch = (path, body, options) => api(path, { ...options, method: "PATCH", body: body ?? {} });
 api.delete = (path, options) => api(path, { ...options, method: "DELETE" });

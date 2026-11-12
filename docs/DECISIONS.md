@@ -512,3 +512,45 @@ olan bir süzgeç "süzülmemiş liste" gibi görünür ve kullanıcı yanlış 
 boşluklar düşünce liste sütununa 290px kalıyordu ve beş sütunlu tablo kendi içinde yatay
 kayıyordu. Dar ekranda panel listenin altında açılıyor ve oraya kaydırılıyor — yoksa satıra
 tıklayan kullanıcı hiçbir şey olmamış sanıyor.
+
+## 34. Talep ekleri: herkese açık değil, tür baytlardan, sayı kilit altında
+
+Destek talebine ekran görüntüsü, fatura ya da belge eklenebiliyor: PNG, JPEG, WebP ve PDF,
+dosya başına en fazla 5 MB, talep başına en fazla 5 ek.
+
+**Ekler ürün görselleri gibi herkese açık DEĞİL.** Görseller `/yuklenen/<ad>` adresinden
+oturumsuz sunuluyor; ekler ise kişisel içerik taşıyor. Ayrı bir depoya
+(`LocalAttachmentStorage`), yükleme klasörünün `ekler` alt klasörüne yazılıyorlar.
+Görsel deposunun ad kalıbı `/` içeremediği için o uçtan alt klasöre ulaşmanın yolu yok;
+her indirme, talebi görme yetkisi sorulan bir uçtan geçiyor. Entegrasyon testi bunu da
+deniyor.
+
+**Tür istemcinin beyanından değil, ilk baytlardan okunuyor.** "image/png" diye gelen bir
+HTML dosyası imza tutmadığı için reddediliyor. SVG, HTML, Office belgeleri ve arşivler
+bilinçli olarak dışarıda: ilk ikisi tarayıcıda betik çalıştırabilir, son ikisi içeriği
+denetlenemeyen kaplar.
+
+**Diskteki ad sunucuda üretiliyor ve istemciye hiç gönderilmiyor.** Kullanıcının verdiği
+ad yalnızca ekranda ve indirme önerisinde görünüyor; yol parçaları ve kontrol karakterleri
+temizleniyor — satır sonu sızsaydı indirme yanıtının başlıkları bölünebilirdi.
+
+**İndirme `attachment` olarak veriliyor**, `nosniff`, `sandbox` ve `no-store` ile: dosya bu
+sitenin bağlamında hiç açılmıyor, ara vekillerde kalmıyor. Ad RFC 5987 biçiminde taşınıyor,
+"Görüntü_Şubat.png" bozulmadan iniyor.
+
+**Erişim jetonu bellekte olduğu için `<a href>` ile indirilemiyor** — düz bağlantı jetonsuz
+gider ve 401 alır. Dosya jetonla çekilip tarayıcıya geçici bir `blob:` adresiyle veriliyor.
+
+**Ek sayısı talep KİLİTLENEREK sayılıyor** (`SELECT … FOR UPDATE`). Kilit olmasa aynı anda
+gelen iki yükleme ikisi de "4 ek var" görüp sınırı aşabilirdi. Dosya transaction'dan önce
+yazılmak zorunda (disk işlemi geri alınamıyor); kayıt yazılamazsa dosya açıkça siliniyor,
+yoksa diskte hiçbir kayda bağlı olmayan dosyalar birikirdi.
+
+**Misafir ek ekleyemiyor.** Ek, talep açıldıktan sonra ayrı bir istekle yükleniyor ve o uç
+talebin sahibini soruyor. Misafirin talebi bir hesaba bağlı değil; misafire ek açmak, talep
+numarasını bilen herkese dosya yükleme kapısı açmak olurdu. Kapatılmış talebe de müşteri ek
+ekleyemiyor.
+
+**nginx sınırı 3 MB'tan 6 MB'a çıktı.** Eskisi ürün görseli (2 MB) için ayarlıydı ve 4 MB'lık
+bir PDF uygulamaya hiç ulaşamıyordu. Asıl sınır uygulamada; nginx'teki pay, kullanıcının kuru
+bir 413 sayfası yerine Türkçe mesaj görmesi için.

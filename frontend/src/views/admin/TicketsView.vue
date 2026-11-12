@@ -9,6 +9,8 @@ import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import PaginationBar from "../../components/PaginationBar.vue";
 import FormField from "../../components/FormField.vue";
+import TalepEkleri from "../../components/TalepEkleri.vue";
+import AppIcon from "../../components/AppIcon.vue";
 
 const toast = useToastStore();
 
@@ -192,6 +194,21 @@ onMounted(load);
             </p>
             <p class="whitespace-pre-line text-ink-700">{{ message.body }}</p>
           </div>
+        </div>
+
+        <!-- Ekler: ekran görüntüsü, fatura, belge. İndirme yetkisi talebi
+             görme yetkisiyle aynı ve her indirmede sunucuda soruluyor. -->
+        <div class="mt-4">
+          <p class="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
+            <AppIcon name="ek" :size="14" /> Ekler
+          </p>
+          <TalepEkleri
+            :ekler="selected.attachments || []"
+            :yukleme-yolu="`/admin/tickets/${selected.id}/ekler`"
+            :indirme-yolu="(ekId) => `/admin/tickets/${selected.id}/ekler/${ekId}`"
+            bakan="ekip"
+            @eklendi="(ek) => selected.attachments = [...(selected.attachments || []), ek]"
+          />
         </div>
 
         <form class="mt-5 space-y-3" @submit.prevent="send">

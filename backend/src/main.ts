@@ -48,6 +48,7 @@ async function start(): Promise<void> {
 
   // Görsel klasörü ilk yüklemede değil, açılışta hazırlanır.
   await services.fileStorage.init?.();
+  await services.attachmentStorage.init?.();
 
   await syncRolesAndPermissions(services.unitOfWork, logger);
   await syncOAuthClients({ ...services, config, logger });

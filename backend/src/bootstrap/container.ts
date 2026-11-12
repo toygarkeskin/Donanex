@@ -48,6 +48,8 @@ import { Pkce } from "../infrastructure/security/Pkce";
 import { safeEqual } from "../infrastructure/security/safeEqual";
 import { createMailer } from "../infrastructure/mail/NodemailerMailer";
 import { LocalFileStorage } from "../infrastructure/storage/LocalFileStorage";
+import { LocalAttachmentStorage } from "../infrastructure/storage/LocalAttachmentStorage";
+import path from "node:path";
 import { SystemClock } from "../infrastructure/support/Clock";
 import { UuidGenerator } from "../infrastructure/support/Ids";
 
@@ -68,6 +70,7 @@ export interface ContainerDeps {
  */
 export interface BuiltServices extends Services {
   readonly fileStorage: Services["fileStorage"] & { init?(): Promise<void> };
+  readonly attachmentStorage: Services["attachmentStorage"] & { init?(): Promise<void> };
 }
 
 export interface Container {
@@ -117,6 +120,9 @@ export function buildContainer(
     cache,
     mailer: createMailer(config.smtp, logger),
     fileStorage: new LocalFileStorage({ directory: config.uploadDir }),
+    // Ekler yükleme klasörünün ALT klasöründe: "/yuklenen" herkese açık
+    // sunuyor ve onun ad kalıbı "/" içeremediği için buraya ulaşamıyor.
+    attachmentStorage: new LocalAttachmentStorage({ directory: path.join(config.uploadDir, "ekler") }),
     clock,
     ids: new UuidGenerator(),
     logger,
