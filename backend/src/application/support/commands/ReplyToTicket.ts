@@ -58,7 +58,8 @@ export class ReplyToTicketHandler implements Handler<ReplyToTicketCommand, Reply
           isStaff: true
         });
       }
-      const updated = await repos.support.setTicketStatus(ticketId, reply.status);
+      // Öncelik yalnızca GÖNDERİLDİYSE değişir; yoksa olduğu gibi kalır.
+      const updated = await repos.support.setTicketStatus(ticketId, reply.status, reply.priority);
 
       if (reply.body) {
         await repos.outbox.add(

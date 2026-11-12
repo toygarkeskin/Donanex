@@ -81,6 +81,19 @@ export function requireEnum<T extends string>(value: unknown, allowed: readonly 
   return value as T;
 }
 
+/**
+ * Verilmişse listede olmak zorunda, verilmemişse null.
+ *
+ * Süzgeçler için: adres çubuğundan gelen "durum" ya geçerli bir değerdir ya
+ * da hiç yoktur. Tanınmayan bir değeri sessizce yok saymak yerine hata
+ * veriyoruz — sessizce yok sayılsaydı yazım hatası olan bir süzgeç
+ * "süzülmemiş liste" gibi görünür ve kullanıcı yanlış veriye bakardı.
+ */
+export function optionalEnum<T extends string>(value: unknown, allowed: readonly T[], field: string): T | null {
+  if (value === undefined || value === null || value === "") return null;
+  return requireEnum(value, allowed, field);
+}
+
 export function requireQuantity(value: unknown, field = "Adet", max = 99): number {
   const quantity = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
   if (!isPositiveInteger(quantity, max)) {

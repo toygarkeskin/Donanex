@@ -5,7 +5,7 @@ import type { Row, SupportRepository } from "../../../../application/shared/cont
 
 const TICKET = `
   id, reference, user_id AS "userId", store_id AS "storeId", order_id AS "orderId",
-  email, full_name AS "fullName", subject, message, status, created_at AS "createdAt"`;
+  email, full_name AS "fullName", subject, message, status, priority, created_at AS "createdAt"`;
 
 export class PgSupportRepository implements SupportRepository {
   private readonly db: Db;
@@ -67,10 +67,22 @@ export class PgSupportRepository implements SupportRepository {
     );
   }
 
-  async setTicketStatus(ticketId: string, status: string): Promise<Row | null> {
+  /**
+   * Durumu — ve verilmişse önceliği — günceller.
+   *
+   * COALESCE bilinçli: öncelik null geldiğinde sütun KENDİ değerini alıyor,
+   * yani dokunulmamış oluyor. Ayrı bir UPDATE yazılsaydı yalnızca durum
+   * güncelleyen bir istek iki sorgu çalıştırır ya da önceliği sıfırlardı.
+   */
+  async setTicketStatus(ticketId: string, status: string, priority: string | null = null): Promise<Row | null> {
     const { rows } = await this.db.query(
-      `UPDATE support_tickets SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING ${TICKET}`,
-      [status, ticketId]
+      `UPDATE support_tickets
+          SET status = $1,
+              priority = COALESCE($2, priority),
+              updated_at = NOW()
+        WHERE id = $3
+      RETURNING ${TICKET}`,
+      [status, priority, ticketId]
     );
     return rows[0] || null;
   }

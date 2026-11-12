@@ -464,3 +464,51 @@ değişince kısa ad da değişir ve kayıtlı bağlantı kırılırdı).
 **Emoji tamamen kalktı.** Panel menüsünden sonra hesap menüsü, boş durum kutuları, kargo
 rozetleri ve "bulunamadı" sayfası da `AppIcon` çizimlerine geçti — emoji her işletim
 sisteminde başka çiziliyor ve renk almıyor.
+
+## 33. Talep önceliği ve Türkçe tam metin arama
+
+**Önceliği talebi açan seçemiyor.** Dört kademe var (acil, yüksek, normal, düşük) ve yeni
+talep her zaman "normal" başlıyor; kademeyi talebe bakan ekip veriyor. Aciliyet müşteriye
+sorulsaydı herkes "acil" derdi ve alan hiçbir şey söylemezdi.
+
+Dörtten fazla kademe konmadı: "yüksek" ile "çok yüksek" arasındaki farkı kimse tutarlı
+uygulamıyor ve sıralama anlamını yitiriyor.
+
+**Öncelik gönderilmediğinde korunuyor.** Yanıt formu durumu her zaman, önceliği her zaman
+göndermiyor; eksik gelen alan `COALESCE($2, priority)` ile olduğu gibi kalıyor. Varsayılan
+"normal" olsaydı, yalnızca durum güncelleyen bir istek acil bir talebi sessizce normale
+düşürürdü.
+
+**Sıralama: önce durum, sonra öncelik, sonra tarih.** Yanıtlanmış bir talep, acil bile olsa
+sırada bekleyenin önüne geçmiyor. Öncelik metin olduğu için alfabetik sırası yanlış
+(high < low < normal < urgent); sıra `CASE` ile sayıya çevriliyor ve göçteki indeks AYNI
+ifadeyi taşıyor, yoksa her sıralama tabloyu tarardı.
+
+**Arama: PostgreSQL tam metin, `turkish` yapılandırmasıyla.** Konu (ağırlık A) ve mesaj
+(B) üretilmiş bir `tsvector` sütununda duruyor, GIN ile indeksli. Üretilmiş sütun seçildi,
+tetikleyici değil: tetikleyiciyi atlayan tek bir toplu güncelleme indeksi sessizce
+eskitirdi.
+
+Kazanç ölçüldü: "kargolar" araması "Kargom gecikti", "Kargo ne zaman çıkar?" ve mesajında
+"Kargodan" geçen talebi birlikte buluyor. ILIKE ile üçü de kaçardı.
+
+**Kök bulucunun sınırı kayıt altında.** Türkçe çözümleyici isimlerde iyi, fiil çekimlerinde
+değil: "gecikti" ile "gecikiyor" ayrı kelime sayılıyor. Bu bir hata değil, kullanılan
+sözlüğün kapsamı — entegrasyon testi bunu açıkça sınıyor ki ileride biri "arama bozuk"
+diye uğraşmasın.
+
+**`websearch_to_tsquery` seçildi, `to_tsquery` değil:** kullanıcının yazdığı serbest metni
+olduğu gibi alıyor ve bozuk girdide HATA FIRLATMIYOR. `to_tsquery` "kargo &" gibi yarım bir
+ifadede sorguyu düşürürdü — arama kutusuna yazarken bu durum her tuşta oluşur. Kelimeler
+VE ile birleşiyor: yazdıkça sonuç daralıyor.
+
+Talep numarası (DT-000123) yazıldığında tam metne hiç gidilmiyor, doğrudan eşleşiyor:
+numara kelime olarak parçalanıp beklenmedik taleplerle eşleşebilirdi.
+
+**Tanınmayan süzgeç sessizce yok sayılmıyor, 400 dönüyor.** Yok sayılsaydı yazım hatası
+olan bir süzgeç "süzülmemiş liste" gibi görünür ve kullanıcı yanlış veriye bakardı.
+
+**Yan panel artık xl'de yana geçiyor, lg'de değil.** Ölçüm: 1024px ekranda kenar menü ve
+boşluklar düşünce liste sütununa 290px kalıyordu ve beş sütunlu tablo kendi içinde yatay
+kayıyordu. Dar ekranda panel listenin altında açılıyor ve oraya kaydırılıyor — yoksa satıra
+tıklayan kullanıcı hiçbir şey olmamış sanıyor.

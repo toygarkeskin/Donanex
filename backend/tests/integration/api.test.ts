@@ -1594,3 +1594,170 @@ test("yönetim ve mağaza panelleri de sipariş numarasıyla açılır", opts, a
   assert.equal(yonetim.status, 200, JSON.stringify(yonetim.data));
   assert.equal(yonetim.data.orderNumber, paket.orderNumber);
 });
+
+/* ------------------------------------------- talep önceliği ve tam metin arama */
+
+/** Sorgu dizesi; boş değerler atlanır. */
+function qs(params: Record<string, unknown>): string {
+  const arama = new URLSearchParams();
+  for (const [ad, deger] of Object.entries(params)) {
+    if (deger !== null && deger !== undefined && deger !== "") arama.set(ad, String(deger));
+  }
+  const metin = arama.toString();
+  return metin ? `?${metin}` : "";
+}
+
+test("destek talepleri aranır, önceliklenir ve öncelik sırasına girer", opts, async () => {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await magazaci.get("/api/me")).data.stores?.[0]?.id;
+  assert.ok(storeId, "mağaza sahibinin paneli olmalı");
+
+  const damga = Date.now();
+  const ac = async (subject: string, message: string) => {
+    const yanit = await anon.post("/api/support/tickets", {
+      email: `talep${damga}@example.com`,
+      fullName: "Talep Testi",
+      subject,
+      message,
+      storeId
+    });
+    assert.equal(yanit.status, 201, JSON.stringify(yanit.data));
+    return yanit.data.reference as string;
+  };
+
+  const kargo = await ac(`Kargom gecikti ${damga}`, "Siparişim bir haftadır yola çıkmadı.");
+  const fatura = await ac(`Fatura sorunu ${damga}`, "Faturamda yanlış adres yazıyor.");
+  const iade = await ac(`İade talebi ${damga}`, "Ürünü iade etmek istiyorum, kutusu açılmadı.");
+
+  const bul = async (sorgu: string) => {
+    const yanit = await magazaci.get(`/api/stores/${storeId}/tickets${qs({ q: sorgu, pageSize: 50 })}`);
+    assert.equal(yanit.status, 200, JSON.stringify(yanit.data));
+    return yanit.data;
+  };
+
+  /*
+   * TAM METİN ARAMA, ILIKE değil: arama "kargolar" yazıyor, talepte "Kargom"
+   * geçiyor. Harf dizisi olarak eşleşmiyorlar; Türkçe kök bulucu ikisini de
+   * "kargo" köküne indirdiği için bulunuyor. ILIKE ile bu talep bulunamazdı.
+   */
+  const kokArama = await bul("kargolar");
+  assert.ok(
+    kokArama.items.some((t: Row) => t.reference === kargo),
+    "kök bulucu 'kargolar' ile 'Kargom' taleplerini eşleştirmeli"
+  );
+  assert.ok(
+    !kokArama.items.some((t: Row) => t.reference === fatura),
+    "ilgisiz talep arama sonucuna girmemeli"
+  );
+
+  /*
+   * Birden çok kelime VE ile birleşiyor: ikisi de geçmeyen talep gelmiyor.
+   * Bu, arama kutusunun beklenen davranışı — yazdıkça sonuç daralır.
+   */
+  assert.equal((await bul(`kargolar fatura`)).total, 0, "iki kelime de geçmeli");
+
+  /*
+   * KÖK BULUCUNUN SINIRI, bilerek sınanıyor: PostgreSQL'in Türkçe kök
+   * bulucusu isimlerde iyi ("kargom" ve "kargolar" aynı köke iner) ama fiil
+   * çekimlerinde değil — "gecikti" ile "gecikiyor" ayrı kelime sayılıyor.
+   * Burada bunu kayıt altına alıyoruz ki ileride biri "arama bozuk" diye
+   * uğraşmasın; bu bir hata değil, kullanılan kök bulucunun kapsamı.
+   */
+  assert.equal((await bul("gecikiyor")).total, 0, "fiil çekimi köke inmiyor (bilinen sınır)");
+  assert.ok((await bul("gecikti")).items.some((t: Row) => t.reference === kargo));
+
+  // Mesaj metni de aranıyor, yalnızca konu değil.
+  const mesajArama = await bul("kutusu açılmadı");
+  assert.ok(mesajArama.items.some((t: Row) => t.reference === iade), "mesaj içinde de aranır");
+
+  // Talep numarası yazıldığında doğrudan o talebe gidiliyor.
+  const numaraArama = await bul(fatura);
+  assert.equal(numaraArama.total, 1);
+  assert.equal(numaraArama.items[0].reference, fatura);
+
+  /*
+   * Bozuk arama metni SORGUYU DÜŞÜRMEMELİ. websearch_to_tsquery serbest metni
+   * olduğu gibi kabul ediyor; to_tsquery kullanılsaydı arama kutusuna yazarken
+   * oluşan yarım ifadeler 500 üretirdi.
+   */
+  for (const bozuk of ["kargo &", '"', "( ) | &&", "!!!"]) {
+    assert.equal((await bul(bozuk)).total >= 0, true, `${bozuk} sorguyu düşürmemeli`);
+  }
+
+  /* ----- öncelik ----- */
+
+  const kimlikBul = async (reference: string) => {
+    const liste = await magazaci.get(`/api/stores/${storeId}/tickets${qs({ q: reference })}`);
+    return liste.data.items[0].id as string;
+  };
+
+  // Yeni talep "normal" başlar: açan kişi aciliyetini kendi seçemiyor.
+  const kargoId = await kimlikBul(kargo);
+  const ilkHal = await magazaci.get(`/api/stores/${storeId}/tickets/${kargoId}`);
+  assert.equal(ilkHal.data.priority, "normal");
+
+  assert.equal(
+    (await magazaci.put(`/api/stores/${storeId}/tickets/${kargoId}`, { status: "in_progress", priority: "urgent" }))
+      .status,
+    200
+  );
+  const iadeId = await kimlikBul(iade);
+  assert.equal(
+    (await magazaci.put(`/api/stores/${storeId}/tickets/${iadeId}`, { status: "in_progress", priority: "high" }))
+      .status,
+    200
+  );
+
+  /*
+   * Öncelik GÖNDERİLMEDİĞİNDE korunuyor. Varsayılan "normal" olsaydı, yalnızca
+   * durum güncelleyen bir istek acil bir talebi sessizce normale düşürürdü.
+   */
+  assert.equal(
+    (await magazaci.put(`/api/stores/${storeId}/tickets/${kargoId}`, { status: "answered" })).status,
+    200
+  );
+  assert.equal((await magazaci.get(`/api/stores/${storeId}/tickets/${kargoId}`)).data.priority, "urgent");
+
+  // Süzme
+  const acilOlanlar = await magazaci.get(`/api/stores/${storeId}/tickets${qs({ priority: "urgent", pageSize: 50 })}`);
+  assert.ok(acilOlanlar.data.items.every((t: Row) => t.priority === "urgent"));
+  assert.ok(acilOlanlar.data.items.some((t: Row) => t.reference === kargo));
+
+  // Tanınmayan süzgeç sessizce yok sayılmıyor, hata veriyor: yazım hatası olan
+  // bir süzgeç "süzülmemiş liste" gibi görünmemeli.
+  assert.equal((await magazaci.get(`/api/stores/${storeId}/tickets?priority=acil`)).status, 400);
+  assert.equal((await magazaci.get(`/api/stores/${storeId}/tickets?status=yok`)).status, 400);
+
+  const siralama = async () => {
+    const liste = await magazaci.get(`/api/stores/${storeId}/tickets${qs({ pageSize: 50 })}`);
+    return liste.data.items.map((t: Row) => t.reference) as string[];
+  };
+
+  /*
+   * DURUM ÖNCELİĞİN ÖNÜNDE. Bu noktada "fatura" açık ve normal, "kargo" ise
+   * acil ama yanıtlanmış. Yanıtlanmış bir talep, sırada bekleyen bir talebin
+   * önüne geçmemeli: acil olması onu yeniden sıraya sokmaz.
+   */
+  const durumSirasi = await siralama();
+  assert.ok(
+    durumSirasi.indexOf(fatura) < durumSirasi.indexOf(kargo),
+    "açık talep, yanıtlanmış acil talebin önünde olmalı"
+  );
+
+  /*
+   * ÜÇÜ DE AYNI DURUMDAYKEN sıra önceliğe göre: acil, yüksek, normal.
+   * Öncelik metin olduğu için alfabetik sırası yanlış olurdu
+   * (high < normal < urgent); sıralama CASE ile sayıya çeviriyor.
+   */
+  for (const kimlik of [await kimlikBul(kargo), await kimlikBul(fatura)]) {
+    assert.equal(
+      (await magazaci.put(`/api/stores/${storeId}/tickets/${kimlik}`, { status: "in_progress" })).status,
+      200
+    );
+  }
+
+  const oncelikSirasi = await siralama();
+  assert.ok(oncelikSirasi.indexOf(kargo) < oncelikSirasi.indexOf(iade), "acil, yüksekten önce gelmeli");
+  assert.ok(oncelikSirasi.indexOf(iade) < oncelikSirasi.indexOf(fatura), "yüksek, normalden önce gelmeli");
+});

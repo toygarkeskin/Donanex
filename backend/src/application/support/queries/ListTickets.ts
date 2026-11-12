@@ -1,12 +1,17 @@
 "use strict";
 
 import { Query, type Handler } from "../../shared/cqrs/Message";
+import { optionalEnum } from "../../../domain/shared/guards";
+import { TICKET_STATUSES, TICKET_PRIORITIES } from "../../../domain/support/SupportTicket";
 import { assertCan, type UseCaseContext } from "../../shared/authorize";
 import type { Row, SupportReadModel } from "../../shared/contracts";
 import type { TicketScope } from "./GetTicket";
 
 export interface TicketFilters {
   status?: unknown;
+  priority?: unknown;
+  /** Serbest arama metni; konu ve mesajda tam metin araması yapılır. */
+  q?: unknown;
   page?: unknown;
   pageSize?: unknown;
 }
@@ -42,16 +47,27 @@ export class ListTicketsHandler implements Handler<ListTicketsQuery, Row, UseCas
     const page = Math.max(1, Number(filters.page) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize) || 20));
     const paging = { limit: pageSize, offset: (page - 1) * pageSize, page, pageSize };
-    const status = typeof filters.status === "string" ? filters.status : null;
+
+    const status = optionalEnum(filters.status, TICKET_STATUSES, "Talep durumu");
+    const priority = optionalEnum(filters.priority, TICKET_PRIORITIES, "Talep önceliği");
+    /*
+     * Arama metni UZUNLUK SINIRIYLA geçiyor. Serbest metin doğrudan tam metin
+     * sorgusuna gidiyor; sınırsız bırakılsa binlerce kelimelik bir girdi
+     * sorguyu gereksiz yere pahalı kılabilirdi. 200 karakter, bir arama
+     * kutusuna yazılan her şey için fazlasıyla yeterli.
+     */
+    const q = typeof filters.q === "string" ? filters.q.trim().slice(0, 200) : null;
+    const suzgecler = { ...paging, status, priority, q };
 
     if (scope === "store") {
       assertCan(context, "support:read", { storeId });
-      return this.readModel.listForStore(storeId as string, { ...paging, status });
+      return this.readModel.listForStore(storeId as string, suzgecler);
     }
     if (scope === "admin") {
       assertCan(context, "support:read");
-      return this.readModel.listForAdmin({ ...paging, status });
+      return this.readModel.listForAdmin(suzgecler);
     }
+    // Müşterinin kendi listesi süzülmüyor: birkaç talep için arama gereksiz.
     return this.readModel.listForUser(userId as string, paging);
   }
 }

@@ -132,7 +132,7 @@ Her uç izni **`{ storeId }` kapsamıyla** sorar: başka mağazanın kimliği 40
 | `GET …/orders` · `GET …/orders/:packageId` | `order:read` |
 | `PATCH …/orders/:packageId/status` · `…/shipping` | `order:fulfil` |
 | `GET/POST …/members` | `store:member:manage` |
-| `GET …/tickets` · `PUT …/tickets/:ticketId` | `support:read` / `support:respond` |
+| `GET …/tickets` · `PUT …/tickets/:ticketId` | `support:read` / `support:respond`. Liste `?q=` (konu ve mesajda Türkçe tam metin; `DT-000123` yazılırsa doğrudan o talep), `?status=`, `?priority=` (`urgent`/`high`/`normal`/`low`) alır; tanınmayan süzgeç 400. Sıra: durum, öncelik, tarih. `PUT` gövdesinde `priority` verilmezse mevcut öncelik korunur |
 | `GET …/notifications` · `…/unread-count` · `POST …/notifications/:id/read` · `…/read-all` | `notification:read` (mağazanın ORTAK kutusu: okundu işareti de ortak) |
 
 Mağaza panelinde görülen sipariş birimi **pakettir** (`order_packages`), sipariş değil: kargo ve

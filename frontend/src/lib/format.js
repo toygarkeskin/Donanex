@@ -99,6 +99,21 @@ export const TICKET_STATUS = {
   closed: { label: "Kapatıldı", tone: "neutral" }
 };
 
+/*
+ * Talep önceliği.
+ *
+ * "Normal" listede ROZET OLARAK ÇİZİLMİYOR (bkz. talep görünümleri): varsayılan
+ * değerin işarete ihtiyacı yok ve her satıra gri bir "Normal" etiketi koymak
+ * listeyi gürültüye çeviriyordu. Rozet yalnızca varsayılandan sapan talepte
+ * görünüyor, böylece göz doğrudan acil olanlara gidiyor.
+ */
+export const TICKET_PRIORITY = {
+  urgent: { label: "Acil", tone: "bad" },
+  high: { label: "Yüksek", tone: "warn" },
+  normal: { label: "Normal", tone: "neutral" },
+  low: { label: "Düşük", tone: "neutral" }
+};
+
 export const USER_STATUS = {
   active: { label: "Aktif", tone: "good" },
   suspended: { label: "Askıda", tone: "bad" }

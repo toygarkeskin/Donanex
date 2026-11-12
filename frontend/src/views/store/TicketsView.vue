@@ -1,9 +1,9 @@
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { api, query } from "../../lib/api";
 import { useMagaza } from "../../lib/magaza";
-import { formatDate, TICKET_STATUS } from "../../lib/format";
+import { formatDate, TICKET_STATUS, TICKET_PRIORITY } from "../../lib/format";
 import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
 import StatusBadge from "../../components/StatusBadge.vue";
@@ -18,9 +18,9 @@ const toast = useToastStore();
 
 const result = ref({ items: [], total: 0, page: 1, pages: 1 });
 const loading = ref(true);
-const filters = reactive({ status: "", page: 1 });
+const filters = reactive({ q: "", status: "", priority: "", page: 1 });
 const selected = ref(null);
-const reply = reactive({ body: "", status: "answered" });
+const reply = reactive({ body: "", status: "answered", priority: "normal" });
 const saving = ref(false);
 
 const base = () => `/stores/${storeId.value}/tickets`;
@@ -34,10 +34,21 @@ async function load() {
   }
 }
 
+/*
+ * Talep paneli dar ekranda listenin ALTINDA açılıyor; oraya kaydırmazsak
+ * satıra tıklayan kullanıcı hiçbir şey olmamış sanıyor.
+ */
+const panel = ref(null);
+
 async function open(ticket) {
   selected.value = await api.get(`${base()}/${ticket.id}`);
   reply.body = "";
   reply.status = selected.value.status === "closed" ? "closed" : "answered";
+  // Öncelik, talebin MEVCUT değeriyle açılıyor: form gönderildiğinde
+  // dokunulmamış bir alan sessizce "normal"e düşmesin.
+  reply.priority = selected.value.priority ?? "normal";
+  await nextTick();
+  if (window.innerWidth < 1280) panel.value?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function send() {
@@ -54,6 +65,25 @@ async function send() {
   }
 }
 
+/*
+ * Arama HER TUŞTA değil, yazma durunca çalışıyor.
+ *
+ * Tam metin sorgusu indeksli ama yine de bir sorgu; "kargom gecikti"
+ * yazarken on dört istek göndermenin karşılığı yok. 350 ms, yazmayı
+ * bölmeden bekleyen bir aralık.
+ */
+let aramaZamanlayici;
+watch(
+  () => filters.q,
+  () => {
+    clearTimeout(aramaZamanlayici);
+    aramaZamanlayici = setTimeout(() => {
+      filters.page = 1;
+      load();
+    }, 350);
+  }
+);
+
 onMounted(load);
 </script>
 
@@ -62,16 +92,47 @@ onMounted(load);
     <PageHeader title="Destek talepleri" description="Mağazanıza gelen müşteri talepleri." />
 
     <div class="mb-4 flex flex-wrap gap-3">
+      <!--
+        Arama konu ve mesaj metninde çalışıyor (PostgreSQL tam metin, Türkçe
+        kök bulucuyla): "kargom gecikti" yazınca "kargolar gecikiyor" diyen
+        talep de çıkıyor. Talep numarası yazılırsa (DT-000123) doğrudan o
+        talebe gidiliyor.
+      -->
+      <input
+        v-model="filters.q"
+        type="search"
+        class="field max-w-xs"
+        placeholder="Konu, mesaj veya talep no…"
+        aria-label="Taleplerde ara"
+      />
       <select v-model="filters.status" class="field w-auto" aria-label="Durum" @change="filters.page = 1; load()">
         <option value="">Tüm durumlar</option>
         <option v-for="(meta, key) in TICKET_STATUS" :key="key" :value="key">{{ meta.label }}</option>
       </select>
+      <select v-model="filters.priority" class="field w-auto" aria-label="Öncelik" @change="filters.page = 1; load()">
+        <option value="">Tüm öncelikler</option>
+        <option v-for="(meta, key) in TICKET_PRIORITY" :key="key" :value="key">{{ meta.label }}</option>
+      </select>
+      <button
+        v-if="filters.q || filters.status || filters.priority"
+        type="button"
+        class="btn-secondary"
+        @click="filters.q = ''; filters.status = ''; filters.priority = ''; filters.page = 1; load()"
+      >
+        Temizle
+      </button>
     </div>
 
     <LoadingBlock v-if="loading" :rows="3" />
     <EmptyState v-else-if="!result.items.length" title="Destek talebi yok" icon="destek" />
 
-    <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <!--
+      Yan panel xl'de (1280px) yana geçiyor, lg'de (1024px) değil.
+      Ölçüm: 1024px ekranda kenar menü (256) ve boşluklar düşünce liste
+      sütununa 290px kalıyordu; beş sütunlu tablo oraya sığmayıp kendi
+      içinde yatay kayıyordu. Altında tam genişlikte durması daha iyi.
+    -->
+    <div v-else class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div>
         <div class="table-wrap">
           <table class="table">
@@ -80,6 +141,7 @@ onMounted(load);
                 <th>No</th>
                 <th>Konu</th>
                 <th>Gönderen</th>
+                <th>Öncelik</th>
                 <th>Durum</th>
               </tr>
             </thead>
@@ -97,6 +159,17 @@ onMounted(load);
                   <p class="text-sm">{{ ticket.fullName }}</p>
                   <p class="text-xs text-ink-500">{{ formatDate(ticket.createdAt, false) }}</p>
                 </td>
+                <td>
+                  <!-- "Normal" çizilmiyor: varsayılan değerin işarete ihtiyacı
+                       yok ve her satırda gri bir etiket listeyi gürültüye
+                       çevirirdi. Göz doğrudan sapan taleplere gidiyor. -->
+                  <StatusBadge
+                    v-if="ticket.priority && ticket.priority !== 'normal'"
+                    :map="TICKET_PRIORITY"
+                    :value="ticket.priority"
+                  />
+                  <span v-else class="text-xs text-ink-400">—</span>
+                </td>
                 <td><StatusBadge :map="TICKET_STATUS" :value="ticket.status" /></td>
               </tr>
             </tbody>
@@ -112,7 +185,7 @@ onMounted(load);
         />
       </div>
 
-      <aside v-if="selected" class="card h-fit p-5">
+      <aside v-if="selected" ref="panel" class="card h-fit p-5 scroll-mt-20">
         <h2 class="text-base font-semibold text-ink-900">{{ selected.subject }}</h2>
         <p class="mt-1 text-xs text-ink-500">
           {{ selected.reference }} · {{ selected.fullName }} · {{ selected.email }}
@@ -139,11 +212,18 @@ onMounted(load);
           <FormField id="reply" label="Yanıtınız" hint="Yanıt yazarsanız müşteriye e-posta gönderilir.">
             <textarea id="reply" v-model="reply.body" rows="4" class="field" maxlength="5000" />
           </FormField>
-          <FormField id="status" label="Durum">
-            <select id="status" v-model="reply.status" class="field">
-              <option v-for="(meta, key) in TICKET_STATUS" :key="key" :value="key">{{ meta.label }}</option>
-            </select>
-          </FormField>
+          <div class="grid grid-cols-2 gap-3">
+            <FormField id="status" label="Durum">
+              <select id="status" v-model="reply.status" class="field">
+                <option v-for="(meta, key) in TICKET_STATUS" :key="key" :value="key">{{ meta.label }}</option>
+              </select>
+            </FormField>
+            <FormField id="priority" label="Öncelik">
+              <select id="priority" v-model="reply.priority" class="field">
+                <option v-for="(meta, key) in TICKET_PRIORITY" :key="key" :value="key">{{ meta.label }}</option>
+              </select>
+            </FormField>
+          </div>
           <button type="submit" class="btn-primary w-full" :disabled="saving">
             {{ saving ? "Kaydediliyor…" : "Kaydet" }}
           </button>

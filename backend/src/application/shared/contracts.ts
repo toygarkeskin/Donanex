@@ -196,7 +196,8 @@ export interface SupportRepository {
     body: string;
     isStaff: boolean;
   }): Promise<void>;
-  setTicketStatus(ticketId: string, status: string): Promise<Row | null>;
+  /** priority null ise mevcut öncelik korunur — "dokunma" demektir. */
+  setTicketStatus(ticketId: string, status: string, priority?: string | null): Promise<Row | null>;
 }
 
 /**
