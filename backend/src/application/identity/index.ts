@@ -5,6 +5,8 @@ import authPolicy from "./authPolicy";
 
 import * as RegisterUser from "./commands/RegisterUser";
 import * as SignIn from "./commands/SignIn";
+import * as VerifySignInCode from "./commands/VerifySignInCode";
+import * as ResendSignInCode from "./commands/ResendSignInCode";
 import * as SignOut from "./commands/SignOut";
 import * as Authorize from "./commands/Authorize";
 import * as CompleteAuthorization from "./commands/CompleteAuthorization";
@@ -30,6 +32,8 @@ const context = defineContext({
   commands: {
     RegisterUser,
     SignIn,
+    VerifySignInCode,
+    ResendSignInCode,
     SignOut,
     Authorize,
     CompleteAuthorization,

@@ -65,6 +65,26 @@ const templates: Record<string, Template> = {
     };
   },
 
+  /*
+   * Giriş kodu. Konu satırında kod YOK: telefon bildirimleri ve kilit ekranı
+   * konuyu gösteriyor, kod orada herkese görünmesin.
+   */
+  "user.login_code_requested": ({ fullName, code, expiresInMinutes }) => {
+    const dakika = Number(expiresInMinutes) || 10;
+    const kod = escapeHtml(code);
+    return {
+      subject: "Donanex giriş kodunuz",
+      text: `Merhaba ${fullName},\n\nGiriş kodunuz: ${code}\n\nKod ${dakika} dakika geçerlidir. Bu girişi siz yapmadıysanız parolanızı değiştirin; kodu kimseyle paylaşmayın.`,
+      html: layout(
+        "Giriş kodu",
+        `<p>Merhaba <strong>${escapeHtml(fullName)}</strong>,</p>
+         <p>Donanex hesabınıza giriş için doğrulama kodunuz:</p>
+         <p style="font-size:32px;font-weight:700;letter-spacing:8px;font-family:monospace;margin:24px 0;color:#111827">${kod}</p>
+         <p style="color:#6b7280;font-size:13px">Kod ${dakika} dakika geçerlidir. Donanex çalışanları bu kodu asla sormaz. Bu girişi siz yapmadıysanız parolanızı hemen değiştirin.</p>`
+      )
+    };
+  },
+
   "user.password_reset_requested": ({ fullName, resetToken }, { publicUrl }) => {
     // Jeton "#" sonrasında taşınır: sunucu günlüklerine ve Referer başlığına düşmez.
     const link = `${publicUrl}/parola-sifirla#token=${resetToken}`;

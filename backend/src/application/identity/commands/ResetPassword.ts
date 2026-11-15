@@ -67,6 +67,7 @@ export class ResetPasswordHandler implements Handler<ResetPasswordCommand, Reset
       await repos.users.changePassword(claimed.userId, passwordHash);
       await repos.authSessions.revokeAllForUser(claimed.userId);
       await repos.oauth.revokeRefreshTokensForUser(claimed.userId);
+      await repos.loginChallenges.revokeTrustedDevices(claimed.userId);
       await repos.audit.record({
         actorId: claimed.userId,
         action: "user.password_reset",

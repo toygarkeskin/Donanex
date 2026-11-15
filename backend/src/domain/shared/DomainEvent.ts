@@ -9,6 +9,7 @@ export const EventTypes = {
   USER_REGISTERED: "user.registered",
   USER_PASSWORD_RESET_REQUESTED: "user.password_reset_requested",
   USER_PASSWORD_CHANGED: "user.password_changed",
+  USER_LOGIN_CODE_REQUESTED: "user.login_code_requested",
   STORE_APPLIED: "store.applied",
   STORE_APPROVED: "store.approved",
   ORDER_PLACED: "order.placed",

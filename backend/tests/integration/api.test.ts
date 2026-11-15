@@ -557,6 +557,124 @@ test("yetkilendirme kodu akışı PKCE ile tamamlanır", opts, async () => {
   assert.ok(client.cookies.dnx_rt, "yenileme jetonu HttpOnly çerezdedir");
 });
 
+/* ------------------------------------------------- giriş doğrulama kodu */
+
+/** Parola adımını geçer; kodu ve challengeId'yi döndürür. */
+async function parolaAdimi(client: Client, email: string, password: string) {
+  const sira = app.outbox.messages.length;
+  const yanit = await client.post("/api/auth/sign-in", { email, password });
+  return { yanit, sira };
+}
+
+test("giriş kodu: parola doğruysa oturum açılmaz, kod e-postayla gelir ve tek kullanımlıktır", opts, async () => {
+  const email = `kod${Date.now()}@example.com`;
+  await anon.post("/api/auth/register", { fullName: "Kod Testi", email, password: "KodParola12" });
+  // Kayıt e-postası kuyruktan geç geliyor; sayım ondan SONRA başlamalı.
+  assert.ok(await app.outbox.waitFor((m) => m.to === email));
+
+  // Yanlış parola: kod GİTMEZ (kutuyu başkası dolduramaz).
+  const once = app.outbox.messages.length;
+  assert.equal((await new Client(app.base).post("/api/auth/sign-in", { email, password: "Yanlis12345" })).status, 401);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(app.outbox.messages.slice(once).filter((m) => m.to === email).length, 0, "yanlış parolada e-posta gitmez");
+
+  const client = new Client(app.base);
+  const { yanit, sira } = await parolaAdimi(client, email, "KodParola12");
+  assert.equal(yanit.status, 200);
+  assert.equal(yanit.data.verificationRequired, true);
+  assert.match(yanit.data.challengeId, /^[0-9a-f-]{36}$/);
+  assert.match(yanit.data.maskedEmail, /^ko\*+@example\.com$/, "adres maskeli");
+  assert.equal(yanit.data.user, undefined, "kod girilmeden kullanıcı dönmez");
+  assert.ok(!client.cookies.dnx_sso, "kod girilmeden oturum çerezi verilmez");
+
+  const mail = await app.outbox.waitFor((m) => m.to === email && m.subject === "Donanex giriş kodunuz", 5000, sira);
+  assert.ok(mail, "kod e-postası gelir");
+  const kod = await client.loginCode(email, sira);
+  assert.match(kod ?? "", /^\d{6}$/);
+  assert.ok(!mail!.subject.includes(kod!), "kod konu satırında görünmez");
+
+  const yanlisKod = kod === "000000" ? "111111" : "000000";
+  const yanlis = await client.post("/api/auth/sign-in/verify", { challengeId: yanit.data.challengeId, code: yanlisKod });
+  assert.equal(yanlis.status, 401);
+  assert.match(yanlis.data.message, /4 deneme/);
+
+  const dogru = await client.post("/api/auth/sign-in/verify", { challengeId: yanit.data.challengeId, code: `${kod!.slice(0, 3)} ${kod!.slice(3)}` });
+  assert.equal(dogru.status, 200, "boşluklu yapıştırılan kod da geçer");
+  assert.equal(dogru.data.user.email, email);
+  assert.ok(client.cookies.dnx_sso, "kod doğrulanınca oturum açılır");
+  assert.ok(!client.cookies.dnx_dev, "hatırla seçilmediyse cihaz çerezi yok");
+
+  const tekrar = await new Client(app.base).post("/api/auth/sign-in/verify", { challengeId: yanit.data.challengeId, code: kod });
+  assert.equal(tekrar.status, 401, "aynı kod ikinci kez kullanılamaz");
+});
+
+test("giriş kodu: 5 hatalı denemeden sonra kod ölür; yeniden gönderim beklemeli", opts, async () => {
+  const email = `kilit${Date.now()}@example.com`;
+  await anon.post("/api/auth/register", { fullName: "Kilit Testi", email, password: "KilitParola1" });
+  const client = new Client(app.base);
+  const { yanit, sira } = await parolaAdimi(client, email, "KilitParola1");
+  const kod = await client.loginCode(email, sira);
+  const yanlisKod = kod === "000000" ? "111111" : "000000";
+
+  // Hemen yeniden gönderim: 30 sn dolmadı.
+  const erken = await client.post("/api/auth/sign-in/resend", { challengeId: yanit.data.challengeId });
+  assert.equal(erken.status, 409);
+  assert.match(erken.data.message, /saniye/);
+  assert.equal((await client.post("/api/auth/sign-in/resend", { challengeId: crypto.randomUUID() })).status, 401);
+
+  const mesajlar = [];
+  for (let i = 0; i < 5; i++) {
+    const r = await client.post("/api/auth/sign-in/verify", { challengeId: yanit.data.challengeId, code: yanlisKod });
+    assert.equal(r.status, 401);
+    mesajlar.push(r.data.message);
+  }
+  assert.match(mesajlar[3], /1 deneme/);
+  assert.match(mesajlar[4], /Çok fazla/);
+
+  const gec = await client.post("/api/auth/sign-in/verify", { challengeId: yanit.data.challengeId, code: kod });
+  assert.equal(gec.status, 401, "kilitlenen kod doğru girilse de geçmez");
+
+  // Bozuk girdiler 500 değil 401.
+  assert.equal((await client.post("/api/auth/sign-in/verify", { challengeId: "x", code: "123456" })).status, 401);
+  assert.equal((await client.post("/api/auth/sign-in/verify", { challengeId: yanit.data.challengeId, code: 123456 })).status, 401);
+});
+
+test("bu cihazı hatırla: aynı tarayıcıda kod sorulmaz, başka hesaba geçmez, parola değişince düşer", opts, async () => {
+  const email = `cihaz${Date.now()}@example.com`;
+  await anon.post("/api/auth/register", { fullName: "Cihaz Testi", email, password: "CihazParola1" });
+
+  const tarayici = new Client(app.base);
+  const { yanit, sira } = await parolaAdimi(tarayici, email, "CihazParola1");
+  const kod = await tarayici.loginCode(email, sira);
+  const dogru = await tarayici.post("/api/auth/sign-in/verify", {
+    challengeId: yanit.data.challengeId,
+    code: kod,
+    rememberDevice: true
+  });
+  assert.equal(dogru.status, 200);
+  assert.ok(tarayici.cookies.dnx_dev, "cihaz çerezi verilir");
+  assert.match(header(dogru, "set-cookie"), /dnx_dev=[^;]+;.*HttpOnly.*Path=\/api\/auth/, "HttpOnly ve yalnız giriş yolunda");
+
+  const ikinci = await tarayici.post("/api/auth/sign-in", { email, password: "CihazParola1" });
+  assert.equal(ikinci.status, 200);
+  assert.equal(ikinci.data.verificationRequired, undefined, "güvenilen cihazda kod sorulmaz");
+  assert.equal(ikinci.data.user.email, email);
+
+  // Parola yine şart: çerez parolanın yerini tutmaz.
+  assert.equal((await tarayici.post("/api/auth/sign-in", { email, password: "Yanlis12345" })).status, 401);
+
+  // Aynı tarayıcıda başka hesap: çerez onun için geçmez.
+  const baska = await tarayici.post("/api/auth/sign-in", { email: "musteri@donanex.test", password: DEMO_PASSWORD });
+  assert.equal(baska.data.verificationRequired, true, "çerez yalnız kendi kullanıcısı için geçer");
+
+  // Parola değişince güvenilen cihazlar silinir.
+  const oturum = new Client(app.base);
+  assert.ok((await oturum.signIn(email, "CihazParola1")).ok);
+  assert.equal((await oturum.put("/api/me/password", { currentPassword: "CihazParola1", newPassword: "YeniCihaz12" })).status, 200);
+  const sonra = await tarayici.post("/api/auth/sign-in", { email, password: "YeniCihaz12" });
+  assert.equal(sonra.data.verificationRequired, true, "parola değişince cihaz güveni düşer");
+});
+
 test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => {
   const client = new Client(app.base);
   const verifier = crypto.randomBytes(48).toString("base64url");
@@ -567,9 +685,15 @@ test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => 
       `&scope=openid&state=s&code_challenge=${challenge}&code_challenge_method=S256`
   );
   const authRequestId = new URL(header(authorize, "location")).searchParams.get("auth");
-  const signIn = await client.post("/api/auth/sign-in", {
+  const sira = app.outbox.messages.length;
+  const parola = await client.post("/api/auth/sign-in", {
     email: "musteri@donanex.test",
     password: DEMO_PASSWORD,
+    authRequestId
+  });
+  const signIn = await client.post("/api/auth/sign-in/verify", {
+    challengeId: parola.data.challengeId,
+    code: await client.loginCode("musteri@donanex.test", sira),
     authRequestId
   });
   const code = new URL(signIn.data.redirectTo).searchParams.get("code");
@@ -945,7 +1069,7 @@ test("parola sıfırlama tek kullanımlıktır ve hesap varlığını ele vermez
   assert.ok(mail, "sıfırlama e-postası gönderilir");
   assert.ok(!app.outbox.messages.some((message) => message.to === "kayitsiz@example.com"));
 
-  const token = mail.text.match(/#token=([a-f0-9]{64})/)[1];
+  const token = mail.text.match(/#token=([a-f0-9]{64})/)![1];
   assert.ok(mail.text.includes("/parola-sifirla#token="), "jeton adres parçasında taşınır");
 
   const stored = await app.pool.query("SELECT token_hash FROM verification_tokens WHERE purpose = 'password_reset'");

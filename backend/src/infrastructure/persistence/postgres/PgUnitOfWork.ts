@@ -8,6 +8,7 @@ import { PgRoleRepository } from "./repositories/PgRoleRepository";
 import { PgAuthSessionRepository } from "./repositories/PgAuthSessionRepository";
 import { PgOAuthRepository } from "./repositories/PgOAuthRepository";
 import { PgVerificationTokenRepository } from "./repositories/PgVerificationTokenRepository";
+import { PgLoginChallengeRepository } from "./repositories/PgLoginChallengeRepository";
 import { PgStoreRepository } from "./repositories/PgStoreRepository";
 import { PgProductRepository } from "./repositories/PgProductRepository";
 import { PgCategoryRepository } from "./repositories/PgCategoryRepository";
@@ -53,6 +54,7 @@ export class PgUnitOfWork implements UnitOfWork {
       authSessions: new PgAuthSessionRepository(client),
       oauth: new PgOAuthRepository(client),
       verificationTokens: new PgVerificationTokenRepository(client),
+      loginChallenges: new PgLoginChallengeRepository(client),
       stores: new PgStoreRepository(client),
       products: new PgProductRepository(client),
       categories: new PgCategoryRepository(client),

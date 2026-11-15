@@ -212,6 +212,7 @@ const TRACKING_CODE = "a".repeat(64);
 
 const fakeOpaqueTokens = {
   generate: () => TRACKING_CODE,
+  numericCode: (length: number) => "1".repeat(length),
   hash: (value: Row) => `hash:${value}`,
   isWellFormed: (value: Row) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
 };

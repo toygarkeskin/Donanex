@@ -48,7 +48,7 @@ export const PORTS = {
   // issueAccessToken / issueIdToken: imzalı JWT üretir, verifyAccessToken doğrular
   tokenIssuer: ["issueAccessToken", "issueIdToken", "verifyAccessToken", "jwks"],
   // Tahmin edilemez tek kullanımlık kodlar; veritabanında yalnızca özeti tutulur
-  opaqueTokens: ["generate", "hash", "isWellFormed"],
+  opaqueTokens: ["generate", "numericCode", "hash", "isWellFormed"],
   passwordHasher: ["hash", "verify", "verifyDummy", "needsRehash"],
   // PKCE doğrulaması (S256); açık istemcide çalınan yetkilendirme kodunu işe yaramaz kılar
   pkce: ["verify"],

@@ -56,6 +56,7 @@ export class SetUserStatusHandler implements Handler<SetUserStatusCommand, UserS
         // Erişim anında kesilmeli: jeton süresinin dolmasını bekleyemeyiz.
         await repos.authSessions.revokeAllForUser(userId);
         await repos.oauth.revokeRefreshTokensForUser(userId);
+        await repos.loginChallenges.revokeTrustedDevices(userId);
       }
 
       await repos.audit.record({

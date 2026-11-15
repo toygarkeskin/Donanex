@@ -46,6 +46,7 @@ export interface ApiResponse {
 interface SentMail extends Row {
   readonly to: string;
   readonly subject: string;
+  readonly text: string;
 }
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
@@ -100,11 +101,15 @@ function createOutbox() {
         return true;
       }
     },
-    /** Olaylar kuyruktan geçtiği için e-posta gecikmeli gelir. */
-    async waitFor(predicate: (mail: SentMail) => boolean, timeoutMs = 5000): Promise<SentMail | null> {
+    /**
+     * Olaylar kuyruktan geçtiği için e-posta gecikmeli gelir.
+     * `from`: yalnızca bu sıradan SONRA gelenlere bakılır (aynı kişiye giden
+     * eski bir giriş kodunu yanlışlıkla almamak için).
+     */
+    async waitFor(predicate: (mail: SentMail) => boolean, timeoutMs = 5000, from = 0): Promise<SentMail | null> {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
-        const found = messages.find(predicate);
+        const found = messages.slice(from).find(predicate);
         if (found) return found;
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
@@ -164,6 +169,7 @@ async function startHarness() {
   }
 
   const outbox = createOutbox();
+  Client.mailbox = outbox;
   const { commands, queries, services } = buildContainer(
     { pool, cache, logger: silentLogger, config },
     { mailer: outbox.mailer }
@@ -257,7 +263,16 @@ type SignInOutcome =
  * Çerezleri ve erişim jetonunu taşıyan basit istemci.
  * signIn gerçek OAuth akışını baştan sona yürütür.
  */
+type Mailbox = ReturnType<typeof createOutbox>;
+
+/** E-postadaki 6 haneli giriş kodu. */
+function girisKodu(mail: SentMail | null): string | null {
+  return mail?.text?.match(/Giriş kodunuz: (\d{6})/)?.[1] ?? null;
+}
+
 class Client {
+  /** Giriş kodu e-postayla geliyor; signIn kodu buradan okuyor. */
+  static mailbox: Mailbox | null = null;
   readonly base: string;
   /**
    * Sunucunun Set-Cookie ile verdigi cerezler; gercek tarayici gibi tasinir.
@@ -361,7 +376,14 @@ class Client {
     });
   }
 
-  /** Tam yetkilendirme kodu akışı: authorize → giriş → kod → jeton. */
+  /** `from` sırasından sonra bu adrese gelen en yeni giriş kodu. */
+  async loginCode(email: string, from = 0): Promise<string | null> {
+    if (!Client.mailbox) throw new Error("posta kutusu bağlı değil");
+    const mail = await Client.mailbox.waitFor((m) => m.to === email && girisKodu(m) !== null, 5000, from);
+    return girisKodu(mail);
+  }
+
+  /** Tam yetkilendirme kodu akışı: authorize → giriş → e-posta kodu → kod → jeton. */
   async signIn(email: string, password: string): Promise<SignInOutcome> {
     const verifier = crypto.randomBytes(48).toString("base64url");
     const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
@@ -379,8 +401,21 @@ class Client {
     let redirectTo = location;
     if (location.includes("/giris?auth=")) {
       const authRequestId = new URL(location).searchParams.get("auth");
-      const signIn = await this.post("/api/auth/sign-in", { email, password, authRequestId });
+      const sira = Client.mailbox?.messages.length ?? 0;
+      let signIn = await this.post("/api/auth/sign-in", { email, password, authRequestId });
       if (signIn.status !== 200) return { ok: false, reason: signIn.data.message, status: signIn.status };
+
+      // İkinci adım: e-postadaki kod (güvenilen cihazda atlanır).
+      if (signIn.data.verificationRequired) {
+        const code = await this.loginCode(email, sira);
+        if (!code) return { ok: false, reason: "giriş kodu e-postası gelmedi" };
+        signIn = await this.post("/api/auth/sign-in/verify", {
+          challengeId: signIn.data.challengeId,
+          code,
+          authRequestId
+        });
+        if (signIn.status !== 200) return { ok: false, reason: signIn.data.message, status: signIn.status };
+      }
       redirectTo = signIn.data.redirectTo;
     }
 

@@ -1,12 +1,14 @@
 "use strict";
 
 import type { RouteContext } from "../types";
-import type { CompleteAuthorizationResult, SignInResult } from "../support/results";
+import type { CompleteAuthorizationResult, SignInResult, SignInStepResult, VerifySignInCodeResult } from "../support/results";
 
 import { Router, type Request, type Response } from "express";
 import {
   RegisterUserCommand,
   SignInCommand,
+  VerifySignInCodeCommand,
+  ResendSignInCodeCommand,
   SignOutCommand,
   CompleteAuthorizationCommand,
   RequestPasswordResetCommand,
@@ -69,16 +71,60 @@ export function authRoutes({ commands, config, limiters }: Pick<RouteContext, "c
     await completeSignIn(req, res, result, 201);
   });
 
+  /*
+   * Giriş iki adımlı: parola doğruysa çoğu zaman oturum AÇILMAZ, e-postaya
+   * kod gider ve yanıt { verificationRequired, challengeId } olur. Tarayıcı
+   * "bu cihazı hatırla" çerezini taşıyorsa (ve çerez bu kullanıcınınsa)
+   * kod adımı atlanır, yanıt eskisi gibi oturumla döner.
+   */
   router.post("/sign-in", limiters.signIn, async (req, res) => {
-    const result = await commands.execute<SignInResult>(
+    const result = await commands.execute<SignInStepResult>(
       new SignInCommand({
         email: req.body?.email,
         password: req.body?.password,
+        guestCartId: req.guestCartId,
+        trustedDeviceToken: req.cookies[COOKIES.DEVICE] || null
+      }),
+      req.context()
+    );
+    if ("verificationRequired" in result && result.verificationRequired) {
+      res.json({
+        verificationRequired: true,
+        challengeId: result.challengeId,
+        maskedEmail: result.maskedEmail
+      });
+      return;
+    }
+    await completeSignIn(req, res, result as SignInResult);
+  });
+
+  router.post("/sign-in/verify", limiters.signIn, async (req, res) => {
+    const result = await commands.execute<VerifySignInCodeResult>(
+      new VerifySignInCodeCommand({
+        challengeId: req.body?.challengeId,
+        code: req.body?.code,
+        rememberDevice: req.body?.rememberDevice,
         guestCartId: req.guestCartId
       }),
       req.context()
     );
+    if (result.trustedDevice) {
+      // Yalnızca giriş uçlarına gider (Path): başka hiçbir isteğe eklenmez.
+      appendCookie(
+        res,
+        buildCookie(COOKIES.DEVICE, result.trustedDevice.token, {
+          maxAgeSeconds: result.trustedDevice.maxAgeSeconds,
+          secure: config.cookieSecure,
+          sameSite: "Strict",
+          path: "/api/auth"
+        })
+      );
+    }
     await completeSignIn(req, res, result);
+  });
+
+  router.post("/sign-in/resend", limiters.signIn, async (req, res) => {
+    res.json(await commands.execute(new ResendSignInCodeCommand({ challengeId: req.body?.challengeId }), req.context()));
   });
 
   router.post("/sign-out", async (req, res) => {

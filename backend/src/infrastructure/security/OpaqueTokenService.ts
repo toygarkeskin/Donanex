@@ -25,6 +25,13 @@ export class OpaqueTokenService implements OpaqueTokens {
     return crypto.randomBytes(32).toString("hex");
   }
 
+  /** randomInt modülo yanlılığı taşımıyor; her hane eşit olasılıklı. */
+  numericCode(length: number): string {
+    let code = "";
+    for (let i = 0; i < length; i++) code += crypto.randomInt(0, 10).toString();
+    return code;
+  }
+
   hash(token: unknown): string {
     return crypto.createHmac("sha256", this.pepper).update(String(token)).digest("hex");
   }

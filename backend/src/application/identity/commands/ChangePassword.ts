@@ -77,6 +77,7 @@ export class ChangePasswordHandler implements Handler<ChangePasswordCommand, Cha
       await repos.users.changePassword(user.id, passwordHash);
       await repos.authSessions.revokeAllForUser(user.id);
       await repos.oauth.revokeRefreshTokensForUser(user.id);
+      await repos.loginChallenges.revokeTrustedDevices(user.id);
 
       const session = await issueSsoSession(repos, {
         userId: user.id,

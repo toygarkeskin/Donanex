@@ -18,7 +18,9 @@ import type { Request, Response } from "express";
 export const COOKIES = Object.freeze({
   SSO: "dnx_sso",
   REFRESH: "dnx_rt",
-  CART: "dnx_cart"
+  CART: "dnx_cart",
+  /** "Bu cihazı hatırla": girişte e-posta kodunu atlatır (yalnız /api/auth yolunda). */
+  DEVICE: "dnx_dev"
 });
 
 export function parseCookies(req: Request): Record<string, string> {

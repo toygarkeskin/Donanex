@@ -16,6 +16,14 @@ export const SSO_SESSION_TTL_MS = 14 * DAY;
 export const AUTHORIZATION_CODE_TTL_MS = 2 * MINUTE;
 export const PASSWORD_RESET_TTL_MS = 30 * MINUTE;
 export const EMAIL_VERIFICATION_TTL_MS = 3 * DAY;
+/** Girişteki e-posta kodu: kısa ömürlü ve sınırlı deneme. */
+export const LOGIN_CODE_TTL_MS = 10 * MINUTE;
+export const LOGIN_CODE_LENGTH = 6;
+export const LOGIN_CODE_MAX_ATTEMPTS = 5;
+export const LOGIN_CODE_RESEND_SECONDS = 30;
+export const LOGIN_CODE_MAX_SENDS = 5;
+/** "Bu cihazı hatırla" seçilirse o tarayıcıda bu süre kod sorulmaz. */
+export const TRUSTED_DEVICE_TTL_MS = 30 * DAY;
 /** Misafir sepeti bu süre boyunca saklanır. */
 export const GUEST_CART_TTL_MS = 30 * DAY;
 /** Ödenmeyen sipariş bu sürenin sonunda iptal edilir ve stok iade edilir. */
@@ -35,6 +43,8 @@ const authPolicy = Object.freeze({
   AUTHORIZATION_CODE_TTL_MS,
   PASSWORD_RESET_TTL_MS,
   EMAIL_VERIFICATION_TTL_MS,
+  LOGIN_CODE_TTL_MS,
+  TRUSTED_DEVICE_TTL_MS,
   GUEST_CART_TTL_MS,
   UNPAID_ORDER_TTL_MINUTES,
   ACCESS_POLICY_CACHE_TTL_SECONDS

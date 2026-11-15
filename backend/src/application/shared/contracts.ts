@@ -115,6 +115,30 @@ export interface VerificationTokenRepository {
   purgeExpired(): Promise<void>;
 }
 
+/** Girişteki e-posta kodunun bekleyen kaydı. */
+export interface LoginChallenge {
+  readonly id: string;
+  readonly userId: string;
+  readonly codeHash: string;
+  readonly attempts: number;
+  readonly sends: number;
+  readonly lastSentAt: Date;
+  readonly expiresAt: Date;
+}
+
+export interface LoginChallengeRepository {
+  create(input: { id: string; userId: string; codeHash: string; expiresAt: Date }): Promise<void>;
+  lock(id: string): Promise<LoginChallenge | null>;
+  /** Yeni deneme sayısını döndürür. */
+  recordFailure(id: string): Promise<number>;
+  resend(input: { id: string; codeHash: string; expiresAt: Date; now: Date }): Promise<void>;
+  remove(id: string): Promise<void>;
+  trustDevice(input: { userId: string; tokenHash: string; expiresAt: Date }): Promise<void>;
+  isTrustedDevice(userId: string, tokenHash: string, now: Date): Promise<boolean>;
+  revokeTrustedDevices(userId: string): Promise<void>;
+  purgeExpired(): Promise<void>;
+}
+
 export interface StoreRepository {
   create(store: Row): Promise<Row>;
   findById(id: string): Promise<Row | null>;
@@ -332,6 +356,7 @@ export interface Repositories {
   readonly authSessions: AuthSessionRepository;
   readonly oauth: OAuthRepository;
   readonly verificationTokens: VerificationTokenRepository;
+  readonly loginChallenges: LoginChallengeRepository;
   readonly stores: StoreRepository;
   readonly products: ProductRepository;
   readonly categories: CategoryRepository;
@@ -491,6 +516,8 @@ export interface TokenIssuer {
 
 export interface OpaqueTokens {
   generate(): string;
+  /** Kullanıcının elle yazacağı kısa kod: yalnızca rakam, kriptografik rastgele. */
+  numericCode(length: number): string;
   hash(token: unknown): string;
   /** Tip daraltıcı: geçen değer çağıran tarafta artık string olarak bilinir. */
   isWellFormed(token: unknown): token is string;

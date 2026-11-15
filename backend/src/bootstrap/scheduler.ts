@@ -35,10 +35,11 @@ export function startScheduler({
     {
       name: "purge-expired-tokens",
       run: async () =>
-        unitOfWork.run(async ({ oauth, authSessions, verificationTokens }) => {
+        unitOfWork.run(async ({ oauth, authSessions, verificationTokens, loginChallenges }) => {
           await oauth.purgeExpired();
           await authSessions.purgeExpired();
           await verificationTokens.purgeExpired();
+          await loginChallenges.purgeExpired();
           return null;
         })
     },

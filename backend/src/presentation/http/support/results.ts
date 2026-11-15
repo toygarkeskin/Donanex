@@ -33,6 +33,15 @@ export interface SignInResult extends Sonuc {
   readonly mergedCartItems: number;
 }
 
+/** Parola adımı: ya oturum (güvenilen cihaz) ya da "e-postadaki kodu gir". */
+export type SignInStepResult =
+  | SignInResult
+  | { readonly verificationRequired: true; readonly challengeId: string; readonly maskedEmail: string };
+
+export interface VerifySignInCodeResult extends SignInResult {
+  readonly trustedDevice: { readonly token: string; readonly maxAgeSeconds: number } | null;
+}
+
 export interface CompleteAuthorizationResult extends Sonuc {
   readonly redirectTo: string | null;
 }
