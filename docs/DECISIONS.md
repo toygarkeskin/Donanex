@@ -554,3 +554,77 @@ ekleyemiyor.
 **nginx sınırı 3 MB'tan 6 MB'a çıktı.** Eskisi ürün görseli (2 MB) için ayarlıydı ve 4 MB'lık
 bir PDF uygulamaya hiç ulaşamıyordu. Asıl sınır uygulamada; nginx'teki pay, kullanıcının kuru
 bir 413 sayfası yerine Türkçe mesaj görmesi için.
+
+## 35. "Son gelenler" yayın tarihine göre; tarih tetikleyiciyle
+
+Ana sayfadaki liste `created_at`'e göre sıralanıyordu ve ürün formu varsayılan olarak **taslak**
+açıyordu. Satıcı ürünü bugün taslak kaydedip yarın yayınlayınca ürün listenin ortasında
+kalıyordu: kullanıcı "eklediğim ürün çıkmıyor" diye gördü.
+
+Artık `products.published_at` var ve **ilk** etkinleşmede bir tetikleyici (`urun_yayin_tarihi`)
+dolduruyor. Uygulamada değil veritabanında, çünkü durumu değiştiren yol tek değil (form, toplu
+içe aktarma, yönetim): birinde unutulsa sessizce yanlış sıralanırdı. Yayından kaldırıp yeniden
+yayınlamak tarihi **yenilemiyor** — yoksa satıcı ürünü aç-kapa yaparak listenin başına taşırdı.
+Formun varsayılanı da "yayında" oldu.
+
+## 36. Öneriler: tamamlayıcı kategori haritası, kategoriler dönüşümlü
+
+"Bunları da alabilirsiniz" önerisi, sepetteki ürünle **aynı kategoriden** değil, onu tamamlayan
+kategorilerden geliyor: mouse için mousepad, klavye, kulaklık, monitör — ikinci bir mouse değil.
+Harita domain'de (`Complements.ts`) elle yazılmış bir tablo; satın alma verisinden öğrenmek bu
+ölçekte (birkaç düzine ürün) gürültüden başka bir şey üretmezdi.
+
+SQL'de `ROW_NUMBER() OVER (PARTITION BY kategori)` ile kategoriler **dönüşümlü** diziliyor:
+önce her tamamlayıcı kategoriden bir ürün, sonra ikinciler. Böylece şeridin ilk ekranı tek bir
+kategoriyle dolmuyor. Sepetteki ürünler, stokta olmayanlar ve kapalı mağazanın ürünleri
+çıkarılıyor. Tamamlayıcı bulunamazsa (boş sepet, haritada olmayan kategori) genel bir karışık
+liste dönüyor; yanıt hangisi olduğunu `basis` ile söylüyor. 60 saniye önbellekte.
+
+## 37. Mağaza kategori ekleyebilir; aynı ad yeni kategori açmaz
+
+Kategori listesi sabitti ve "RAM" satmak isteyen mağaza ürününü ekleyemiyordu. Ürün formundan
+yeni kategori eklenebiliyor ama ekleme **bul-ya-da-oluştur**: kısa ada (`slug`) çevrilen ad
+varsa mevcut kategori dönüyor (200), yoksa oluşuyor (201). İki mağaza "Ram" ve "RAM" yazınca iki
+kategori olmuyor. Yetki ürün yazma yetkisiyle aynı (`catalog:product:write`); her ekleme denetim
+kaydına düşüyor, gereksiz kategori yönetimden temizlenebilsin diye.
+
+## 38. Yorum ve soru-cevap: bir kişi bir yorum, "Satın aldı" hesaplanır, kimlik gizli
+
+- Bir kullanıcının bir ürüne **tek yorumu** var; yeniden yazınca güncelleniyor
+  (`ON CONFLICT … DO UPDATE`, `xmax = 0` ile "yeni mi" ayırt ediliyor). Puan şişirilemiyor.
+- **"Satın aldı" rozeti istemciden gelmiyor**; ödenmiş ve iptal edilmemiş bir siparişte ürün
+  geçiyorsa sunucu koyuyor. Sıralamada önce bunlar, sonra fotoğraflılar geliyor.
+- Mağaza kendi ürününe yorum yazamıyor (409).
+- Ad "Ayşe Y." biçiminde kısaltılıyor; yanıtta kullanıcı kimliği yok.
+- Fotoğraflar yorumdan **sonra** ayrı istekle yükleniyor (en fazla 3, kilit altında sayılıyor).
+  Yorumu yazan dışında kimse fotoğraf ekleyemiyor. Dosya transaction'dan önce yazılıyor;
+  kayıt başarısız olursa siliniyor.
+- Soruyu giriş yapmış herkes soruyor; **yanıtı satıcı** (o mağazada `support:respond`) ya da
+  yönetim veriyor ve yanıtın altında kişi değil mağaza adı görünüyor. Soru mağazaya, yanıt soru
+  sahibine bildirim + e-posta olarak gidiyor — mevcut outbox zincirinden, yeni bir kanal açmadan.
+
+## 39. Girişte e-posta kodu; "bu cihazı hatırla" isteğe bağlı
+
+Parola doğruysa oturum **hemen açılmıyor**; e-postaya 6 haneli kod gidiyor, oturum kod girilince
+açılıyor. Kararlar:
+
+- **Kod yalnızca parola doğruysa gidiyor.** Aksi halde parolayı bilmeyen biri başkasının
+  kutusunu kodla doldurabilirdi; yanlış parola yine aynı "e-posta veya parola hatalı" mesajını
+  alıyor, hesap varlığı sızmıyor.
+- 6 hane = 10^6 olasılık; bu yüzden **deneme sayılıyor**: 5 yanlışta kod ölüyor, süre 10 dakika.
+  Yeniden gönderme 30 saniyede bir ve giriş başına en fazla 5 kez — yeniden göndererek deneme
+  hakkını sonsuza kadar tazelemek mümkün değil (en çok 25 deneme).
+- Sayaç işlemin **içinde** artıyor, hata işlemin **dışında** atılıyor. Hata içeride atılsaydı geri
+  alma sayacı da geri alırdı ve kod sınırsız denenebilirdi (yetkilendirme kodunun tüketilme
+  sırasındaki tuzağın aynısı).
+- Kodun kendisi saklanmıyor; HMAC özeti, içine kodun kimliği karıştırılarak. Açık kod yalnızca
+  outbox olayıyla e-posta tüketicisine gidiyor (parola sıfırlama bağlantısı da böyle).
+  E-postanın **konusunda kod yok**: telefon kilit ekranı konuyu gösteriyor.
+- **"Bu cihazı 30 gün hatırla"**: HttpOnly çerezde rastgele jeton, yolu yalnızca `/api/auth`.
+  Parolanın yerini tutmuyor, yalnız kod adımını atlatıyor; **başka kullanıcı için geçmiyor**
+  (paylaşılan bilgisayar). Parola değişince, sıfırlanınca ve hesap askıya alınınca o kişinin
+  bütün güvenilen cihazları siliniyor.
+- Kayıt akışında kod yok: e-posta zaten doğrulama bağlantısıyla ayrıca doğrulanıyor.
+
+Demoda kodlar Mailpit'e düşüyor (`http://localhost:8093`); gerçek SMTP tanımlıysa gerçek
+kutuya gidiyor.

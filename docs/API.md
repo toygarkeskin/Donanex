@@ -63,6 +63,18 @@ Her limitin kendi Redis sayacı vardır; biri dolduğunda diğerleri etkilenmez.
 | `GET /api/categories` | Kategori ağacı |
 | `GET /api/storefront/stores` | Etkin mağazalar |
 | `GET /api/storefront/stores/:slug` | Mağaza vitrini |
+| `GET /api/oneriler` | `urun` (virgüllü ürün kimlikleri, en fazla 50), `adet` (≤30). Tamamlayıcı kategorilerden öneri; `basis`: `tamamlayici` ya da `genel` |
+| `GET /api/urunler/:productId/yorumlar` | Yorumlar + özet (ortalama, dağılım, satın alan sayısı). `page`, `pageSize` |
+| `GET /api/urunler/:productId/sorular` | Sorular ve yanıtları; yanıtlananlar önce |
+
+### Yorum ve soru-cevap (giriş gerekir)
+
+| Uç | Yetki | Ne yapar |
+|---|---|---|
+| `POST /api/urunler/:productId/yorumlar` | giriş | `{ rating 1–5, body ≥10 }`; kişi başı tek yorum, yeniden yazınca güncellenir. Kendi mağazanın ürününe 409 |
+| `POST /api/urunler/:productId/yorumlar/:reviewId/fotograflar` | yorumun sahibi | Ham görsel gövdesi (PNG/JPEG/WebP, ≤2 MB), en fazla 3 |
+| `POST /api/urunler/:productId/sorular` | giriş | `{ body ≥5 }`; mağazaya bildirim |
+| `POST /api/urunler/:productId/sorular/:questionId/yanit` | o mağazada `support:respond` ya da yönetim | Yanıt; soru sahibine bildirim + e-posta |
 
 Katalog yanıtları 60 saniye önbelleklenir. Stok ya da ürün değişince önbellek anında temizlenir.
 
@@ -95,7 +107,9 @@ Tutar **sunucuda** hesaplanır; gövdede gönderilen fiyat ve toplam yok sayıl�
 | Uç | Ne yapar |
 |---|---|
 | `POST /api/auth/register` | Kayıt; misafir sepetini taşır. Bekleyen OAuth isteği varsa `redirectTo` döner |
-| `POST /api/auth/sign-in` | Giriş; SSO oturumu açar |
+| `POST /api/auth/sign-in` | Parola adımı. Doğruysa e-postaya kod gider ve `{ verificationRequired, challengeId, maskedEmail }` döner; tarayıcıda geçerli "bu cihazı hatırla" çerezi varsa doğrudan oturum açar |
+| `POST /api/auth/sign-in/verify` | `{ challengeId, code, rememberDevice?, authRequestId? }` — kod doğruysa SSO oturumu açar. 5 yanlışta kod ölür |
+| `POST /api/auth/sign-in/resend` | `{ challengeId }` — yeni kod; 30 sn aralık, en fazla 5 gönderim (aşılırsa 409) |
 | `POST /api/auth/sign-out` | Oturumu ve yenileme jetonunu sunucuda iptal eder |
 | `POST /api/auth/password/forgot` | Sıfırlama bağlantısı. Adresin kayıtlı olup olmadığını **ele vermez** |
 | `POST /api/auth/password/reset` | `{ token, password }`; tüm oturumları düşürür |
@@ -118,6 +132,8 @@ Tutar **sunucuda** hesaplanır; gövdede gönderilen fiyat ve toplam yok sayıl�
 | `GET /api/me/notifications/stream` | Gerçek zamanlı akış (SSE). Kişinin görebildiği **bütün** kutuları tek bağlantıda taşır: kendi bildirimleri, mağazalarının, yöneticiyse yönetimin. Kanal kurulamazsa 503 — istemci yoklamaya düşsün diye |
 
 ## Mağaza paneli — `/api/stores/:storeId/...`
+
+`POST /api/stores/:storeId/categories` — `{ name }`: kategori **bul-ya-da-oluştur** (varsa 200, yeni ise 201). Ürün yazma yetkisi gerekir.
 
 Her uç izni **`{ storeId }` kapsamıyla** sorar: başka mağazanın kimliği 403 döner.
 

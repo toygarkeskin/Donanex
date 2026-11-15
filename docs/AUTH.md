@@ -21,6 +21,10 @@ Yetkilendirme kodu çalınsa bile doğrulayıcıyı bilmeyen saldırgan kodu jet
     │                              │                                │
     │ 3. POST /api/auth/sign-in    │                                │
     │    (e-posta, parola, auth)   │ parola doğrula ───────────────►│
+    │ ◄──{ verificationRequired }──┤ 6 haneli kod → e-posta (outbox)│
+    │                              │                                │
+    │ 3b. POST …/sign-in/verify    │                                │
+    │    (challengeId, kod, auth)  │ kodu doğrula (5 deneme, 10 dk) │
     │                              │ SSO oturumu aç (HttpOnly)      │
     │ ◄──{ redirectTo }────────────┤ yetkilendirme kodu üret        │
     │                              │                                │
@@ -187,3 +191,10 @@ günlüklerine ve `Referer` başlığına düşmez. Arayüz jetonu okuduktan son
 olmasa da aynı yanıt döner ve yanıt gönderim işlemini beklemez.
 
 Sıfırlama başarılı olunca kullanıcının tüm oturumları ve yenileme jetonları iptal edilir.
+
+## Girişte e-posta kodu
+
+Parola doğru olunca oturum açılmıyor; e-postaya 6 haneli kod gidiyor (bkz. DECISIONS 39).
+"Bu cihazı 30 gün hatırla" işaretlenirse tarayıcıya `dnx_dev` HttpOnly çerezi veriliyor
+(yalnız `/api/auth` yolunda gönderilir); o tarayıcıda aynı kullanıcı için kod adımı atlanıyor,
+parola yine soruluyor.

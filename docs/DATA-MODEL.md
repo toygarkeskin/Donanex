@@ -77,6 +77,8 @@ edilmiş bir paket yeniden aktif bir duruma alınamaz; aksi halde aynı stok iki
 | `oauth_authorization_codes` | 2 dk ömür, `DELETE … RETURNING` ile atomik tüketilir |
 | `oauth_refresh_tokens` | `family_id` ile zincirlenir; tekrar kullanım tüm zinciri iptal eder |
 | `verification_tokens` | Parola sıfırlama ve e-posta doğrulama; `(purpose, token_hash)` birincil anahtar |
+| `login_challenges` | Girişteki e-posta kodu: yalnız HMAC özeti, `attempts` (5'te ölür), `sends` (en fazla 5), 10 dk ömür. Kullanıcının aynı anda tek bekleyen kodu olur |
+| `trusted_devices` | "Bu cihazı hatırla" jetonlarının özeti, 30 gün. Parola değişimi / sıfırlama / askıya alma kullanıcının hepsini siler |
 
 ### Mağaza ve katalog
 
@@ -84,7 +86,10 @@ edilmiş bir paket yeniden aktif bir duruma alınamaz; aksi halde aynı stok iki
 |---|---|
 | `stores` | `status`: pending/active/suspended. Sahibi silinemez (`RESTRICT`) |
 | `categories` | Kendine referanslı (`parent_id`), silinirse alt kategori köksüz kalır (`SET NULL`) |
-| `products` | `(store_id, slug)` benzersiz — iki mağaza aynı adresi kullanabilir. Mağaza silinirse ürünleri gider (`CASCADE`). `image_url` **kapak** görselidir (kart, sepet, sipariş kaydı onu kullanır); `gallery_urls` kapağın yanındaki en fazla 5 ek görsel — dizi kolonu, çünkü galeri küçük, hep ürünle birlikte okunur ve kendi başına sorgulanmaz |
+| `products` | `(store_id, slug)` benzersiz — iki mağaza aynı adresi kullanabilir. Mağaza silinirse ürünleri gider (`CASCADE`). `image_url` **kapak** görselidir (kart, sepet, sipariş kaydı onu kullanır); `gallery_urls` kapağın yanındaki en fazla 5 ek görsel — dizi kolonu, çünkü galeri küçük, hep ürünle birlikte okunur ve kendi başına sorgulanmaz. `published_at` ilk etkinleşmede tetikleyiciyle dolar, yeniden yayınlamak değiştirmez ("Son gelenler" buna göre) |
+| `product_reviews` | `(product_id, user_id)` benzersiz: kişi başı tek yorum. `verified_purchase` sunucuda hesaplanır |
+| `product_review_photos` | Yorum başına en fazla 3; yorum silinirse gider (`CASCADE`) |
+| `product_questions`, `product_answers` | Soru-cevap. Yanıtta `author_name` mağaza adıdır, kişi değil |
 
 ### Sepet ve sipariş
 
