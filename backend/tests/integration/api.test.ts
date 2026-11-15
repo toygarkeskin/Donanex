@@ -426,6 +426,39 @@ test("misafir sepeti çerez yerine X-Sepet başlığıyla da taşınır", opts, 
 
 /* ------------------------------------------------- misafir sepeti ve sipariş */
 
+test("oturum açıkken tarayıcıda kalmış misafir sepeti kaybolmaz, kullanıcıya taşınır", opts, async () => {
+  const product = await firstProduct(3);
+  const email = `sessiz${Date.now()}@example.com`;
+  await anon.post("/api/auth/register", { fullName: "Sessiz Giriş", email, password: "SessizGiris1" });
+
+  // Misafirken sepete eklenmiş ürün (çerezde misafir sepeti).
+  const misafir = new Client(app.base);
+  await misafir.post("/api/cart/items", { productId: product.id, quantity: 2 });
+  const misafirSepeti = misafir.cookies.dnx_cart;
+  assert.ok(misafirSepeti);
+
+  // Giriş adımı atlanmış gibi: oturum açık, çerez hâlâ duruyor.
+  const tarayici = new Client(app.base);
+  assert.ok((await tarayici.signIn(email, "SessizGiris1")).ok);
+  tarayici.cookies.dnx_cart = misafirSepeti;
+
+  const sepet = await tarayici.get("/api/cart");
+  assert.equal(sepet.status, 200);
+  assert.equal(sepet.data.itemCount, 2, "misafir sepetindeki ürün kullanıcıya geçti");
+  assert.match(sepet.headers.get("set-cookie") ?? "", /dnx_cart=;.*Max-Age=0/, "misafir çerezi silinir");
+
+  // Tekrar istekte ikinci kez eklenmez.
+  tarayici.cookies.dnx_cart = misafirSepeti;
+  assert.equal((await tarayici.get("/api/cart")).data.itemCount, 2, "aynı sepet iki kez taşınmaz");
+
+  // Başkasının hesabına geçmiş sepet bir daha taşınamaz.
+  const baska = new Client(app.base);
+  assert.ok((await baska.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+  const once = (await baska.get("/api/cart")).data.itemCount;
+  baska.cookies.dnx_cart = misafirSepeti;
+  assert.equal((await baska.get("/api/cart")).data.itemCount, once, "kullanıcıya bağlanmış sepet başkasına geçmez");
+});
+
 test("misafir sepet açabilir, sepet sunucuda tutulur", opts, async () => {
   const guest = new Client(app.base);
   const product = await firstProduct(3);

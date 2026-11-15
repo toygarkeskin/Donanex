@@ -41,6 +41,14 @@ Telefonda o adresi aç, giriş yap. Ana ekrana eklemek için tarayıcı menüsü
 **Ctrl+C** ile kapatıldığında `PUBLIC_URL` kendiliğinden yerel adrese dönüyor
 ve `api` yeniden başlıyor. Yani deneme sonrası elle temizlik gerekmiyor.
 
+**Tünel düşerse betik kendisi yenisini açıyor.** Cloudflare'in hızlı tüneli geçici:
+bilgisayar uyuyunca ya da ağ bir an kopunca Cloudflare tüneli siliyor ve adres bir daha
+dirilmiyor (cloudflared günlüğüne "Tunnel not found" yazıyor, ad DNS'ten de kalkıyor).
+Önceden `PUBLIC_URL` bu ölü adreste kalıyor, telefonda "Bağlantı yok" görünüyordu.
+Artık betik bunu günlükten ya da yoklamadan (30 sn'de bir, 4 başarısız = yeniden kur)
+yakalıyor, yeni tünel açıyor, `PUBLIC_URL`'i güncelliyor ve yeni adresi aynı çerçeveyle
+yeniden basıyor. **Telefonda yeni adresi açmak gerekiyor** — hızlı tünelin adresi sabit değil.
+
 Tünel süreci dışarıdan kapandıysa ayarları şu komut yerele döndürüyor:
 
 ```powershell
@@ -64,11 +72,11 @@ elle vermen gerekir: `api` konteyneri compose'un yayın portunu görmüyor.
 
 ## Tünel açıkken bilgisayardan giriş
 
-Çalışıyor, ama giriş adımı **tünel adresi üzerinden** dönüyor: `PUBLIC_URL`
-aynı zamanda jetonların `iss` alanı ve OIDC uç noktalarının adresi, yani
-kimlik sağlayıcının adresi o anda tünel. Tarayıcı kısa süre
-`trycloudflare.com` adresinde görünüp `localhost:8090`'a geri dönüyor. Bu
-beklenen davranış, hata değil.
+Çalışıyor ve giriş sayfası **bulunduğunuz adreste** açılıyor: `/oauth/authorize`
+giriş ekranına göreli adresle (`/giris?auth=…`) yönlendiriyor. Önceden
+`PUBLIC_URL`'e yönlendiriyordu; tünel ölünce bilgisayardan bile giriş
+yapılamıyordu. `PUBLIC_URL` hâlâ jetonların `iss` alanı ve e-postalardaki
+bağlantıların adresi.
 
 ## Açılışta otomatik başlatma
 
@@ -142,3 +150,10 @@ Cloudflare'in tünel hizmeti o kurulumda da ücretsiz; ücretli olan tek şey
 alan adının kendisi.
 
 Tünel klasörü (`.tunel/`) günlük ve adres dosyası tutuyor, `.gitignore`'da.
+
+## Telefon uygulaması (Donanex Mobil)
+
+Masaüstündeki **Donanex Mobil** klasörü aynı API'yi kullanan Expo uygulaması. Telefona
+Expo Go kurup `npx expo start` QR kodunu okutmak yetiyor; uygulama bilgisayarı kendisi
+buluyor. Aynı ağdan ulaşılamıyorsa uygulamada **Hesabım → Sunucu adresi**'ne tünel
+adresini yazın. Ayrıntı: o klasördeki README.

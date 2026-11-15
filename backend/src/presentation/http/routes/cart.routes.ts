@@ -12,6 +12,8 @@ import {
   RemoveFromCartCommand,
   ClearCartCommand
 } from "../../../application/ordering";
+import { AdoptGuestCartCommand } from "../../../application/identity";
+import { COOKIES, appendCookie, clearCookie } from "../support/cookies";
 
 /**
  * Sepet. GİRİŞ GEREKTİRMEZ.
@@ -20,8 +22,26 @@ import {
  * sepet kimliği (HttpOnly çerez) bulunur. Kullanıcı sonradan giriş yaparsa
  * ya da kayıt olursa sepet kendi hesabına taşınır ve hiçbir ürün kaybolmaz.
  */
-export function cartRoutes({ commands, queries }: Pick<RouteContext, "commands" | "queries">): Router {
+export function cartRoutes({ commands, queries, config }: Pick<RouteContext, "commands" | "queries" | "config">): Router {
   const router = Router();
+
+  /*
+   * Oturum açık ama tarayıcıda misafir sepeti çerezi kalmış: giriş adımı
+   * atlanmış (açık oturumla sessiz yetkilendirme) ve sepet taşınmamış demek.
+   * Sepete ilk dokunuşta kullanıcıya taşınıyor ve çerez siliniyor; misafirken
+   * eklenen ürünler kaybolmuyor.
+   */
+  router.use(async (req, res, next) => {
+    const misafir = req.cookies[COOKIES.CART];
+    if (!req.auth?.userId || !misafir) return next();
+    try {
+      await commands.execute(new AdoptGuestCartCommand({ userId: req.auth.userId, guestCartId: misafir }), req.context());
+      appendCookie(res, clearCookie(COOKIES.CART, { secure: config.cookieSecure, sameSite: "Lax" }));
+      next();
+    } catch (hata) {
+      next(hata);
+    }
+  });
 
   /** Giriş yapılmışsa kullanıcı, değilse çerezdeki misafir sepeti. */
   const identity = (req: Request) => ({ userId: req.auth?.userId ?? null, guestCartId: req.guestCartId });

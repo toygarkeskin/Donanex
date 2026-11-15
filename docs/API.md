@@ -88,6 +88,8 @@ Katalog yanıtları 60 saniye önbelleklenir. Stok ya da ürün değişince önb
 | `DELETE /api/cart/items/:productId` | Satırı siler |
 | `DELETE /api/cart` | Sepeti boşaltır |
 
+Misafir sepetinin kimliği tarayıcıda HttpOnly `dnx_cart` çerezinde, telefon uygulamasında `X-Sepet` başlığında taşınır (yeni sepet açılınca yanıt da aynı başlığı taşır).
+
 Sepet **sunucuda** durur. Giriş ya da kayıt olunduğunda misafir sepeti kullanıcının sepetiyle
 birleştirilir: aynı ürün varsa adetler toplanır, stok sınırı aşılmaz.
 
@@ -177,9 +179,9 @@ Bu izinlerin kapsamı `global`'dir: mağazaya bağlı bir rol bunları **asla** 
 |---|---|
 | `GET /.well-known/openid-configuration` | Keşif belgesi |
 | `GET /oauth/jwks` · `/oauth/jwks.json` | Açık anahtar seti |
-| `GET /oauth/authorize` | Yetkilendirme — yalnızca `response_type=code`, **PKCE S256 zorunlu** |
+| `GET /oauth/authorize` | Yetkilendirme — yalnızca `response_type=code`, **PKCE S256 zorunlu**. Giriş gerekiyorsa **göreli** `/giris?auth=…` adresine yönlendirir. `Accept: application/json` gönderen 302 yerine `{ redirectTo }` alır (telefon uygulaması). `prompt=login` açık oturumu yok sayar |
 | `GET /oauth/authorize/request/:id` | Giriş ekranının bekleyen isteği okuması için |
-| `POST /oauth/token` | `authorization_code` · `refresh_token` · `client_credentials` |
+| `POST /oauth/token` | `authorization_code` · `refresh_token` · `client_credentials`. Yenileme jetonu web istemcisine yalnız HttpOnly çerezle, `donanex-mobil` istemcisine gövdede verilir |
 | `POST /oauth/revoke` | RFC 7009 — geçersiz jetona da `200` döner |
 | `GET /oauth/userinfo` | OIDC kullanıcı bilgisi (Bearer) |
 

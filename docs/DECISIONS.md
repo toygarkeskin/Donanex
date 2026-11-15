@@ -628,3 +628,53 @@ açılıyor. Kararlar:
 
 Demoda kodlar Mailpit'e düşüyor (`http://localhost:8093`); gerçek SMTP tanımlıysa gerçek
 kutuya gidiyor.
+
+## 40. Telefon uygulaması aynı API'yi kullanır; farklar istemci kimliğine bağlı
+
+Donanex Mobil (Expo) ayrı bir arka uç istemiyor; web'le aynı uçları kullanıyor. Telefonun
+tarayıcıdan farkı üç yerde, üçü de sunucuda dar tutuldu:
+
+- **`donanex-mobil` OAuth istemcisi**: açık istemci, PKCE zorunlu, yalnız `shop` kapsamı
+  (mağaza/yönetim web'de). Dönüş adresi `donanexmobil://giris` hiç açılmıyor; uygulama kodu
+  yanıttaki adresten okuyor.
+- **`/oauth/authorize` JSON**: React Native fetch 302'yi kendisi izliyor ve `Location`'ı
+  okutmuyor. `Accept: application/json` gönderene aynı adres gövdede veriliyor — yeni bilgi
+  açılmıyor, `Location`'daki ne ise o.
+- **Yenileme jetonu gövdede, yalnız mobile**: telefonda çerez kavanozu güvenilir değil; jeton
+  cihazın şifreli deposunda (Keychain/Keystore) tutuluyor. Karar `client_id`'ye bağlı ve kod
+  ile jetonun o istemciye ait olduğu `ExchangeToken`'da zaten doğrulanıyor; web istemcisinin
+  jetonu hiçbir koşulda gövdeye düşmüyor (test var).
+- **Misafir sepeti `X-Sepet` başlığı**: çerez yoksa okunuyor, UUID biçimi şart; gizliliği
+  çerezdekiyle aynı.
+
+## 41. Giriş sayfasına göreli yönlendirme
+
+`/oauth/authorize` giriş gerektiğinde `${PUBLIC_URL}/giris` yerine `/giris`'e gönderiyor.
+`PUBLIC_URL` bir tünel adresiyken tünel ölünce bilgisayardan da giriş yapılamıyor, kullanıcı
+"Bağlantı yok" görüyordu. Göreli adresle kullanıcı geldiği adreste kalıyor; PKCE doğrulayıcısı
+da başladığı adresin deposunda olduğu için zaten orada kalması gerekiyordu. `PUBLIC_URL`
+jetonların `iss` alanı ve e-posta bağlantıları için kullanılmaya devam ediyor.
+
+## 42. `prompt=login`
+
+OIDC'nin standart parametresi: açık tarayıcı oturumu olsa da kimlik yeniden soruluyor. Telefon
+uygulaması her girişte gönderiyor. Sebep bir hataydı: oturum açıkken sunucu kodu doğrudan
+veriyor, parola/kod adımı hiç çalışmıyordu — misafir sepeti yalnızca o adımda hesaba
+taşındığından sepet sessizce kayboluyordu.
+
+## 43. Hızlı tünel kendini yeniliyor
+
+Cloudflare'in hızlı tüneli bağlantı bir an kopunca siliniyor ve cloudflared ölü tünele sonsuza
+dek bağlanmaya çalışıyor. `scripts/tunel.js` artık bunu iki yoldan yakalıyor: günlükteki
+"Tunnel not found" ve 30 sn'lik yoklama (Cloudflare'in 530'u ya da adın DNS'ten kalkması;
+DNS hatası ancak adres bir kez yanıt verdikten sonra sayılıyor, yoksa yeni tünel kendi DNS
+kaydı yayılmadan kendini öldürürdü). Yeni tünel açılıyor ve `PUBLIC_URL` güncelleniyor.
+Kalıcı çözüm adlandırılmış bir tünel (sabit alan adı); hesap gerektirdiği için şimdilik yok.
+
+## 44. Oturum açıkken kalmış misafir sepeti taşınır
+
+Misafir sepeti giriş adımında (parola, kod, kayıt) hesaba taşınıyordu. Giriş bu adımdan
+geçmediğinde — tarayıcıda açık oturum varken yetkilendirme sessizce tamamlanınca — misafirken
+eklenen ürünler kayboluyordu. Sepet uçları artık oturum açık bir istekte misafir sepeti
+çerezini görünce sepeti kullanıcıya taşıyor (`AdoptGuestCart`) ve çerezi siliyor. Başka
+bir kullanıcıya bağlanmış sepet taşınmıyor; aynı sepet iki kez taşınmıyor (test var).
