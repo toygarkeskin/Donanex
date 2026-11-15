@@ -354,7 +354,7 @@ test("mobil istemci: JSON authorize, e-posta kodu, yenileme jetonu gövdede", op
   // JSON isteyen 302 yerine adresi gövdede alır.
   const authorize = await telefon.get(yetki, { Accept: "application/json" });
   assert.equal(authorize.status, 200);
-  const authRequestId = new URL(authorize.data.redirectTo).searchParams.get("auth");
+  const authRequestId = new URL(authorize.data.redirectTo, app.base).searchParams.get("auth");
   assert.ok(authRequestId, "giriş gerekiyor: bekleyen istek kimliği döner");
 
   // Mobil istemciye yönetim yetki alanı verilmez.
@@ -768,7 +768,7 @@ test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => 
     `/oauth/authorize?response_type=code&client_id=donanex-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
       `&scope=openid&state=s&code_challenge=${challenge}&code_challenge_method=S256`
   );
-  const authRequestId = new URL(header(authorize, "location")).searchParams.get("auth");
+  const authRequestId = new URL(header(authorize, "location"), app.base).searchParams.get("auth");
   const sira = app.outbox.messages.length;
   const parola = await client.post("/api/auth/sign-in", {
     email: "musteri@donanex.test",
@@ -802,6 +802,17 @@ test("PKCE doğrulayıcısı olmadan kod jetona çevrilemez", opts, async () => 
     code_verifier: verifier
   });
   assert.ok(retry.status >= 400, "tüketilen kod yeniden kullanılamaz");
+});
+
+test("giriş sayfasına yönlendirme göreli: PUBLIC_URL başka (ölü tünel) olsa da kullanıcı kendi adresinde kalır", opts, async () => {
+  const client = new Client(app.base);
+  const authorize = await client.get(
+    `/oauth/authorize?response_type=code&client_id=donanex-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&scope=openid&state=g&code_challenge=${"b".repeat(43)}&code_challenge_method=S256`
+  );
+  assert.equal(authorize.status, 302);
+  const konum = header(authorize, "location");
+  assert.match(konum, /^\/giris\?auth=[0-9a-f-]{36}$/, "mutlak PUBLIC_URL değil, göreli adres");
 });
 
 test("authorize geçersiz istekleri reddeder", opts, async () => {

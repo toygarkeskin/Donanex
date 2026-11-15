@@ -67,29 +67,25 @@ export class AuthorizeHandler implements Handler<AuthorizeCommand, AuthorizeResu
   private readonly cache: Cache;
   private readonly clock: Clock;
   private readonly ids: IdGenerator;
-  private readonly publicUrl: string;
 
   constructor({
     unitOfWork,
     opaqueTokens,
     cache,
     clock,
-    ids,
-    publicUrl
+    ids
   }: {
     unitOfWork: UnitOfWork;
     opaqueTokens: OpaqueTokens;
     cache: Cache;
     clock: Clock;
     ids: IdGenerator;
-    publicUrl: string;
   }) {
     this.unitOfWork = unitOfWork;
     this.opaqueTokens = opaqueTokens;
     this.cache = cache;
     this.clock = clock;
     this.ids = ids;
-    this.publicUrl = publicUrl;
   }
 
   async handle({ params, ssoToken }: AuthorizeCommand): Promise<AuthorizeResult> {
@@ -131,13 +127,21 @@ export class AuthorizeHandler implements Handler<AuthorizeCommand, AuthorizeResu
       return { outcome: "code", redirectTo: this.buildRedirect(redirectUri, { code, state: request.state }) };
     }
 
-    // Giriş gerekiyor: isteği sakla ve arayüzün giriş sayfasına gönder.
+    /*
+     * Giriş gerekiyor: isteği sakla ve arayüzün giriş sayfasına gönder.
+     *
+     * Adres GÖRELİ: kullanıcı hangi adresten geldiyse (localhost, ağ IP'si,
+     * tünel) giriş sayfası orada açılıyor. Önceden PUBLIC_URL'e gidiyordu;
+     * PUBLIC_URL bir tünel adresiyken tünel ölünce bilgisayardan bile giriş
+     * yapılamıyordu ("bağlantı yok"). PKCE doğrulayıcısı da başladığı adresin
+     * deposunda; giriş sayfasının aynı adreste kalması bu yüzden de doğru.
+     */
     const requestId = this.ids.uuid();
     await this.cache.set(`authreq:${requestId}`, request, 15 * 60);
     return {
       outcome: "login_required",
       authRequestId: requestId,
-      redirectTo: `${this.publicUrl}/giris?auth=${encodeURIComponent(requestId)}`
+      redirectTo: `/giris?auth=${encodeURIComponent(requestId)}`
     };
   }
 

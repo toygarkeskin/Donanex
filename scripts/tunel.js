@@ -187,8 +187,9 @@ function cloudflaredBul() {
  * Adres cloudflared'ın GÜNLÜĞÜNDE geçiyor, standart çıktısında değil; bu
  * yüzden iki akışı birden dinliyoruz.
  */
-function tuneliAc(exe, hedef) {
+function tuneliAc(exe, hedef, olduHaberi = () => {}) {
   return new Promise((coz, yad) => {
+    let olumBildirildi = false;
     const surec = spawn(exe, ["tunnel", "--url", hedef, "--no-autoupdate"], {
       cwd: KOK,
       stdio: ["ignore", "pipe", "pipe"]
@@ -208,6 +209,16 @@ function tuneliAc(exe, hedef) {
         fs.appendFileSync(path.join(TUNEL_DIZINI, "cloudflared.log"), metin);
       } catch {
         /* günlük yazılamazsa iş durmasın */
+      }
+      /*
+       * Hızlı tünel geçici: bağlantı bir an kopunca (uyku, ağ değişimi)
+       * Cloudflare tüneli SİLİYOR ve cloudflared aynı ölü tünele sonsuza dek
+       * "Tunnel not found" alarak bağlanmaya çalışıyor. Adres bir daha
+       * dirilmiyor; tek çare yeni tünel.
+       */
+      if (cozuldu && !olumBildirildi && /Tunnel not found/i.test(metin)) {
+        olumBildirildi = true;
+        olduHaberi("Cloudflare tuneli sildi (Tunnel not found)");
       }
       const esle = metin.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
       if (esle && !cozuldu) {
@@ -306,43 +317,107 @@ async function main() {
   yaz("Yigin hazir.");
 
   const yerel = yerelAdres();
-  const { surec, adres } = await tuneliAc(exe, yerel);
-  yaz(`Tunel adresi: ${adres}`);
-  fs.writeFileSync(ADRES_DOSYASI, adres + os.EOL);
-
-  const hazir = await ayarlariUygula(adres);
-
-  yaz("");
-  yaz("===========================================================");
-  if (!hazir) {
-    yaz("  DIKKAT: tunel acik ama api calismiyor; giris calismaz.");
-  }
-  yaz(`  Telefonda bu adresi acin: ${adres}`);
-  yaz("  Surec yasadigi surece calisir.");
-  yaz("  Elle calistirildiysa Ctrl+C; gorevden calisiyorsa:");
-  yaz("  Stop-ScheduledTask -TaskName Donanex-Tunel");
-  yaz("===========================================================");
-
+  let surec = null;
+  let adres = null;
   let kapaniyor = false;
+  let yenileniyor = false;
+  let saglikZamani = null;
+
   const kapat = () => {
     if (kapaniyor) return;
     kapaniyor = true;
     yaz("Kapatiliyor...");
+    clearInterval(saglikZamani);
     try {
-      surec.kill();
+      surec?.kill();
     } catch {
       /* zaten olmus olabilir */
     }
     yereleDon(yerel);
     process.exit(0);
   };
-
   process.on("SIGINT", kapat);
   process.on("SIGTERM", kapat);
-  surec.on("exit", (kod) => {
-    yaz(`cloudflared kapandi (${kod}).`);
-    kapat();
-  });
+
+  /*
+   * Tünel ölünce (Cloudflare sildi, cloudflared çöktü, adres yanıt vermiyor)
+   * betik kapanmıyor: yeni tünel açıp PUBLIC_URL'i ona çeviriyor. Önceden
+   * tünel sessizce ölüyor, PUBLIC_URL ölü adreste kalıyor ve giriş her
+   * cihazda "bağlantı yok" veriyordu.
+   */
+  async function yenidenKur(neden) {
+    if (kapaniyor || yenileniyor) return;
+    yenileniyor = true;
+    yaz(`Tunel dustu: ${neden}. Yeni tunel aciliyor...`);
+    const eski = surec;
+    surec = null;
+    try {
+      eski?.kill();
+    } catch {
+      /* zaten ölmüş */
+    }
+    for (let deneme = 1; !kapaniyor; deneme++) {
+      try {
+        await kur();
+        break;
+      } catch (hata) {
+        const bekleme = Math.min(60, 5 * deneme);
+        yaz(`Tunel acilamadi (${hata.message}); ${bekleme} sn sonra yeniden.`);
+        await bekle(bekleme * 1000);
+      }
+    }
+    yenileniyor = false;
+  }
+
+  async function kur() {
+    const acilan = await tuneliAc(exe, yerel, (neden) => void yenidenKur(neden));
+    surec = acilan.surec;
+    adres = acilan.adres;
+    yaz(`Tunel adresi: ${adres}`);
+    fs.writeFileSync(ADRES_DOSYASI, adres + os.EOL);
+
+    const bu = surec;
+    surec.on("exit", (kod) => {
+      // Yalnızca GÜNCEL süreç: bilerek kapatılan eski süreç yeniden kurulum tetiklemesin.
+      if (kapaniyor || surec !== bu) return;
+      void yenidenKur(`cloudflared kapandi (${kod})`);
+    });
+
+    const hazir = await ayarlariUygula(adres);
+    yaz("");
+    yaz("===========================================================");
+    if (!hazir) yaz("  DIKKAT: tunel acik ama api calismiyor; giris calismaz.");
+    yaz(`  Telefonda bu adresi acin: ${adres}`);
+    yaz("  Tunel duserse betik kendiliginden yenisini acar ve");
+    yaz("  bu satirlari yeni adresle tekrar basar.");
+    yaz("  Elle calistirildiysa Ctrl+C; gorevden calisiyorsa:");
+    yaz("  Stop-ScheduledTask -TaskName Donanex-Tunel");
+    yaz("===========================================================");
+  }
+
+  await kur();
+
+  /*
+   * Günlükte "Tunnel not found" görünmeden ölen tüneller için yedek
+   * yoklama: Cloudflare ölü tünelde 530 döndürüyor. Art arda 4 başarısız
+   * yoklama (≈2 dk) yeniden kurulumu tetikliyor; tek bir ağ hıçkırığı değil.
+   * Yeni adresin DNS kaydı ilk dakikada bu bilgisayarda çözülmeyebilir; bu
+   * yüzden DNS hatası "ölü" sayılmıyor, yalnızca sunucudan gelen 530/502/404.
+   */
+  let basarisiz = 0;
+  saglikZamani = setInterval(async () => {
+    if (kapaniyor || yenileniyor || !adres) return;
+    try {
+      const yanit = await fetch(`${adres}/api/health`, { signal: AbortSignal.timeout(15000) });
+      basarisiz = [530, 502, 404].includes(yanit.status) ? basarisiz + 1 : 0;
+    } catch {
+      basarisiz = 0;
+    }
+    if (basarisiz >= 4) {
+      basarisiz = 0;
+      void yenidenKur("adres 2 dakikadir yanit vermiyor");
+    }
+  }, 30000);
 }
 
 main().catch((hata) => {

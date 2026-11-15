@@ -400,7 +400,7 @@ class Client {
 
     let redirectTo = location;
     if (location.includes("/giris?auth=")) {
-      const authRequestId = new URL(location).searchParams.get("auth");
+      const authRequestId = new URL(location, this.base).searchParams.get("auth");
       const sira = Client.mailbox?.messages.length ?? 0;
       let signIn = await this.post("/api/auth/sign-in", { email, password, authRequestId });
       if (signIn.status !== 200) return { ok: false, reason: signIn.data.message, status: signIn.status };
