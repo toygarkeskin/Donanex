@@ -21,6 +21,7 @@ import { storePanelRoutes } from "./routes/store.routes";
 import { adminRoutes } from "./routes/admin.routes";
 import { supportRoutes } from "./routes/support.routes";
 import { uploadRoutes } from "./routes/uploads.routes";
+import { feedbackRoutes } from "./routes/feedback.routes";
 
 import { bildirimDagitici } from "./support/bildirimAkisi";
 
@@ -138,6 +139,7 @@ export function createApp({
   api.use("/stores", storePanelRoutes(context));
   api.use("/admin", adminRoutes(context));
   api.use(supportRoutes(context));
+  api.use(feedbackRoutes(context));
   api.use(notFoundHandler);
 
   app.use("/api", api);

@@ -9,6 +9,10 @@ import LoadingBlock from "../../components/LoadingBlock.vue";
 import EmptyState from "../../components/EmptyState.vue";
 import AlertBox from "../../components/AlertBox.vue";
 import ProductCard from "../../components/ProductCard.vue";
+import OneriSeridi from "../../components/OneriSeridi.vue";
+import UrunYorumlari from "../../components/UrunYorumlari.vue";
+import UrunSorulari from "../../components/UrunSorulari.vue";
+import YildizPuan from "../../components/YildizPuan.vue";
 import ProductImage from "../../components/ProductImage.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import { sayfayiTanimla } from "../../lib/sayfaBilgisi";
@@ -23,6 +27,8 @@ const notFound = ref(false);
 const quantity = ref(1);
 const adding = ref(false);
 const benzerler = ref([]);
+/* Yorum bölümü yüklenince başlıktaki yıldız özeti için gönderiyor. */
+const puanOzeti = ref(null);
 
 /*
  * Görsel galerisi.
@@ -123,7 +129,7 @@ watch(() => route.fullPath, load);
     <RouterLink :to="{ name: 'products' }" class="btn-primary">Ürünlere dön</RouterLink>
   </EmptyState>
 
-  <div v-else class="grid gap-5 lg:grid-cols-2 lg:gap-8">
+  <div v-else class="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-8">
     <!--
       Telefonda görsel alçak tutuluyor: 420px'te "Sepete ekle" katlamanın
       altında kalıyor ve satın almak için kaydırmak gerekiyordu. Geniş ekranda
@@ -226,6 +232,17 @@ watch(() => route.fullPath, load);
 
       <h1 class="text-2xl font-bold tracking-tight text-ink-900">{{ product.name }}</h1>
 
+      <!-- Puan özeti başlığın altında; tıklayınca yorumlara iniyor. -->
+      <a
+        v-if="puanOzeti?.count"
+        href="#yorumlar"
+        class="mt-1.5 inline-flex items-center gap-2 text-sm text-ink-600 hover:text-brand-600"
+      >
+        <YildizPuan :puan="puanOzeti.average" :boyut="16" />
+        <span class="font-semibold text-ink-800">{{ puanOzeti.average.toLocaleString("tr-TR") }}</span>
+        <span>({{ puanOzeti.count }} değerlendirme)</span>
+      </a>
+
       <RouterLink
         :to="{ name: 'store', params: { slug: product.storeSlug } }"
         class="mt-2 inline-flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700"
@@ -327,6 +344,24 @@ watch(() => route.fullPath, load);
           </RouterLink>
         </div>
       </div>
+    </div>
+
+    <!--
+      "Bunları da sepete ekleyebilirsiniz" — benzer ürünlerin ÜSTÜNDE.
+      Benzer ürünler bu ürünün ALTERNATİFİ (başka bir mouse), bu şerit ise
+      onu TAMAMLAYAN ürünler (klavye, mousepad). Karar vermiş kullanıcıya
+      önce tamamlayıcıyı göstermek, onu yeniden seçim yapmaya itmekten iyi.
+    -->
+    <OneriSeridi v-if="product" class="lg:col-span-2" :urun-idleri="[product.id]" />
+
+    <!--
+      Değerlendirmeler ve soru-cevap. Geniş ekranda yan yana: ikisi de uzun
+      bir liste ve alt alta dizildiğinde soru-cevap sayfanın çok aşağısında
+      kalıyordu.
+    -->
+    <div v-if="product" class="grid grid-cols-1 gap-8 lg:col-span-2 xl:grid-cols-2">
+      <UrunYorumlari :urun="product" @ozet="(ozet) => (puanOzeti = ozet)" />
+      <UrunSorulari :urun="product" />
     </div>
 
     <section v-if="benzerler.length" class="lg:col-span-2">

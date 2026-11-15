@@ -92,6 +92,16 @@ export class LocalFileStorage implements FileStorage {
     return { fileName, contentType: tur.mime, size: icerik.length };
   }
 
+  /** Dosyayı siler; ad kalıba uymuyorsa ya da dosya yoksa sessiz geçer. */
+  async remove(fileName: string): Promise<void> {
+    if (typeof fileName !== "string" || !AD_KALIBI.test(fileName)) return;
+    try {
+      await fs.unlink(path.join(this.directory, fileName));
+    } catch {
+      /* yoksa sorun değil */
+    }
+  }
+
   /** Dosyayı okur. Ad kalıba uymuyorsa hiç diske gidilmez. */
   async read(fileName: string): Promise<{ content: Buffer; contentType: string }> {
     if (typeof fileName !== "string" || !AD_KALIBI.test(fileName)) {

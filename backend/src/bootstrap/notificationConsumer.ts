@@ -20,7 +20,7 @@ import { aliciAnahtari } from "../infrastructure/notifications/RedisNotification
  * devam eder.
  */
 const QUEUE = "donanex.notifications";
-const PATTERNS = ["user.*", "order.*", "store.*", "support.*"];
+const PATTERNS = ["user.*", "order.*", "store.*", "support.*", "product.*"];
 
 /**
  * Kuyruktan gelen olayları site içi bildirime çevirir.

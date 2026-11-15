@@ -1946,3 +1946,222 @@ test("kapatılmış talebe müşteri ek ekleyemez", opts, async () => {
   const yanit = await ekYukle(musteri, `/api/me/tickets/${acilan.data.id}/ekler`, PNG_1X1, "image/png", "geç.png");
   assert.equal(yanit.status, 409);
 });
+
+/* ================================================= vitrin, öneri, yorum, soru */
+
+/** Mağaza sahibi ve kendi mağaza kimliği. */
+async function magazaciGir() {
+  const magazaci = new Client(app.base);
+  assert.ok((await magazaci.signIn("teknoloji@donanex.test", DEMO_PASSWORD)).ok);
+  const storeId = (await magazaci.get("/api/me")).data.stores?.[0]?.id as string;
+  assert.ok(storeId, "mağaza sahibinin paneli olmalı");
+  return { magazaci, storeId };
+}
+
+test("son gelenler: taslaktan yayına alınan ürün şeridin başına gelir", opts, async () => {
+  const { magazaci, storeId } = await magazaciGir();
+  const ad = `Son Gelen Deneme ${Date.now()}`;
+
+  // Taslak oluştur: vitrinde görünmemeli.
+  const taslak = await magazaci.post(`/api/stores/${storeId}/products`, {
+    name: ad,
+    description: "Yayın tarihi denemesi.",
+    price: "199.90",
+    stock: 5,
+    imageUrl: "/images/urun-gorseli-yok.svg",
+    status: "draft"
+  });
+  assert.equal(taslak.status, 201, JSON.stringify(taslak.data));
+  let vitrin = await anon.get("/api/products?pageSize=6");
+  assert.ok(!vitrin.data.items.some((u: Row) => u.name === ad), "taslak vitrinde görünmez");
+
+  /*
+   * Yayına al: oluşturulma tarihi eski kalsa da şeridin BAŞINA gelmeli.
+   * Eskiden sıralama created_at'e bakıyordu ve taslaktan çıkan ürün
+   * şeride hiç giremiyordu.
+   */
+  const yayin = await magazaci.patch(`/api/stores/${storeId}/products/${taslak.data.id}/status`, { status: "active" });
+  assert.equal(yayin.status, 200, JSON.stringify(yayin.data));
+  vitrin = await anon.get("/api/products?pageSize=6");
+  assert.equal(vitrin.data.items[0].name, ad, "yeni yayına alınan ürün ilk sırada");
+  assert.ok(vitrin.data.items[0].publishedAt, "yayın tarihi listede geliyor");
+
+  /*
+   * Taslağa alıp yeniden yayınlamak ürünü TEKRAR başa taşımaz: yayın tarihi
+   * yalnızca ilk sefer yazılıyor. Yoksa mağaza ürünlerini kapatıp açarak ana
+   * sayfanın üstüne itebilirdi.
+   */
+  const ilkTarih = vitrin.data.items[0].publishedAt;
+  await magazaci.patch(`/api/stores/${storeId}/products/${taslak.data.id}/status`, { status: "draft" });
+  await magazaci.patch(`/api/stores/${storeId}/products/${taslak.data.id}/status`, { status: "active" });
+  const tekrar = (await anon.get("/api/products?pageSize=60")).data.items.find((u: Row) => u.name === ad);
+  assert.equal(tekrar.publishedAt, ilkTarih, "yeniden yayın tarihi değiştirmez");
+});
+
+test("ürün formundan yeni kategori: bul ya da oluştur", opts, async () => {
+  const { magazaci, storeId } = await magazaciGir();
+  const ad = `Bellek ${Date.now()}`;
+
+  const ilk = await magazaci.post(`/api/stores/${storeId}/categories`, { name: ad });
+  assert.equal(ilk.status, 201, JSON.stringify(ilk.data));
+  assert.equal(ilk.data.created, true);
+
+  // Aynı ad, farklı büyük/küçük harf: yeni kategori AÇILMAZ, mevcut döner.
+  const ikinci = await magazaci.post(`/api/stores/${storeId}/categories`, { name: ad.toUpperCase() });
+  assert.equal(ikinci.status, 200);
+  assert.equal(ikinci.data.created, false);
+  assert.equal(ikinci.data.category.id, ilk.data.category.id);
+
+  // Müşteri kategori açamaz; başka mağaza adına da açılamaz.
+  const musteri = new Client(app.base);
+  assert.ok((await musteri.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+  assert.equal((await musteri.post(`/api/stores/${storeId}/categories`, { name: "Sahte" })).status, 403);
+  assert.equal((await magazaci.post(`/api/stores/${storeId}/categories`, { name: "" })).status, 400);
+});
+
+test("öneriler tamamlayıcı: mouse alana mouse önerilmez", opts, async () => {
+  const urunler = (await anon.get("/api/products?pageSize=60")).data.items as Row[];
+  const mouse = urunler.find((u) => u.categorySlug === "mouse");
+  assert.ok(mouse, "demo verisinde mouse olmalı");
+
+  const oneri = await anon.get(`/api/oneriler?urun=${mouse.id}&adet=12`);
+  assert.equal(oneri.status, 200);
+  assert.equal(oneri.data.basis, "tamamlayici");
+  assert.ok(oneri.data.items.length > 0, "öneri boş olmamalı");
+  assert.ok(
+    oneri.data.items.every((u: Row) => u.categorySlug !== "mouse"),
+    "sepetteki ürünün kategorisinden öneri gelmez"
+  );
+  assert.ok(!oneri.data.items.some((u: Row) => u.id === mouse.id), "ürünün kendisi önerilmez");
+  assert.ok(oneri.data.items.every((u: Row) => u.stock > 0), "stokta olmayan ürün önerilmez");
+  // İlk öneriler tamamlayıcı kategorilerden: klavye, kulaklık, monitör…
+  assert.ok(["mousepad", "klavye", "kulaklik", "monitor"].includes(oneri.data.items[0].categorySlug));
+
+  // Boş sepet: genel liste, farklı kategorilerden.
+  const genel = await anon.get("/api/oneriler?adet=8");
+  assert.equal(genel.data.basis, "genel");
+  assert.ok(new Set(genel.data.items.map((u: Row) => u.categorySlug)).size > 1, "tek kategori listeyi doldurmaz");
+
+  // Bozuk kimlik sessizce atlanıyor, hata vermiyor.
+  assert.equal((await anon.get("/api/oneriler?urun=bozuk")).status, 200);
+});
+
+test("yorum: tek kişi tek yorum, satın alma rozeti, fotoğraf sınırı", opts, async () => {
+  const urun = (await anon.get("/api/products?pageSize=60")).data.items.find((u: Row) => u.stock > 2) as Row;
+  const yol = `/api/urunler/${urun.id}/yorumlar`;
+
+  // Giriş yapmadan yorum yazılamaz.
+  assert.equal((await anon.post(yol, { rating: 5, body: "Harika bir ürün gerçekten." })).status, 401);
+
+  const musteri = new Client(app.base);
+  assert.ok((await musteri.signIn("ahmet@donanex.test", DEMO_PASSWORD)).ok);
+
+  assert.equal((await musteri.post(yol, { rating: 6, body: "Puan sınır dışı deneme." })).status, 400);
+  assert.equal((await musteri.post(yol, { rating: 4, body: "kısa" })).status, 400, "en az 10 karakter");
+
+  const ilk = await musteri.post(yol, { rating: 4, body: "Fiyatına göre gayet iyi bir ürün." });
+  assert.equal(ilk.status, 201, JSON.stringify(ilk.data));
+  assert.equal(ilk.data.authorName, "Ahmet Ç.", "ad kısaltılarak gösterilir");
+  assert.equal(ilk.data.userId, undefined, "hesap numarası dışarı verilmez");
+
+  // İkinci gönderim YENİ yorum açmaz, mevcutu günceller.
+  const ikinci = await musteri.post(yol, { rating: 5, body: "Bir hafta kullandım, fikrim değişti: mükemmel." });
+  assert.equal(ikinci.status, 200);
+  assert.equal(ikinci.data.id, ilk.data.id);
+
+  const liste = await anon.get(yol);
+  const benim = liste.data.items.filter((y: Row) => y.authorName === "Ahmet Ç.");
+  assert.equal(benim.length, 1, "kişi başına tek yorum");
+  assert.equal(liste.data.summary.count >= 1, true);
+  assert.ok(liste.data.summary.distribution.length === 5);
+
+  // Fotoğraf: en fazla 3; başkasının yorumuna eklenemez.
+  const fotoYolu = `${yol}/${ilk.data.id}/fotograflar`;
+  const yukle = (client: Client) =>
+    fetch(`${app.base}${fotoYolu}`, {
+      method: "POST",
+      headers: { "Content-Type": "image/png", Authorization: `Bearer ${client.accessToken}` },
+      body: PNG_1X1
+    });
+  for (let i = 0; i < 3; i += 1) assert.equal((await yukle(musteri)).status, 201);
+  assert.equal((await yukle(musteri)).status, 409, "dördüncü fotoğraf reddedilir");
+
+  const baskasi = new Client(app.base);
+  assert.ok((await baskasi.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+  assert.equal((await yukle(baskasi)).status, 404, "başkasının yorumuna fotoğraf eklenemez");
+
+  // Fotoğraflar yorumla birlikte, herkese açık adresle geliyor.
+  const sonra = (await anon.get(`${yol}?pageSize=30`)).data.items.find((y: Row) => y.id === ilk.data.id);
+  assert.equal(sonra.photos.length, 3);
+  assert.match(sonra.photos[0].imageUrl, /^\/yuklenen\/[0-9a-f]{32}\.png$/);
+
+  // Mağaza kendi ürününe yorum yazamaz.
+  const { magazaci, storeId } = await magazaciGir();
+  const kendi = (await anon.get("/api/products?pageSize=60")).data.items.find((u: Row) => u.storeId === storeId);
+  assert.equal(
+    (await magazaci.post(`/api/urunler/${kendi.id}/yorumlar`, { rating: 5, body: "Kendi ürünümüz harika!!" })).status,
+    409
+  );
+});
+
+test("satın alan müşterinin yorumu 'Satın aldı' rozeti taşır", opts, async () => {
+  const urun = (await anon.get("/api/products?pageSize=60")).data.items.find((u: Row) => u.stock > 2) as Row;
+  const alici = new Client(app.base);
+  assert.ok((await alici.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+
+  await alici.post("/api/cart/items", { productId: urun.id, quantity: 1 });
+  const siparis = await alici.post("/api/orders", checkout());
+  assert.equal(siparis.status, 201);
+  await alici.post(`/api/orders/${siparis.data.orderId}/payment`, { outcome: "success" });
+
+  const yorum = await alici.post(`/api/urunler/${urun.id}/yorumlar`, { rating: 5, body: "Aldım, kullandım, memnunum." });
+  assert.ok([200, 201].includes(yorum.status), JSON.stringify(yorum.data));
+  assert.equal(yorum.data.verifiedPurchase, true);
+});
+
+test("soru-cevap: müşteri sorar, yalnızca satıcı yanıtlar, soran haber alır", opts, async () => {
+  const { magazaci, storeId } = await magazaciGir();
+  const urun = (await anon.get("/api/products?pageSize=60")).data.items.find((u: Row) => u.storeId === storeId) as Row;
+  const yol = `/api/urunler/${urun.id}/sorular`;
+
+  assert.equal((await anon.post(yol, { body: "Garantisi kaç yıl?" })).status, 401);
+
+  const musteri = new Client(app.base);
+  assert.ok((await musteri.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+  const metin = `Garantisi kaç yıl? ${Date.now()}`;
+  const soru = await musteri.post(yol, { body: metin });
+  assert.equal(soru.status, 201, JSON.stringify(soru.data));
+
+  // Mağazanın kutusuna "yeni ürün sorusu" düşüyor.
+  const magazaBildirimi = await bildirimBekle(
+    magazaci,
+    `/api/stores/${storeId}/notifications`,
+    (b) => b.kind === "product.question_asked" && String(b.body).includes(metin)
+  );
+  assert.ok(magazaBildirimi.bildirim, "mağaza soru bildirimini alır");
+
+  // Başka bir müşteri ya da başka mağazanın satıcısı yanıtlayamaz.
+  const yanitYolu = `${yol}/${soru.data.id}/yanit`;
+  const digerMusteri = new Client(app.base);
+  assert.ok((await digerMusteri.signIn("ahmet@donanex.test", DEMO_PASSWORD)).ok);
+  assert.equal((await digerMusteri.post(yanitYolu, { body: "İki yıl." })).status, 403);
+  const rakip = new Client(app.base);
+  assert.ok((await rakip.signIn("oyuncu@donanex.test", DEMO_PASSWORD)).ok);
+  assert.equal((await rakip.post(yanitYolu, { body: "Bizde daha ucuz." })).status, 403);
+
+  const yanit = await magazaci.post(yanitYolu, { body: "Ürün iki yıl üretici garantilidir." });
+  assert.equal(yanit.status, 201, JSON.stringify(yanit.data));
+  assert.equal(yanit.data.authorName, urun.storeName, "yanıtın altında mağazanın adı görünür");
+
+  // Herkese açık listede soru yanıtıyla birlikte; soranın hesap numarası yok.
+  const liste = await anon.get(yol);
+  const kayit = liste.data.items.find((q: Row) => q.id === soru.data.id);
+  assert.equal(kayit.answers.length, 1);
+  assert.equal(kayit.userId, undefined);
+
+  // Soran hem bildirim hem e-posta alıyor.
+  const bildirim = await bildirimBekle(musteri, "/api/me/notifications", (b) => b.kind === "product.question_answered");
+  assert.ok(bildirim.bildirim, "soru sahibi yanıt bildirimini alır");
+  assert.match(String(bildirim.bildirim.url), /#sorular$/);
+  assert.ok(await app.outbox.waitFor((m) => m.subject.startsWith("Sorunuz yanıtlandı")), "e-posta da gider");
+});

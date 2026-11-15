@@ -77,6 +77,34 @@ async function tikla(bildirim) {
   if (yol.startsWith("/") && !yol.startsWith("//")) router.push(yol);
 }
 
+/*
+ * Fare panelden çıkınca panel KENDİLİĞİNDEN kapanıyor.
+ *
+ * Önceden yalnızca dışarı tıklayınca ya da Esc ile kapanıyordu; kullanıcı
+ * bildirime bakıp fareyi başka yere götürdüğünde panel, başka bir şeye
+ * tıklayana kadar sayfanın üstünde asılı kalıyordu.
+ *
+ * Kısa bir bekleme var (350 ms): fare zilden panele inerken ya da panelin
+ * kenarından bir an taşarken panel kapanmasın. Geri dönülürse bekleme iptal.
+ *
+ * YALNIZCA FARE. Dokunmatikte "fare çıktı" olayı parmağı kaldırınca
+ * tetikleniyor; ona bağlansaydı panel telefonda açılır açılmaz kapanırdı.
+ * Orada dışarı dokunmak ve Esc yine çalışıyor.
+ */
+let kapatmaZamanlayici = null;
+
+function fareCikti(olay) {
+  if (olay.pointerType !== "mouse" || !acik.value) return;
+  clearTimeout(kapatmaZamanlayici);
+  kapatmaZamanlayici = setTimeout(() => {
+    acik.value = false;
+  }, 350);
+}
+
+function fareGeldi(olay) {
+  if (olay.pointerType === "mouse") clearTimeout(kapatmaZamanlayici);
+}
+
 function disaridaTiklandi(olay) {
   if (sarmalayici.value && !sarmalayici.value.contains(olay.target)) acik.value = false;
 }
@@ -93,6 +121,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearTimeout(kapatmaZamanlayici);
   document.removeEventListener("click", disaridaTiklandi);
   document.removeEventListener("keydown", tusaBasildi);
 });
@@ -123,7 +152,7 @@ watch(
     kapsayıcı yapışkan başlık oluyor ve panel sayfanın kendi kenar boşluğuna
     (16px) hizalanıyor. Masaüstünde yer bol, orada zile hizalanması doğru.
   -->
-  <div ref="sarmalayici" class="static sm:relative">
+  <div ref="sarmalayici" class="static sm:relative" @pointerleave="fareCikti" @pointerenter="fareGeldi">
     <button
       type="button"
       class="relative rounded-lg p-2 text-ink-600 hover:bg-ink-100 hover:text-ink-900"

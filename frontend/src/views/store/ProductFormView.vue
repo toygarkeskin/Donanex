@@ -29,10 +29,44 @@ const form = reactive({
   sku: "",
   categoryId: "",
   brandId: "",
-  status: "draft"
+  // Yeni ürün varsayılan olarak YAYINDA: taslakta açıldığında mağaza ürünü
+  // ekleyip vitrinde göremiyor ve "eklenmedi" sanıyordu. Taslak hâlâ seçilebilir.
+  status: "active"
 });
 
 const categories = ref([]);
+
+/*
+ * Listede olmayan kategori (ör. RAM) formdan eklenebiliyor.
+ *
+ * Seçim listesi DURUYOR — kullanıcı önce var olanlardan seçiyor; yalnızca
+ * aradığı yoksa altındaki bağlantıyla yeni ad yazıyor. Sunucu "bul ya da
+ * oluştur" çalışıyor: aynı adla kategori zaten varsa yenisi açılmıyor,
+ * mevcut olan seçiliyor. Böylece "Ram", "RAM" ve "ram" tek kategori kalıyor.
+ */
+const kategoriEkleAcik = ref(false);
+const yeniKategoriAdi = ref("");
+const kategoriEkleniyor = ref(false);
+
+async function kategoriEkle() {
+  const ad = yeniKategoriAdi.value.trim();
+  if (!ad) return;
+  kategoriEkleniyor.value = true;
+  try {
+    const { category, created } = await api.post(`/stores/${storeId.value}/categories`, { name: ad });
+    if (!categories.value.some((k) => k.id === category.id)) {
+      categories.value = [...categories.value, category].sort((a, b) => a.name.localeCompare(b.name, "tr"));
+    }
+    form.categoryId = category.id;
+    toast.success(created ? `"${category.name}" kategorisi eklendi ve seçildi.` : `"${category.name}" zaten vardı, o seçildi.`);
+    yeniKategoriAdi.value = "";
+    kategoriEkleAcik.value = false;
+  } catch (error) {
+    toast.error(error.message);
+  } finally {
+    kategoriEkleniyor.value = false;
+  }
+}
 const brands = ref([]);
 const yukleniyor = ref(false);
 const dosyaAlani = ref(null);
@@ -293,6 +327,38 @@ onMounted(load);
               {{ category.name }}
             </option>
           </select>
+
+          <button
+            v-if="!kategoriEkleAcik"
+            type="button"
+            class="mt-1.5 text-xs font-medium text-brand-600 hover:underline"
+            @click="kategoriEkleAcik = true"
+          >
+            + Listede yok mu? Yeni kategori ekle
+          </button>
+          <!-- Form içinde ayrı <form> olamaz; Enter yalnızca bu alanda kategori ekliyor. -->
+          <div v-else class="mt-2 flex gap-2">
+            <input
+              v-model="yeniKategoriAdi"
+              type="text"
+              class="field"
+              maxlength="120"
+              placeholder="Ör. RAM"
+              aria-label="Yeni kategori adı"
+              @keydown.enter.prevent="kategoriEkle"
+            />
+            <button
+              type="button"
+              class="btn-primary shrink-0"
+              :disabled="kategoriEkleniyor || !yeniKategoriAdi.trim()"
+              @click="kategoriEkle"
+            >
+              {{ kategoriEkleniyor ? "Ekleniyor…" : "Ekle" }}
+            </button>
+            <button type="button" class="btn-ghost shrink-0" @click="kategoriEkleAcik = false; yeniKategoriAdi = ''">
+              Vazgeç
+            </button>
+          </div>
         </FormField>
         <!--
           Marka kategoriden ayrı: kategori ürünün NE olduğunu ("Mouse"),

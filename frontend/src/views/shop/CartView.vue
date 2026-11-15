@@ -8,6 +8,7 @@ import { useToastStore } from "../../stores/toast";
 import PageHeader from "../../components/PageHeader.vue";
 import ProductImage from "../../components/ProductImage.vue";
 import EmptyState from "../../components/EmptyState.vue";
+import OneriSeridi from "../../components/OneriSeridi.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 import AlertBox from "../../components/AlertBox.vue";
 import ConfirmDialog from "../../components/ConfirmDialog.vue";
@@ -77,6 +78,17 @@ onMounted(() => cart.load().catch(() => {}));
     >
       <RouterLink :to="{ name: 'products' }" class="btn-primary">Ürünlere git</RouterLink>
     </EmptyState>
+
+    <!--
+      Boş sepet sayfası artık boş kalmıyor: farklı kategorilerden en yeni
+      ürünler, tek tıkla sepete eklenebilir hâlde. Yalnızca "Sepetiniz boş"
+      yazan bir sayfa kullanıcıya geri dönmekten başka yol göstermiyordu.
+    -->
+    <OneriSeridi
+      v-if="cart.loaded && !cart.items.length"
+      class="mt-8"
+      baslik="Bunlara göz atabilirsiniz"
+    />
 
     <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div class="space-y-3">
@@ -192,6 +204,18 @@ onMounted(() => cart.load().catch(() => {}));
         </p>
       </aside>
     </div>
+
+    <!--
+      Dolu sepet: sepetteki ürünleri TAMAMLAYAN ürünler. Mouse alana klavye,
+      mousepad, kulaklık önerilir; bir mouse daha değil. Sepete eklenen her
+      ürün öneriyi yeniden hesaplatıyor (kimlik listesi değişiyor).
+    -->
+    <OneriSeridi
+      v-if="cart.items.length"
+      class="mt-8"
+      :urun-idleri="cart.items.map((kalem) => kalem.productId)"
+      baslik="Bunları da alabilirsiniz"
+    />
 
     <!--
       Telefonda sabit ödeme çubuğu.

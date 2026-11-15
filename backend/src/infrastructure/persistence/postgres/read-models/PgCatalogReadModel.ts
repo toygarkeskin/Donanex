@@ -9,14 +9,28 @@ const CARD = `
   ${money("p.price_cents")} AS price,
   s.id AS "storeId", s.slug AS "storeSlug", s.name AS "storeName",
   c.slug AS "categorySlug", c.name AS "categoryName",
-  b.slug AS "brandSlug", b.name AS "brandName"`;
+  b.slug AS "brandSlug", b.name AS "brandName",
+  p.published_at AS "publishedAt",
+  /*
+   * Kartın fareyle gezilen görselleri: kapak + galeriden ilk dördü.
+   * Önceden galeri yalnızca ürün detayında okunuyordu; artık kart da fareyi
+   * yatay gezdirince fotoğraf değiştiriyor. Taşınan şey yalnızca birkaç
+   * adres (metin), görsellerin kendisi değil — görseller tarayıcıda ancak
+   * fare üstüne geldiğinde iniyor.
+   */
+  array_remove(ARRAY[p.image_url]::text[] || COALESCE(p.gallery_urls[1:4]::text[], ARRAY[]::text[]), NULL) AS "previewUrls"`;
 
 /**
  * Sıralama seçenekleri BURADA sabittir: kullanıcının gönderdiği metin asla
  * doğrudan ORDER BY'a girmez, yalnızca bu haritada anahtar arar.
  */
 const SORTS: Record<string, string> = {
-  newest: "p.created_at DESC, p.id DESC",
+  /*
+   * "En yeni" = rafa en son konan: yayına alınma anı, oluşturulma değil.
+   * Taslak kaydedilip sonradan yayınlanan ürün de şeridin başına geliyor
+   * (bkz. 007_product_published_at.sql).
+   */
+  newest: "p.published_at DESC NULLS LAST, p.created_at DESC, p.id DESC",
   price_asc: "p.price_cents ASC, p.id",
   price_desc: "p.price_cents DESC, p.id",
   name_asc: "p.name ASC, p.id"
@@ -202,5 +216,65 @@ export class PgCatalogReadModel implements CatalogReadModel {
       [brandId]
     );
     return rows;
+  }
+
+  async categorySlugsOf(productIds: readonly string[]): Promise<string[]> {
+    if (!productIds.length) return [];
+    const { rows } = await this.db.query(
+      `SELECT DISTINCT c.slug FROM products p JOIN categories c ON c.id = p.category_id
+       WHERE p.id = ANY($1::uuid[])`,
+      [productIds]
+    );
+    return rows.map((row) => row.slug);
+  }
+
+  /**
+   * Öneri listesi.
+   *
+   * İki sıralama birlikte çalışıyor:
+   *  1. Kategori içi sıra (rn): her kategorinin en yeni ürünü 1, ikincisi 2…
+   *  2. Tercih sırası: preferSlugs listesinde önce gelen kategori önce.
+   * "ORDER BY rn, tercih" kategoriler arasında DÖNÜŞÜMLÜ diziyor: önce her
+   * tamamlayıcı kategorinin en yenisi, sonra ikincileri. Yalnızca tercihe
+   * göre sıralansaydı ilk kategoride 10 ürün varsa şerit 10 mousepad'le
+   * başlardı.
+   *
+   * Tercih listesinde olmayan kategoriler EN SONA düşüyor ama çıkmıyor:
+   * tamamlayıcı ürün azsa şerit yine dolu kalıyor ("sitemde ne kadar ürün
+   * varsa o kadar öneri").
+   *
+   * Stokta olmayan ürün önerilmiyor: "sepete ekle" düğmesi taşıyan bir
+   * öneride tükenmiş ürün, tıklanınca hata veren bir söz olurdu.
+   */
+  async listRecommendations({
+    preferSlugs,
+    excludeSlugs,
+    excludeProductIds,
+    limit
+  }: {
+    preferSlugs: readonly string[];
+    excludeSlugs: readonly string[];
+    excludeProductIds: readonly string[];
+    limit: number;
+  }): Promise<Row[]> {
+    const { rows } = await this.db.query(
+      `SELECT * FROM (
+         SELECT ${CARD},
+                ROW_NUMBER() OVER (PARTITION BY p.category_id ORDER BY p.published_at DESC NULLS LAST, p.id) AS rn,
+                array_position($1::text[], c.slug) AS tercih
+         FROM products p
+         JOIN stores s ON s.id = p.store_id
+         LEFT JOIN categories c ON c.id = p.category_id
+         LEFT JOIN brands b ON b.id = p.brand_id
+         WHERE p.status = 'active' AND s.status = 'active' AND p.stock > 0
+           AND NOT (p.id = ANY($3::uuid[]))
+           AND (c.slug IS NULL OR NOT (c.slug = ANY($2::text[])))
+       ) adaylar
+       ORDER BY (tercih IS NULL), rn, tercih, "publishedAt" DESC NULLS LAST
+       LIMIT $4`,
+      [preferSlugs, excludeSlugs, excludeProductIds, limit]
+    );
+    // Sıralama yardımcıları istemciye gitmiyor.
+    return rows.map(({ rn, tercih, ...urun }) => urun);
   }
 }

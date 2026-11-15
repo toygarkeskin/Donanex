@@ -303,6 +303,38 @@ const templates: Record<string, Template> = {
     return drafts;
   },
 
+  /*
+   * Ürün sorusu: mağazanın kutusuna. Bağlantı ürün sayfasının soru-cevap
+   * bölümüne gidiyor; satıcı yanıtı orada, ürünün yanında yazıyor.
+   */
+  "product.question_asked": ({ payload }) =>
+    payload.storeId
+      ? [
+          {
+            scope: "store",
+            scopeId: payload.storeId,
+            kind: "product.question_asked",
+            title: "Yeni ürün sorusu",
+            body: `${payload.productName}: ${String(payload.body ?? "").slice(0, 120)}`,
+            url: `/urunler/${payload.storeSlug}/${payload.productSlug}#sorular`
+          }
+        ]
+      : [],
+
+  "product.question_answered": ({ payload }) =>
+    payload.userId
+      ? [
+          {
+            scope: "user",
+            scopeId: payload.userId,
+            kind: "product.question_answered",
+            title: "Sorunuz yanıtlandı",
+            body: `${payload.productName} — ${payload.answeredBy}`,
+            url: `/urunler/${payload.storeSlug}/${payload.productSlug}#sorular`
+          }
+        ]
+      : [],
+
   "support.ticket_answered": ({ payload }) =>
     payload.userId
       ? [

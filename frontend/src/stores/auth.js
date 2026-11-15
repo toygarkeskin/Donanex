@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { api, setAccessToken, refreshAccessToken, setUnauthorizedHandler } from "../lib/api";
+import { api, setAccessToken, refreshAccessToken, setUnauthorizedHandler, oturumIziVar } from "../lib/api";
 import { startLogin } from "../lib/oauth";
 import { useBildirimStore } from "./bildirim";
 
@@ -33,7 +33,8 @@ export const useAuthStore = defineStore("auth", {
       if (this.ready || this.restoring) return;
       this.restoring = true;
       try {
-        const token = await refreshAccessToken();
+        // Bu tarayıcıda hiç giriş yapılmadıysa sunucuya sormaya gerek yok.
+        const token = oturumIziVar() ? await refreshAccessToken() : null;
         if (token) await this.loadUser();
       } finally {
         this.restoring = false;

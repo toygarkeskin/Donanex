@@ -9,7 +9,8 @@ import {
   GetProductQuery,
   ListCategoriesQuery,
   ListBrandsQuery,
-  GetBrandQuery
+  GetBrandQuery,
+  ListRecommendationsQuery
 } from "../../../application/catalog";
 import { ListStoresQuery, GetStoreQuery } from "../../../application/stores";
 
@@ -20,6 +21,14 @@ import { ListStoresQuery, GetStoreQuery } from "../../../application/stores";
  */
 export function catalogRoutes({ queries }: Pick<RouteContext, "queries">): Router {
   const router = Router();
+
+  /*
+   * Öneriler: ?urun=<id>&urun=<id> (sepet ya da ürün sayfası). Ürün yoksa
+   * farklı kategorilerden en yeni ürünler döner (boş sepet).
+   */
+  router.get("/oneriler", async (req, res) => {
+    res.json(await queries.ask(new ListRecommendationsQuery({ productIds: req.query.urun, limit: req.query.adet })));
+  });
 
   router.get("/products", async (req, res) => {
     res.json(await queries.ask(new ListProductsQuery(req.query)));

@@ -7,7 +7,7 @@ import type { BrokerMessage, RabbitMqBroker } from "../infrastructure/messaging/
 import { renderEmail } from "../infrastructure/mail/templates";
 
 const QUEUE = "donanex.email";
-const PATTERNS = ["user.*", "order.*", "store.*", "support.*"];
+const PATTERNS = ["user.*", "order.*", "store.*", "support.*", "product.*"];
 
 /**
  * Kuyruktan gelen olayları e-postaya çevirir.

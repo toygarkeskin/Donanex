@@ -1,7 +1,7 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { money } from "../lib/format";
+import { money, gecenSure } from "../lib/format";
 import ProductImage from "./ProductImage.vue";
 
 /*
@@ -39,10 +39,46 @@ const props = defineProps({
     type: String,
     default: "liste",
     validator: (deger) => ["liste", "vitrin"].includes(deger)
-  }
+  },
+  /** "Son gelenler" şeridinde: ürünün ne zaman rafa çıktığını yazar. */
+  zamanGoster: { type: Boolean, default: false }
 });
 
 const vitrin = computed(() => props.gorunum === "vitrin");
+
+/*
+ * Fareyle fotoğraf gezme.
+ *
+ * Ürünün diğer fotoğraflarını görmek için ürün sayfasına girmek gerekiyordu.
+ * Artık fare görselin üstünde YATAY gezdikçe fotoğraf değişiyor: görsel
+ * alanı fotoğraf sayısı kadar dilime bölünüyor, fare hangi dilimdeyse o
+ * fotoğraf görünüyor. Alttaki çizgiler kaçıncı fotoğrafta olunduğunu söylüyor.
+ *
+ * YALNIZCA FARE. Dokunmatikte parmak görselin üstünde kaydırırken sayfa
+ * kayıyor; aynı hareketi fotoğraf değiştirmeye bağlamak kaydırmayı bozardı.
+ * Telefonda görsele dokunmak doğrudan ürün sayfasına götürüyor.
+ *
+ * Fotoğraflar önceden İNDİRİLMİYOR: yalnızca adresleri listede geliyor,
+ * görsel ancak fare o dilime geldiğinde iniyor.
+ */
+const gorseller = computed(() => {
+  const liste = [...new Set([props.product.imageUrl, ...(props.product.previewUrls ?? [])].filter(Boolean))];
+  return liste.length ? liste : [props.product.imageUrl];
+});
+const sira = ref(0);
+const cokluGorsel = computed(() => gorseller.value.length > 1);
+
+function gez(olay) {
+  if (olay.pointerType && olay.pointerType !== "mouse") return;
+  if (!cokluGorsel.value) return;
+  const kutu = olay.currentTarget.getBoundingClientRect();
+  const oran = Math.min(0.999, Math.max(0, (olay.clientX - kutu.left) / kutu.width));
+  sira.value = Math.floor(oran * gorseller.value.length);
+}
+
+const birak = () => {
+  sira.value = 0;
+};
 
 /**
  * Ürün adının marka ÇIKARILMIŞ hâli.
@@ -67,11 +103,35 @@ const adSiz = computed(() => {
     iç boşlukların daralmasından geliyor.
   -->
   <article class="card group flex flex-col overflow-hidden transition hover:shadow-md">
+    <!--
+      Tek fotoğraflı üründe eski hafif büyüme duruyor; çok fotoğraflıda
+      büyüme kapalı, çünkü fare gezdikçe hem değişen hem büyüyen görsel
+      gözü yoruyordu.
+    -->
     <RouterLink
       :to="{ name: 'product', params: { storeSlug: product.storeSlug, productSlug: product.slug } }"
-      class="block aspect-square overflow-hidden transition group-hover:scale-105"
+      class="relative block aspect-square overflow-hidden"
+      @pointermove="gez"
+      @pointerleave="birak"
     >
-      <ProductImage :src="product.imageUrl" :alt="product.name" />
+      <div class="h-full w-full transition" :class="cokluGorsel ? '' : 'group-hover:scale-105'">
+        <ProductImage :src="gorseller[sira]" :alt="product.name" />
+      </div>
+
+      <!-- Kaçıncı fotoğrafta olunduğu: yalnızca fare üstündeyken ve birden
+           çok fotoğraf varsa. -->
+      <span
+        v-if="cokluGorsel"
+        class="pointer-events-none absolute inset-x-2 bottom-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+        aria-hidden="true"
+      >
+        <span
+          v-for="(_, i) in gorseller"
+          :key="i"
+          class="h-1 flex-1 rounded-full"
+          :class="i === sira ? 'bg-brand-600' : 'bg-ink-300/70'"
+        />
+      </span>
     </RouterLink>
 
     <div class="flex flex-1 flex-col gap-1 p-3">
@@ -127,6 +187,11 @@ const adSiz = computed(() => {
         fiyata atlayabiliyor.
       -->
       <p class="mt-1 text-lg font-bold leading-tight text-brand-600">{{ money(product.price) }}</p>
+
+      <!-- "Son gelenler" şeridinde rafa çıkış zamanı: "2 gün önce". -->
+      <p v-if="zamanGoster && product.publishedAt" class="text-xs text-ink-400">
+        {{ gecenSure(product.publishedAt) }}
+      </p>
 
       <!--
         Stok uyarısı yalnızca listede. Vitrinde "Son 2 ürün" bir aciliyet

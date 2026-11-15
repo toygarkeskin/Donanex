@@ -15,6 +15,7 @@ import { PgCartRepository } from "./repositories/PgCartRepository";
 import { PgOrderRepository } from "./repositories/PgOrderRepository";
 import { PgSupportRepository } from "./repositories/PgSupportRepository";
 import { PgNotificationRepository } from "./repositories/PgNotificationRepository";
+import { PgFeedbackRepository } from "./repositories/PgFeedbackRepository";
 import { PgOutboxRepository } from "./repositories/PgOutboxRepository";
 import { PgAuditRepository } from "./repositories/PgAuditRepository";
 
@@ -59,6 +60,7 @@ export class PgUnitOfWork implements UnitOfWork {
       orders: new PgOrderRepository(client),
       support: new PgSupportRepository(client),
       notifications: new PgNotificationRepository(client),
+      feedback: new PgFeedbackRepository(client),
       outbox: new PgOutboxRepository(client),
       audit: new PgAuditRepository(client)
     };

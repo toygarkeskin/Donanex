@@ -12,6 +12,7 @@ import {
   DeleteProductCommand,
   ImportProductsCommand,
   UploadProductImageCommand,
+  AddStoreCategoryCommand,
   ListStoreProductsQuery
 } from "../../../application/catalog";
 import {
@@ -130,6 +131,18 @@ export function storePanelRoutes({ commands, queries }: Pick<RouteContext, "comm
       res.status(201).json(result);
     }
   );
+
+  /*
+   * Ürün formundan yeni kategori ("RAM" listede yoksa). Aynı adla kategori
+   * varsa yenisi açılmaz, mevcut olan döner: 200. Yeni açıldıysa 201.
+   */
+  router.post("/:storeId/categories", may("catalog:product:write"), async (req, res) => {
+    const sonuc = await commands.execute<{ category: unknown; created: boolean }>(
+      new AddStoreCategoryCommand({ storeId: yol(req, "storeId"), name: req.body?.name }),
+      req.context()
+    );
+    res.status(sonuc.created ? 201 : 200).json(sonuc);
+  });
 
   router.put("/:storeId/products/:productId", may("catalog:product:write"), async (req, res) => {
     const product = await commands.execute<Sonuc>(

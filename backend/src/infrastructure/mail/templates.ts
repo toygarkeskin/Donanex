@@ -172,6 +172,24 @@ const templates: Record<string, Template> = {
     )
   }),
 
+  "product.question_answered": ({ fullName, productName, question, answer, answeredBy, storeSlug, productSlug }, { publicUrl }) => {
+    const link = `${publicUrl}/urunler/${storeSlug}/${productSlug}#sorular`;
+    return {
+      subject: `Sorunuz yanıtlandı — ${productName}`,
+      text: `Merhaba ${fullName},\n\n"${productName}" hakkındaki sorunuz yanıtlandı.\n\nSorunuz: ${question}\n${answeredBy}: ${answer}\n\n${link}`,
+      html: layout(
+        "Sorunuz yanıtlandı",
+        `<p>Merhaba <strong>${escapeHtml(fullName)}</strong>,</p>
+         <p><strong>${escapeHtml(productName)}</strong> hakkındaki sorunuz yanıtlandı.</p>
+         <p style="color:#6b7280;font-size:13px;margin-bottom:4px">Sorunuz</p>
+         <blockquote style="margin:0 0 12px;padding:10px 14px;background:#f6f7f9">${escapeHtml(question)}</blockquote>
+         <p style="color:#6b7280;font-size:13px;margin-bottom:4px">${escapeHtml(answeredBy)}</p>
+         <blockquote style="margin:0;padding:10px 14px;background:#f6f7f9;border-left:3px solid #1f2430">${escapeHtml(answer)}</blockquote>
+         ${button(link, "Ürüne git")}`
+      )
+    };
+  },
+
   "support.ticket_opened": ({ fullName, reference, subject }) => ({
     subject: `Destek talebiniz alındı — ${reference}`,
     text: `Merhaba ${fullName},\n\n"${subject}" konulu destek talebiniz alındı. Talep numaranız: ${reference}.`,

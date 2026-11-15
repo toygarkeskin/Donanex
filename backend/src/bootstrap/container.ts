@@ -26,9 +26,10 @@ import catalog = require("../application/catalog");
 import ordering = require("../application/ordering");
 import support = require("../application/support");
 import notifications = require("../application/notifications");
+import feedback = require("../application/feedback");
 import system = require("../application/system");
 
-const MODULES = [identity, stores, catalog, ordering, support, notifications, system];
+const MODULES = [identity, stores, catalog, ordering, support, notifications, feedback, system];
 
 import { PgUnitOfWork } from "../infrastructure/persistence/postgres/PgUnitOfWork";
 import { PgCatalogReadModel } from "../infrastructure/persistence/postgres/read-models/PgCatalogReadModel";
@@ -38,6 +39,7 @@ import { PgOrderReadModel } from "../infrastructure/persistence/postgres/read-mo
 import { PgUserReadModel } from "../infrastructure/persistence/postgres/read-models/PgUserReadModel";
 import { PgSupportReadModel } from "../infrastructure/persistence/postgres/read-models/PgSupportReadModel";
 import { PgNotificationReadModel } from "../infrastructure/persistence/postgres/read-models/PgNotificationReadModel";
+import { PgFeedbackReadModel } from "../infrastructure/persistence/postgres/read-models/PgFeedbackReadModel";
 import { PgDashboardReadModel } from "../infrastructure/persistence/postgres/read-models/PgDashboardReadModel";
 import { PgHealthReadModel } from "../infrastructure/persistence/postgres/read-models/PgHealthReadModel";
 
@@ -101,6 +103,7 @@ export function buildContainer(
     userReadModel: new PgUserReadModel(pool),
     supportReadModel: new PgSupportReadModel(pool),
     notificationReadModel: new PgNotificationReadModel(pool),
+    feedbackReadModel: new PgFeedbackReadModel(pool),
     dashboardReadModel: new PgDashboardReadModel(pool),
     healthReadModel: new PgHealthReadModel(pool),
 

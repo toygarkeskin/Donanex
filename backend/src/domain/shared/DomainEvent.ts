@@ -17,7 +17,9 @@ export const EventTypes = {
   ORDER_CANCELLED: "order.cancelled",
   PACKAGE_STATUS_CHANGED: "order.package_status_changed",
   SUPPORT_TICKET_OPENED: "support.ticket_opened",
-  SUPPORT_TICKET_ANSWERED: "support.ticket_answered"
+  SUPPORT_TICKET_ANSWERED: "support.ticket_answered",
+  PRODUCT_QUESTION_ASKED: "product.question_asked",
+  PRODUCT_QUESTION_ANSWERED: "product.question_answered"
 } as const;
 
 /** Yalnızca yukarıdaki olay adları geçerlidir; yazım hatası derlemede yakalanır. */

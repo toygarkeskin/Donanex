@@ -258,6 +258,31 @@ export interface NotificationRepository {
   markAllRead(target: NotificationTarget): Promise<number>;
 }
 
+/** Ürün yorumları ve soru-cevap — yazma tarafı. */
+export interface FeedbackRepository {
+  /** Yorum ve soru için ürünün kendisi: mağazası, vitrin adresi, durumu. */
+  findProduct(productId: string): Promise<Row | null>;
+  /** Kişinin bu ürünü içeren ödenmiş bir siparişi var mı (rozet için). */
+  hasPurchased(userId: string, productId: string): Promise<boolean>;
+  /** Kişi başına ürün başına tek yorum: varsa günceller. */
+  upsertReview(review: {
+    id: string;
+    productId: string;
+    userId: string;
+    authorName: string;
+    rating: number;
+    body: string;
+    verifiedPurchase: boolean;
+  }): Promise<Row>;
+  /** Fotoğraf sayısı sınırı bu kilit altında sayılıyor. */
+  lockReview(reviewId: string, productId: string): Promise<Row | null>;
+  countReviewPhotos(reviewId: string): Promise<number>;
+  addReviewPhoto(photo: { id: string; reviewId: string; imageUrl: string }): Promise<Row>;
+  createQuestion(question: { id: string; productId: string; userId: string; authorName: string; body: string }): Promise<Row>;
+  findQuestion(questionId: string, productId: string): Promise<Row | null>;
+  addAnswer(answer: { id: string; questionId: string; userId: string | null; authorName: string; body: string }): Promise<Row>;
+}
+
 export interface OutboxRepository {
   /** Olay, onu doğuran veriyle AYNI transaction'da yazılır. */
   add(event: DomainEventShape): Promise<void>;
@@ -314,6 +339,7 @@ export interface Repositories {
   readonly orders: OrderRepository;
   readonly support: SupportRepository;
   readonly notifications: NotificationRepository;
+  readonly feedback: FeedbackRepository;
   readonly outbox: OutboxRepository;
   readonly audit: AuditRepository;
 }
@@ -341,6 +367,19 @@ export interface CatalogReadModel {
   listBrands(): Promise<Row[]>;
   getBrandBySlug(slug: string): Promise<Row | null>;
   listBrandStores(brandId: string): Promise<Row[]>;
+  /** Verilen ürünlerin kategori kısa adları (tekrarsız). */
+  categorySlugsOf(productIds: readonly string[]): Promise<string[]>;
+  /**
+   * Öneri listesi. preferSlugs sırasındaki kategoriler önce gelir,
+   * excludeSlugs ve excludeProductIds hiç gelmez, kategoriler arasında
+   * dönüşümlü dizilir (tek kategori listeyi doldurmasın).
+   */
+  listRecommendations(input: {
+    preferSlugs: readonly string[];
+    excludeSlugs: readonly string[];
+    excludeProductIds: readonly string[];
+    limit: number;
+  }): Promise<Row[]>;
 }
 
 export interface StoreReadModel {
@@ -407,6 +446,14 @@ export interface SupportReadModel {
   get(ticketId: string, scope: Row): Promise<Row | null>;
   /** Kapsam sorgunun içinde: başka talebin ya da başkasının talebinin eki dönmez. */
   getAttachment(ticketId: string, attachmentId: string, scope: Row): Promise<Row | null>;
+}
+
+/** Ürün yorumları ve soru-cevap — okuma tarafı (herkese açık). */
+export interface FeedbackReadModel {
+  /** Yorumlar + özet (ortalama, adet, yıldız dağılımı). */
+  listReviews(productId: string, paging: ListFilters): Promise<Row>;
+  /** Sorular, yanıtlarıyla birlikte. */
+  listQuestions(productId: string, paging: ListFilters): Promise<Row>;
 }
 
 export interface NotificationReadModel {
@@ -498,6 +545,8 @@ export interface Mailer {
 export interface FileStorage {
   save(content: Buffer): Promise<{ fileName: string; contentType: string; size: number }>;
   read(fileName: string): Promise<{ content: Buffer; contentType: string }>;
+  /** Kayıt yazılamazsa diskte sahipsiz görsel kalmasın diye (yorum fotoğrafları). */
+  remove(fileName: string): Promise<void>;
 }
 
 /**
@@ -549,6 +598,7 @@ export interface Services {
   readonly userReadModel: UserReadModel;
   readonly supportReadModel: SupportReadModel;
   readonly notificationReadModel: NotificationReadModel;
+  readonly feedbackReadModel: FeedbackReadModel;
   readonly dashboardReadModel: DashboardReadModel;
   readonly healthReadModel: HealthReadModel;
 

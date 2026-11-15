@@ -17,7 +17,15 @@ export const PORTS = {
   unitOfWork: ["run"],
 
   /* ---------- Okuma tarafı (Query) ---------- */
-  catalogReadModel: ["listProducts", "getProductBySlug", "listCategories", "listStoreProducts", "getProductForStore"],
+  catalogReadModel: [
+    "listProducts",
+    "getProductBySlug",
+    "listCategories",
+    "listStoreProducts",
+    "getProductForStore",
+    "categorySlugsOf",
+    "listRecommendations"
+  ],
   storeReadModel: ["getBySlug", "listPublic", "listForAdmin", "getForMember", "listMembers", "listForMember"],
   cartReadModel: ["getLines", "findCartId"],
   orderReadModel: [
@@ -32,6 +40,7 @@ export const PORTS = {
   userReadModel: ["getProfile", "listForAdmin", "getAccessPolicy", "getSessionVersion", "listAddresses"],
   supportReadModel: ["listForUser", "listForStore", "listForAdmin", "get", "getAttachment"],
   notificationReadModel: ["list", "countUnread"],
+  feedbackReadModel: ["listReviews", "listQuestions"],
   dashboardReadModel: ["adminSummary", "storeSummary"],
   healthReadModel: ["ping"],
 
@@ -49,7 +58,7 @@ export const PORTS = {
   cache: ["get", "set", "delete", "deleteByPrefix"],
   mailer: ["send"],
   // Yüklenen ürün görselleri; ad sunucuda üretilir, tür baytlardan doğrulanır
-  fileStorage: ["save", "read"],
+  fileStorage: ["save", "read", "remove"],
   // Talep ekleri; herkese açık görsellerden ayrı klasörde, yetkiyle sunulur
   attachmentStorage: ["save", "read", "remove"],
   clock: ["now"],

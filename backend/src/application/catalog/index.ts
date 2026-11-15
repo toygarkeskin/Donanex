@@ -9,12 +9,14 @@ import * as DeleteProduct from "./commands/DeleteProduct";
 import * as ImportProducts from "./commands/ImportProducts";
 import * as UploadProductImage from "./commands/UploadProductImage";
 import * as CreateCategory from "./commands/CreateCategory";
+import * as AddStoreCategory from "./commands/AddStoreCategory";
 import * as ListProducts from "./queries/ListProducts";
 import * as GetProduct from "./queries/GetProduct";
 import * as ListCategories from "./queries/ListCategories";
 import * as ListBrands from "./queries/ListBrands";
 import * as GetBrand from "./queries/GetBrand";
 import * as ListStoreProducts from "./queries/ListStoreProducts";
+import * as ListRecommendations from "./queries/ListRecommendations";
 
 /*
  * Katalog bağlamı. Yeni bir kullanım senaryosu buraya eklenir; container.js
@@ -31,6 +33,7 @@ export = defineContext({
     ImportProducts,
     UploadProductImage,
     CreateCategory,
+    AddStoreCategory,
   },
   queries: {
     ListProducts,
@@ -39,5 +42,6 @@ export = defineContext({
     ListBrands,
     GetBrand,
     ListStoreProducts,
+    ListRecommendations,
   }
 });

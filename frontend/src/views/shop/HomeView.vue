@@ -1,20 +1,21 @@
 <script setup>
+import AnaSlider from "../../components/AnaSlider.vue";
 import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { api } from "../../lib/api";
-import { useAuthStore } from "../../stores/auth";
 import ProductCard from "../../components/ProductCard.vue";
 import ProductImage from "../../components/ProductImage.vue";
 import BrandAvatar from "../../components/BrandAvatar.vue";
 import YataySerit from "../../components/YataySerit.vue";
 import LoadingBlock from "../../components/LoadingBlock.vue";
 
-const auth = useAuthStore();
 const products = ref([]);
 const stores = ref([]);
 const categories = ref([]);
 const brands = ref([]);
 const loading = ref(true);
+const urunSayisi = ref(0);
+const magazaSayisi = ref(0);
 
 /*
  * Ana sayfa bir LİSTE DEĞİL, bir giriş kapısı.
@@ -34,6 +35,8 @@ onMounted(async () => {
       api.get("/brands")
     ]);
     products.value = latest.items;
+    urunSayisi.value = latest.total ?? latest.items.length;
+    magazaSayisi.value = storeList.total ?? storeList.items.length;
     stores.value = storeList.items.slice(0, 4);
     // Ürünü olmayan kategori gösterilmiyor: boş bir listeye götüren kutu,
     // kullanıcıya verilmiş boş bir sözdür.
@@ -52,37 +55,7 @@ onMounted(async () => {
       metin değil ÜRÜNLER doldurmalı. Önceden bu blok tek başına ~380px
       kaplıyor ve ilk ürün satırı katlamanın altında kalıyordu.
     -->
-    <section class="overflow-hidden rounded-2xl bg-night px-6 py-7 text-white sm:px-10">
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <div class="max-w-xl">
-          <h1 class="text-xl font-bold tracking-tight sm:text-2xl">
-            Onlarca mağaza, tek sepet, tek ödeme.
-          </h1>
-          <p class="mt-1.5 text-sm text-night-muted">
-            Gezmek ve sepete eklemek için üye olmanıza gerek yok; kayıt olmadan da sipariş verebilirsiniz.
-          </p>
-        </div>
-        <div class="flex flex-wrap gap-3">
-          <RouterLink :to="{ name: 'products' }" class="btn bg-white px-5 py-2.5 text-night hover:bg-white/90">
-            Ürünleri keşfet
-          </RouterLink>
-          <RouterLink
-            v-if="!auth.isSignedIn"
-            :to="{ name: 'register' }"
-            class="btn border border-white/30 px-5 py-2.5 text-white hover:bg-white/10"
-          >
-            Hesap oluştur
-          </RouterLink>
-          <RouterLink
-            v-else-if="!auth.hasStorePanel"
-            :to="{ name: 'account-store-application' }"
-            class="btn border border-white/30 px-5 py-2.5 text-white hover:bg-white/10"
-          >
-            Mağazanı aç
-          </RouterLink>
-        </div>
-      </div>
-    </section>
+    <AnaSlider :kategoriler="categories" :urun-sayisi="urunSayisi" :magaza-sayisi="magazaSayisi" />
 
     <!--
       Kategoriler ana sayfanın ASIL içeriği.
@@ -142,7 +115,12 @@ onMounted(async () => {
     -->
     <section>
       <div class="mb-4 flex items-center justify-between">
-        <h2 class="text-lg font-bold text-ink-900">Yeni eklenenler</h2>
+        <!--
+          "Son gelenler": rafa en son çıkan ürünler, yayına alınma anına göre.
+          Önceden "Yeni eklenenler" oluşturulma tarihine bakıyordu; taslak
+          kaydedilip sonradan yayınlanan ürün şeride hiç giremiyordu.
+        -->
+        <h2 class="text-lg font-bold text-ink-900">Son gelenler</h2>
         <RouterLink :to="{ name: 'products' }" class="text-sm font-medium text-brand-600 hover:text-brand-700">
           Tümünü gör →
         </RouterLink>
@@ -150,7 +128,7 @@ onMounted(async () => {
 
       <LoadingBlock v-if="loading" :rows="2" />
       <div v-else class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        <ProductCard v-for="product in products" :key="product.id" :product="product" gorunum="vitrin" />
+        <ProductCard v-for="product in products" :key="product.id" :product="product" gorunum="vitrin" zaman-goster />
       </div>
     </section>
 
@@ -167,7 +145,7 @@ onMounted(async () => {
           v-for="store in stores"
           :key="store.id"
           :to="{ name: 'store', params: { slug: store.slug } }"
-          class="card flex items-center gap-3 p-4 transition hover:shadow-md"
+          class="card flex items-center gap-3 p-4 transition duration-200 hover:-translate-y-0.5 hover:scale-[1.03] hover:border-brand-200 hover:shadow-lg motion-reduce:hover:transform-none"
         >
           <img
             v-if="store.logoUrl"

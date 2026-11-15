@@ -22,8 +22,36 @@ let accessToken = null;
 let onUnauthorized = () => {};
 let refreshing = null;
 
+/*
+ * "Bu tarayıcıda açık bir oturum olabilir" işareti.
+ *
+ * Yenileme çerezi HttpOnly; JS onun varlığını göremiyor. İşaret olmasa,
+ * açılışta HER ziyaretçi için sessiz tazeleme denenir ve hiç giriş yapmamış
+ * kişide sunucu 401 döner (konsolda kırmızı satır, boşa bir istek). İşaret
+ * yalnızca "1" — jeton ya da kişisel bilgi taşımıyor; XSS onu okusa da
+ * bir şey kazanmaz. Sekmeler arasında ortak: bir sekmede giriş yapılınca
+ * diğeri de yenilemede oturumu geri alıyor.
+ */
+const OTURUM_IZI = "donanex.oturum";
+const izYaz = (acik) => {
+  try {
+    if (acik) localStorage.setItem(OTURUM_IZI, "1");
+    else localStorage.removeItem(OTURUM_IZI);
+  } catch {
+    /* depo kapalıysa işaret yok sayılır: tazeleme yine denenir */
+  }
+};
+export const oturumIziVar = () => {
+  try {
+    return localStorage.getItem(OTURUM_IZI) === "1";
+  } catch {
+    return true;
+  }
+};
+
 export const setAccessToken = (token) => {
   accessToken = token;
+  izYaz(Boolean(token));
 };
 export const getAccessToken = () => accessToken;
 export const setUnauthorizedHandler = (handler) => {
@@ -46,9 +74,12 @@ export async function refreshAccessToken() {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ grant_type: "refresh_token", client_id: "donanex-web" })
       });
-      if (!response.ok) return null;
+      if (!response.ok) {
+        izYaz(false);
+        return null;
+      }
       const data = await response.json();
-      accessToken = data.access_token;
+      setAccessToken(data.access_token);
       return accessToken;
     } catch {
       return null;
