@@ -89,6 +89,15 @@ test("Sipariş verildiğinde yalnızca müşteri haber alır, mağaza değil", (
   assert.match(String(drafts[0].body), /PZ-1003/);
 });
 
+test("Bildirimdeki tutar Türkçe para biçiminde: 80497.00 değil ₺80.497,00", () => {
+  const [taslak] = renderNotifications("order.placed", {
+    aggregateId: SIPARIS,
+    payload: { orderNumber: "PZ-1005", userId: MUSTERI, total: "80497.00", packages: [] }
+  });
+  assert.match(String(taslak.body), /₺80\.497,00/);
+  assert.doesNotMatch(String(taslak.body), /80497\.00 TL/);
+});
+
 test("Paket durumu kullanıcının anlayacağı başlığa çevrilir", () => {
   const kargoda = renderNotifications("order.package_status_changed", {
     aggregateId: SIPARIS,

@@ -399,20 +399,27 @@ async function main() {
 
   /*
    * Günlükte "Tunnel not found" görünmeden ölen tüneller için yedek
-   * yoklama: Cloudflare ölü tünelde 530 döndürüyor. Art arda 4 başarısız
-   * yoklama (≈2 dk) yeniden kurulumu tetikliyor; tek bir ağ hıçkırığı değil.
-   * Yeni adresin DNS kaydı ilk dakikada bu bilgisayarda çözülmeyebilir; bu
-   * yüzden DNS hatası "ölü" sayılmıyor, yalnızca sunucudan gelen 530/502/404.
+   * yoklama. Ölü hızlı tünelde Cloudflare ya 530 döndürüyor ya da adın DNS
+   * kaydını tümden siliyor (ad çözülmüyor). Art arda 4 başarısız yoklama
+   * (≈2 dk) yeniden kurulumu tetikliyor; tek bir ağ hıçkırığı değil.
+   *
+   * Yeni adresin DNS kaydı ilk dakikalarda bu bilgisayarda henüz
+   * çözülmeyebilir; bu yüzden bağlantı hataları ancak adres BİR KEZ yanıt
+   * verdikten sonra sayılıyor — yoksa her yeni tünel kendini öldürürdü.
    */
   let basarisiz = 0;
+  let dogrulananAdres = null;
   saglikZamani = setInterval(async () => {
     if (kapaniyor || yenileniyor || !adres) return;
+    let olu;
     try {
       const yanit = await fetch(`${adres}/api/health`, { signal: AbortSignal.timeout(15000) });
-      basarisiz = [530, 502, 404].includes(yanit.status) ? basarisiz + 1 : 0;
+      olu = [530, 502, 404].includes(yanit.status);
+      if (yanit.ok) dogrulananAdres = adres;
     } catch {
-      basarisiz = 0;
+      olu = dogrulananAdres === adres;
     }
+    basarisiz = olu ? basarisiz + 1 : 0;
     if (basarisiz >= 4) {
       basarisiz = 0;
       void yenidenKur("adres 2 dakikadir yanit vermiyor");

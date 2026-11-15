@@ -1,6 +1,7 @@
 "use strict";
 
 import type { NotificationScope } from "../../application/shared/contracts";
+import { liraBicimi } from "../paraBicimi";
 
 /**
  * Olaydan bildirim üretimi.
@@ -171,7 +172,7 @@ const templates: Record<string, Template> = {
             scopeId: payload.userId,
             kind: "order.placed",
             title: "Siparişiniz alındı",
-            body: `${payload.orderNumber} numaralı siparişiniz alındı. Tutar: ${payload.total} TL`,
+            body: `${payload.orderNumber} numaralı siparişiniz alındı. Tutar: ${liraBicimi(payload.total)}`,
             url: siparisYolu(payload.orderNumber)
           }
         ]

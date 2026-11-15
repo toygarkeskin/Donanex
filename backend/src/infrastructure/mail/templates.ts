@@ -1,5 +1,7 @@
 "use strict";
 
+import { liraBicimi } from "../paraBicimi";
+
 /**
  * E-posta metinleri. Tek yerde tutulur ki ton ve bağlantı biçimi her yerde aynı olsun.
  * Her şablon hem düz metin hem HTML üretir.
@@ -119,12 +121,12 @@ const templates: Record<string, Template> = {
       : "";
     return {
       subject: `Siparişiniz alındı — ${orderNumber}`,
-      text: `Merhaba ${fullName},\n\n${orderNumber} numaralı siparişiniz alındı. Tutar: ${total} TL.${guestNote}\n\nTakip: ${trackLink}`,
+      text: `Merhaba ${fullName},\n\n${orderNumber} numaralı siparişiniz alındı. Tutar: ${liraBicimi(total)}.${guestNote}\n\nTakip: ${trackLink}`,
       html: layout(
         "Siparişiniz alındı",
         `<p>Merhaba <strong>${escapeHtml(fullName)}</strong>,</p>
          <p><strong>${escapeHtml(orderNumber)}</strong> numaralı siparişiniz alındı.</p>
-         <p>Tutar: <strong>${escapeHtml(total)} TL</strong></p>
+         <p>Tutar: <strong>${escapeHtml(liraBicimi(total))}</strong></p>
          ${isGuest ? `<p>Takip kodunuz: <code style="background:#f1f3f5;padding:4px 8px;border-radius:6px">${escapeHtml(trackingCode)}</code><br><span style="color:#6b7280;font-size:13px">Bu kodu saklayın; siparişinizi takip etmek için gerekir.</span></p>` : ""}
          ${button(trackLink, "Siparişimi takip et")}`
       )
