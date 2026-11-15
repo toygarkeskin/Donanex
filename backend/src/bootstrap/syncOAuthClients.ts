@@ -3,7 +3,7 @@
 import type { Services } from "../application/shared/contracts";
 import type { AppConfig } from "../config/env";
 
-import { GrantTypes } from "../domain/identity/OAuthClient";
+import { GrantTypes, MOBILE_CLIENT_ID, MOBILE_REDIRECT_URI } from "../domain/identity/OAuthClient";
 
 /**
  * Sistemin kendi OAuth istemcilerini tanımlar.
@@ -39,9 +39,30 @@ export async function syncOAuthClients({
     isFirstParty: true
   };
 
-  await unitOfWork.run(({ oauth }) => oauth.upsertClient(web));
-  logger.info("OAuth istemcisi hazır: {ClientId}", { ClientId: web.clientId });
+  /*
+   * Telefon uygulaması (Donanex Mobil, Expo). O da AÇIK istemci: uygulama
+   * paketinin içindeki bir parola herkesin elindedir, PKCE zorunlu.
+   * Dönüş adresi uygulamanın kendi şeması; tarayıcı oraya hiç gitmiyor,
+   * uygulama yanıttaki adresten kodu kendisi okuyor. Yönetim ve mağaza
+   * yetki alanları verilmiyor: paneller web'de.
+   */
+  const mobile = {
+    clientId: MOBILE_CLIENT_ID,
+    name: "Donanex Mobil",
+    secretHash: null,
+    redirectUris: [MOBILE_REDIRECT_URI],
+    grantTypes: [GrantTypes.AUTHORIZATION_CODE, GrantTypes.REFRESH_TOKEN],
+    scopes: ["openid", "profile", "email", "shop"],
+    isConfidential: false,
+    isFirstParty: true
+  };
 
-  return { web };
+  await unitOfWork.run(async ({ oauth }) => {
+    await oauth.upsertClient(web);
+    await oauth.upsertClient(mobile);
+  });
+  logger.info("OAuth istemcileri hazır: {ClientIds}", { ClientIds: [web.clientId, mobile.clientId].join(", ") });
+
+  return { web, mobile };
 }
 

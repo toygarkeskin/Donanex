@@ -19,6 +19,15 @@ export const SUPPORTED_SCOPES = Object.freeze([
   "admin" // yönetim paneli
 ]) as readonly string[];
 
+/*
+ * Telefon uygulaması. Tarayıcı gibi çerez saklayamadığı için yenileme jetonu
+ * ona çerezle değil yanıt gövdesinde veriliyor (uygulama cihazın güvenli
+ * deposunda tutuyor). Bu ayrım istemci kimliğine bağlı: web istemcisinin
+ * yenileme jetonu ASLA gövdeye düşmüyor.
+ */
+export const MOBILE_CLIENT_ID = "donanex-mobil";
+export const MOBILE_REDIRECT_URI = "donanexmobil://giris";
+
 /** Yetkilendirme sunucusunda kayıtlı istemci. */
 export interface OAuthClient {
   readonly clientId: string;

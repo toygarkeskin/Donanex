@@ -340,6 +340,90 @@ test("çoklu kategori seçimi birleşim döndürür", opts, async () => {
   }
 });
 
+/* ------------------------------------------------------- telefon uygulaması */
+
+test("mobil istemci: JSON authorize, e-posta kodu, yenileme jetonu gövdede", opts, async () => {
+  const telefon = new Client(app.base);
+  const verifier = crypto.randomBytes(48).toString("base64url");
+  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+  const yetki =
+    `/oauth/authorize?response_type=code&client_id=donanex-mobil` +
+    `&redirect_uri=${encodeURIComponent("donanexmobil://giris")}&scope=${encodeURIComponent("openid profile email shop")}` +
+    `&state=m1&code_challenge=${challenge}&code_challenge_method=S256`;
+
+  // JSON isteyen 302 yerine adresi gövdede alır.
+  const authorize = await telefon.get(yetki, { Accept: "application/json" });
+  assert.equal(authorize.status, 200);
+  const authRequestId = new URL(authorize.data.redirectTo).searchParams.get("auth");
+  assert.ok(authRequestId, "giriş gerekiyor: bekleyen istek kimliği döner");
+
+  // Mobil istemciye yönetim yetki alanı verilmez.
+  const admin = await telefon.get(yetki.replace("shop", "shop admin"), { Accept: "application/json" });
+  assert.ok(admin.status >= 400 || !String(admin.data.redirectTo ?? "").includes("code="), "admin kapsamı istenemez");
+
+  const sira = app.outbox.messages.length;
+  const parola = await telefon.post("/api/auth/sign-in", { email: "musteri@donanex.test", password: DEMO_PASSWORD, authRequestId });
+  assert.equal(parola.data.verificationRequired, true);
+  const dogrula = await telefon.post("/api/auth/sign-in/verify", {
+    challengeId: parola.data.challengeId,
+    code: await telefon.loginCode("musteri@donanex.test", sira),
+    authRequestId
+  });
+  assert.equal(dogrula.status, 200);
+  const donus = new URL(dogrula.data.redirectTo);
+  assert.equal(donus.protocol, "donanexmobil:");
+  assert.equal(donus.searchParams.get("state"), "m1");
+
+  delete telefon.cookies.dnx_rt;
+  const jeton = await telefon.form("/oauth/token", {
+    grant_type: "authorization_code",
+    code: donus.searchParams.get("code")!,
+    redirect_uri: "donanexmobil://giris",
+    client_id: "donanex-mobil",
+    code_verifier: verifier
+  });
+  assert.equal(jeton.status, 200);
+  assert.ok(jeton.data.access_token);
+  assert.ok(jeton.data.refresh_token, "mobilde yenileme jetonu gövdede döner");
+  assert.ok(!telefon.cookies.dnx_rt, "mobilde yenileme çerezi verilmez");
+
+  const yenile = await new Client(app.base).form("/oauth/token", {
+    grant_type: "refresh_token",
+    refresh_token: jeton.data.refresh_token,
+    client_id: "donanex-mobil"
+  });
+  assert.equal(yenile.status, 200);
+  assert.ok(yenile.data.refresh_token, "döndürülen yeni jeton da gövdede");
+  assert.notEqual(yenile.data.refresh_token, jeton.data.refresh_token);
+
+  // Mobilin yenileme jetonu web istemcisi adına kullanılamaz.
+  const capraz = await new Client(app.base).form("/oauth/token", {
+    grant_type: "refresh_token",
+    refresh_token: yenile.data.refresh_token,
+    client_id: "donanex-web"
+  });
+  assert.ok(capraz.status >= 400, "jeton istemciye bağlı");
+});
+
+test("misafir sepeti çerez yerine X-Sepet başlığıyla da taşınır", opts, async () => {
+  const product = await firstProduct(3);
+  const telefon = new Client(app.base);
+
+  const ekle = await telefon.post("/api/cart/items", { productId: product.id, quantity: 1 });
+  assert.equal(ekle.status, 201);
+  const sepet = ekle.headers.get("x-sepet");
+  assert.match(sepet ?? "", /^[0-9a-f-]{36}$/, "yeni sepet kimliği başlıkta döner");
+
+  delete telefon.cookies.dnx_cart;
+  const oku = await telefon.get("/api/cart", { "X-Sepet": sepet! });
+  assert.equal(oku.data.itemCount, 1, "başlıktaki kimlikle aynı sepet okunur");
+
+  delete telefon.cookies.dnx_cart;
+  const bozuk = await telefon.get("/api/cart", { "X-Sepet": "../../etc" });
+  assert.equal(bozuk.status, 200);
+  assert.equal(bozuk.data.itemCount ?? 0, 0, "bozuk kimlik yok sayılır");
+});
+
 /* ------------------------------------------------- misafir sepeti ve sipariş */
 
 test("misafir sepet açabilir, sepet sunucuda tutulur", opts, async () => {

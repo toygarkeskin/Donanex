@@ -11,7 +11,7 @@ import {
   RevokeTokenCommand,
   GetAuthorizationRequestQuery
 } from "../../../application/identity";
-import { SUPPORTED_SCOPES, GrantTypes } from "../../../domain/identity/OAuthClient";
+import { SUPPORTED_SCOPES, GrantTypes, MOBILE_CLIENT_ID } from "../../../domain/identity/OAuthClient";
 import { GetCurrentUserQuery } from "../../../application/identity";
 import { COOKIES, buildCookie, appendCookie } from "../support/cookies";
 import { authPolicy } from "../../../application/identity";
@@ -77,6 +77,15 @@ function endpoints({ commands, queries, services, config, limiters }: RouteConte
     const result = await commands.execute<AuthorizeResult>(
       new AuthorizeCommand({ params: req.query, ssoToken: req.cookies[COOKIES.SSO] || null })
     );
+    /*
+     * Telefon uygulaması 302'yi yakalayamıyor (fetch yönlendirmeyi kendisi
+     * izliyor). JSON isteyene aynı adres gövdede veriliyor; içerik Location
+     * başlığındakinin aynısı, yeni bir bilgi açılmıyor.
+     */
+    if (req.get("accept")?.includes("application/json")) {
+      res.json({ redirectTo: result.redirectTo });
+      return;
+    }
     res.redirect(302, result.redirectTo);
   });
 
@@ -101,8 +110,13 @@ function endpoints({ commands, queries, services, config, limiters }: RouteConte
         { ip: req.ip, userAgent: req.get("user-agent") }
       );
 
-      // Yenileme jetonu tarayıcıya çerezle verilir; gövdede dönmez.
-      if (tokens.refresh_token) {
+      /*
+       * Yenileme jetonu tarayıcıya çerezle verilir; gövdede dönmez.
+       * İstisna telefon uygulaması: çerez kavanozu yok, jetonu cihazın güvenli
+       * deposunda tutuyor. Bu noktaya gelinmişse kod/jeton zaten bu istemciye
+       * ait olduğu doğrulanmış demektir (ExchangeToken istemciyi eşleştiriyor).
+       */
+      if (tokens.refresh_token && params.client_id !== MOBILE_CLIENT_ID) {
         appendCookie(
           res,
           buildCookie(COOKIES.REFRESH, tokens.refresh_token, {
