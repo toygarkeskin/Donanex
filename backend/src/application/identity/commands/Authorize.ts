@@ -22,6 +22,8 @@ export interface AuthorizeParams {
   nonce?: unknown;
   code_challenge?: unknown;
   code_challenge_method?: unknown;
+  /** OIDC: "login" açık oturumu yok sayar, kimliği yeniden sorar. */
+  prompt?: unknown;
 }
 
 /** Giriş beklerken önbellekte saklanan istek. */
@@ -121,7 +123,15 @@ export class AuthorizeHandler implements Handler<AuthorizeCommand, AuthorizeResu
       codeChallenge: params.code_challenge
     };
 
-    const session = await this.resolveSession(ssoToken);
+    /*
+     * OIDC "prompt=login": açık oturum olsa da kimlik yeniden sorulur.
+     * Telefon uygulaması bunu her girişte istiyor: (1) misafir sepeti
+     * yalnızca parola/kod adımında hesaba taşınıyor, sessiz girişte sepet
+     * kayboluyordu; (2) uygulama aynı cihazdaki tarayıcı oturumunu
+     * devralmamalı.
+     */
+    const yenidenSor = typeof params.prompt === "string" && params.prompt.split(" ").includes("login");
+    const session = yenidenSor ? null : await this.resolveSession(ssoToken);
     if (session) {
       const code = await this.issueCode(request, session);
       return { outcome: "code", redirectTo: this.buildRedirect(redirectUri, { code, state: request.state }) };

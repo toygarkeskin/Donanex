@@ -815,6 +815,22 @@ test("giriş sayfasına yönlendirme göreli: PUBLIC_URL başka (ölü tünel) o
   assert.match(konum, /^\/giris\?auth=[0-9a-f-]{36}$/, "mutlak PUBLIC_URL değil, göreli adres");
 });
 
+test("prompt=login açık oturumu yok sayar ve kimliği yeniden sorar", opts, async () => {
+  const client = new Client(app.base);
+  assert.ok((await client.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+  assert.ok(client.cookies.dnx_sso, "tarayıcı oturumu açık");
+
+  const yol =
+    `/oauth/authorize?response_type=code&client_id=donanex-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+    `&scope=openid&state=p&code_challenge=${"c".repeat(43)}&code_challenge_method=S256`;
+
+  const sessiz = header(await client.get(yol), "location");
+  assert.match(sessiz, /[?&]code=/, "prompt yoksa açık oturumla kod doğrudan verilir");
+
+  const yeniden = header(await client.get(`${yol}&prompt=login`), "location");
+  assert.match(yeniden, /^\/giris\?auth=/, "prompt=login giriş ekranına gönderir");
+});
+
 test("authorize geçersiz istekleri reddeder", opts, async () => {
   const base = `/oauth/authorize?response_type=code&client_id=donanex-web&scope=openid&code_challenge_method=S256&code_challenge=${"a".repeat(43)}`;
 
