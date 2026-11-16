@@ -69,7 +69,14 @@ Demoyu nasıl göstereceğiniz: [docs/DEMO.md](docs/DEMO.md)
 varsa adetler toplanır.
 
 **Müşteri** — sipariş geçmişi, sipariş iptali, adres defteri, profil, parola değiştirme,
-parola sıfırlama, destek talepleri
+parola sıfırlama, destek talepleri, fotoğraflı ürün yorumu, ürün sorusu
+
+**Giriş** — parola ve ardından e-postaya gelen 6 haneli kod; "bu cihazı 30 gün hatırla"
+seçilirse o cihazda kod bir daha sorulmaz
+
+**Telefon uygulaması** — [Donanex Mobil](https://github.com/toygarkeskin/Donanex-Mobil)
+(Expo / React Native) aynı API'yle alışverişin tamamını yapar: ürünler, sepet, sipariş, ödeme,
+siparişlerim, bildirimler. Mağaza ve yönetim panelleri web'de kalır.
 
 **Mağaza Sahibi / Çalışanı** — kendi mağazasının panosu, ürün ekleme/düzenleme/arşivleme,
 **CSV ile toplu ürün aktarma** (önizlemeli, satır satır doğrulamalı), **panelden görsel yükleme**
@@ -108,7 +115,7 @@ kullanıcı ve rol yönetimi, tüm siparişler, tüm destek talepleri
 `domain`'e ve port sözleşmelerine bakar; somut altyapı (PostgreSQL, Redis, RabbitMQ, SMTP) yalnızca
 `bootstrap/container.js` içinde bağlanır.
 
-**CQRS:** 42 komut, 30 sorgu — toplam **72 kullanım senaryosu**, her biri kendi dosyasında.
+**CQRS:** 51 komut, 34 sorgu — toplam **85 kullanım senaryosu**, her biri kendi dosyasında.
 Komut handler'ı read model'e, sorgu handler'ı unit of work'e dokunamaz.
 
 Bu kuralların hiçbiri yalnızca belgede yazmaz: `tests/architecture` kuralı çiğneyen kodda kırılır.
@@ -161,7 +168,7 @@ docker compose -f docker-compose.test.yml down -v
 cd backend && npm run test:unit
 ```
 
-**120 test** — 52 entegrasyon, 58 birim, 10 mimari. Tek kullanımlık veritabanı kullanılır; gerçek
+**173 test** — 74 entegrasyon, 89 birim, 10 mimari. Tek kullanımlık veritabanı kullanılır; gerçek
 veriye, çalışan sisteme ve gerçek SMTP'ye dokunulmaz.
 
 Testler yalnızca "mutlu yol"u değil, güvenlik sınırlarını da kontrol eder: eş zamanlı sipariş,
