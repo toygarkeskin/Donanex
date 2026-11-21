@@ -678,3 +678,30 @@ geçmediğinde — tarayıcıda açık oturum varken yetkilendirme sessizce tama
 eklenen ürünler kayboluyordu. Sepet uçları artık oturum açık bir istekte misafir sepeti
 çerezini görünce sepeti kullanıcıya taşıyor (`AdoptGuestCart`) ve çerezi siliyor. Başka
 bir kullanıcıya bağlanmış sepet taşınmıyor; aynı sepet iki kez taşınmıyor (test var).
+
+## 45. Giriş sayfası geçmişe adım bırakmaz; süresi dolan istek işlemden önce yakalanır
+
+"Giriş yap" önce `/giris`'i açıyor, sayfa da `/oauth/authorize`'a gidiyordu. `/giris` geçmişte
+kalınca geri tuşu oraya dönüyor, sayfa akışı yeniden başlatıp kullanıcıyı tekrar ileri atıyordu;
+tarayıcı sayfayı geri/ileri önbelleğinden açınca da "Giriş ekranı hazırlanıyor…"da takılıyordu.
+Artık akış `location.replace` ile başlıyor (geri tuşu girişten önceki sayfaya gidiyor), önbellekten
+açılan giriş sayfası kendini yeniliyor, oturum açıkken giriş sayfasına dönülürse form gösterilmiyor.
+
+Bekleyen yetkilendirme isteği 15 dakika yaşıyor. Süre ancak oturum AÇILDIKTAN sonra fark ediliyordu:
+kayıtta hesap oluşmuş ama kullanıcı hata görmüş, tekrar deneyince "bu e-posta kayıtlı" denmişti.
+`/api/auth/sign-in`, `/sign-in/verify` ve `/register` artık isteği işlemden önce denetliyor;
+süresi dolmuşsa hiçbir şey yapılmadan 404 ve `details.reason = "auth_request_expired"` dönüyor.
+Web ve telefon bunu görünce yeni istek açıp aynı işlemi bir kez tekrarlıyor (web: `Accept:
+application/json` ile `/oauth/authorize`, adres çubuğu sessizce güncelleniyor). Kullanıcı formu
+baştan doldurmuyor.
+
+## 46. Markalar mağaza tarafından eklenebilir (bul ya da oluştur)
+
+Markalar yalnızca demo verisinden geliyordu. Listede olmayan markanın ürünü (ör. Kingston) markasız
+kalıyor, ürün sayfasında marka bağlantısı çıkmıyordu; ürün formu da vitrin listesini kullandığı
+için satışta ürünü olmayan marka seçilemiyordu. Kategorilerdeki çözüm (37) markalara da uygulandı:
+ürün formunda "Yeni marka ekle", CSV'de `marka` sütunu. Kısa ad addan türetiliyor; aynı kısa adla
+marka varsa yenisi açılmıyor. Kategoriden farkı: CSV'de bilinmeyen kategori içe aktarmayı
+durdururken bilinmeyen marka AÇILIYOR — kategori vitrinin iskeleti, yanlış yazılırsa ürün
+kaybolur; marka ise üreticinin adı. Mağazanın açtığı marka onaysız başlıyor; boş marka vitrine
+çıkmıyor.

@@ -42,6 +42,7 @@ watch(() => route.params.slug, yukle);
 
   <EmptyState
     v-else-if="bulunamadi"
+    baslik-etiketi="h1"
     title="Marka bulunamadı"
     description="Aradığınız marka kaldırılmış olabilir."
     icon="etiket"

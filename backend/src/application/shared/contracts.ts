@@ -172,6 +172,11 @@ export interface CategoryRepository {
   findBySlug(slug: string): Promise<Row | null>;
 }
 
+export interface BrandRepository {
+  create(input: { id: string; name: string; slug: string }): Promise<Row | null>;
+  findBySlug(slug: string): Promise<Row | null>;
+}
+
 export interface CartRepository {
   findById(id: string | null): Promise<Row | null>;
   findByUser(userId: string): Promise<Row | null>;
@@ -360,6 +365,7 @@ export interface Repositories {
   readonly stores: StoreRepository;
   readonly products: ProductRepository;
   readonly categories: CategoryRepository;
+  readonly brands: BrandRepository;
   readonly carts: CartRepository;
   readonly orders: OrderRepository;
   readonly support: SupportRepository;
@@ -389,7 +395,8 @@ export interface CatalogReadModel {
   listCategories(): Promise<Row[]>;
   listStoreProducts(storeId: string, filters: ListFilters): Promise<Row>;
   getProductForStore(storeId: string, productId: string): Promise<Row | null>;
-  listBrands(): Promise<Row[]>;
+  /** `tumu`: ürünü olmayan markalar da (ürün formu için); yoksa yalnız vitrindekiler. */
+  listBrands(options?: { tumu?: boolean }): Promise<Row[]>;
   getBrandBySlug(slug: string): Promise<Row | null>;
   listBrandStores(brandId: string): Promise<Row[]>;
   /** Verilen ürünlerin kategori kısa adları (tekrarsız). */

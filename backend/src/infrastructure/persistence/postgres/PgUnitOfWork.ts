@@ -12,6 +12,7 @@ import { PgLoginChallengeRepository } from "./repositories/PgLoginChallengeRepos
 import { PgStoreRepository } from "./repositories/PgStoreRepository";
 import { PgProductRepository } from "./repositories/PgProductRepository";
 import { PgCategoryRepository } from "./repositories/PgCategoryRepository";
+import { PgBrandRepository } from "./repositories/PgBrandRepository";
 import { PgCartRepository } from "./repositories/PgCartRepository";
 import { PgOrderRepository } from "./repositories/PgOrderRepository";
 import { PgSupportRepository } from "./repositories/PgSupportRepository";
@@ -58,6 +59,7 @@ export class PgUnitOfWork implements UnitOfWork {
       stores: new PgStoreRepository(client),
       products: new PgProductRepository(client),
       categories: new PgCategoryRepository(client),
+      brands: new PgBrandRepository(client),
       carts: new PgCartRepository(client),
       orders: new PgOrderRepository(client),
       support: new PgSupportRepository(client),

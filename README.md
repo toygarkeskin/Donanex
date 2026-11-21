@@ -115,7 +115,7 @@ kullanıcı ve rol yönetimi, tüm siparişler, tüm destek talepleri
 `domain`'e ve port sözleşmelerine bakar; somut altyapı (PostgreSQL, Redis, RabbitMQ, SMTP) yalnızca
 `bootstrap/container.js` içinde bağlanır.
 
-**CQRS:** 51 komut, 34 sorgu — toplam **85 kullanım senaryosu**, her biri kendi dosyasında.
+**CQRS:** 52 komut, 34 sorgu — toplam **86 kullanım senaryosu**, her biri kendi dosyasında.
 Komut handler'ı read model'e, sorgu handler'ı unit of work'e dokunamaz.
 
 Bu kuralların hiçbiri yalnızca belgede yazmaz: `tests/architecture` kuralı çiğneyen kodda kırılır.
@@ -168,7 +168,7 @@ docker compose -f docker-compose.test.yml down -v
 cd backend && npm run test:unit
 ```
 
-**173 test** — 74 entegrasyon, 89 birim, 10 mimari. Tek kullanımlık veritabanı kullanılır; gerçek
+**175 test** — 76 entegrasyon, 89 birim, 10 mimari. Tek kullanımlık veritabanı kullanılır; gerçek
 veriye, çalışan sisteme ve gerçek SMTP'ye dokunulmaz.
 
 Testler yalnızca "mutlu yol"u değil, güvenlik sınırlarını da kontrol eder: eş zamanlı sipariş,

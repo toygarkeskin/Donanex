@@ -659,6 +659,56 @@ test("hatalı giriş aynı mesajı döndürür ve oturum açmaz", opts, async ()
   assert.equal(wrongPassword.reason, unknownUser.reason, "kayıtlı e-posta ele verilmez");
 });
 
+test("süresi dolmuş giriş isteği işlemden ÖNCE reddedilir: hesap açılmaz, kod harcanmaz", opts, async () => {
+  const olmayan = crypto.randomUUID();
+
+  // Kayıt: hesap oluşmuyor, oturum çerezi yazılmıyor; aynı e-postayla tekrar denemek "kayıtlı" demiyor.
+  const email = `suresi${Date.now()}@example.com`;
+  const govde = { fullName: "Ali Veli", email, password: "GucluParola1" };
+  const kayitci = new Client(app.base);
+  const reddedilen = await kayitci.post("/api/auth/register", { ...govde, authRequestId: olmayan });
+  assert.equal(reddedilen.status, 404);
+  assert.equal(reddedilen.data.details?.reason, "auth_request_expired", "istemci nedeni tanıyabilmeli");
+  assert.equal(kayitci.cookies.dnx_sso, undefined, "oturum açılmadı");
+  assert.equal((await anon.post("/api/auth/register", govde)).status, 201, "hesap ilk denemede oluşmamıştı");
+
+  // Parola adımı: e-postaya kod gitmiyor.
+  const sira = Client.mailbox?.messages.length ?? 0;
+  const parola = await new Client(app.base).post("/api/auth/sign-in", {
+    email: "musteri@donanex.test",
+    password: DEMO_PASSWORD,
+    authRequestId: olmayan
+  });
+  assert.equal(parola.status, 404);
+  assert.equal(parola.data.details?.reason, "auth_request_expired");
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(
+    Client.mailbox?.messages.slice(sira).filter((m) => m.to === "musteri@donanex.test").length,
+    0,
+    "kod e-postası gönderilmedi"
+  );
+
+  // Kod adımı: süresi dolmuş istekle reddedilen kod harcanmıyor, yeni istekle aynı kod geçiyor.
+  const istemci = new Client(app.base);
+  const authorize = await istemci.get(
+    `/oauth/authorize?response_type=code&client_id=donanex-web&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&scope=openid&state=s&code_challenge=${"c".repeat(43)}&code_challenge_method=S256`
+  );
+  const authRequestId = new URL(header(authorize, "location"), app.base).searchParams.get("auth");
+  const kodSira = Client.mailbox?.messages.length ?? 0;
+  const adim = await istemci.post("/api/auth/sign-in", { email: "ahmet@donanex.test", password: DEMO_PASSWORD, authRequestId });
+  assert.equal(adim.data.verificationRequired, true);
+  const kod = await istemci.loginCode("ahmet@donanex.test", kodSira);
+
+  const eski = await istemci.post("/api/auth/sign-in/verify", { challengeId: adim.data.challengeId, code: kod, authRequestId: olmayan });
+  assert.equal(eski.status, 404);
+  assert.equal(istemci.cookies.dnx_sso, undefined);
+
+  const yeni = await istemci.post("/api/auth/sign-in/verify", { challengeId: adim.data.challengeId, code: kod, authRequestId });
+  assert.equal(yeni.status, 200, "kod ilk denemede harcanmamıştı");
+  assert.match(yeni.data.redirectTo, /[?&]code=/);
+});
+
 /* ----------------------------------------------------------- OAuth 2.1 */
 
 test("yetkilendirme kodu akışı PKCE ile tamamlanır", opts, async () => {
@@ -2285,6 +2335,74 @@ test("ürün formundan yeni kategori: bul ya da oluştur", opts, async () => {
   assert.ok((await musteri.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
   assert.equal((await musteri.post(`/api/stores/${storeId}/categories`, { name: "Sahte" })).status, 403);
   assert.equal((await magazaci.post(`/api/stores/${storeId}/categories`, { name: "" })).status, 400);
+});
+
+test("ürün formundan yeni marka: bul ya da oluştur, ürünle marka sayfasına çıkar", opts, async () => {
+  const { magazaci, storeId } = await magazaciGir();
+  const ad = `Marka${Date.now()}`;
+
+  const ilk = await magazaci.post(`/api/stores/${storeId}/brands`, { name: ad });
+  assert.equal(ilk.status, 201, JSON.stringify(ilk.data));
+  assert.equal(ilk.data.created, true);
+  assert.equal(ilk.data.brand.verified, false, "mağazanın açtığı marka onaysız başlar");
+
+  // Aynı ad, farklı büyük/küçük harf: yeni marka AÇILMAZ, mevcut döner.
+  const ikinci = await magazaci.post(`/api/stores/${storeId}/brands`, { name: ad.toUpperCase() });
+  assert.equal(ikinci.status, 200);
+  assert.equal(ikinci.data.brand.id, ilk.data.brand.id);
+
+  // Ürünü olmayan marka vitrinde yok, ürün formunun listesinde var.
+  const vitrin = (await anon.get("/api/brands")).data.items as Row[];
+  assert.ok(!vitrin.some((m) => m.id === ilk.data.brand.id), "boş marka vitrine çıkmaz");
+  const form = (await anon.get("/api/brands?tumu=1")).data.items as Row[];
+  assert.ok(form.some((m) => m.id === ilk.data.brand.id), "ürün formu bütün markaları görür");
+
+  // Bu markayla yayınlanan ürün marka sayfasında ve vitrin listesinde görünür.
+  const urun = await magazaci.post(`/api/stores/${storeId}/products`, {
+    name: `${ad} Bellek`,
+    description: "Marka testi.",
+    price: "999.00",
+    stock: 3,
+    imageUrl: "/images/urunler/ssd.png",
+    status: "active",
+    brandId: ilk.data.brand.id
+  });
+  assert.equal(urun.status, 201, JSON.stringify(urun.data));
+  const sayfa = await anon.get(`/api/brands/${ilk.data.brand.slug}`);
+  assert.equal(sayfa.status, 200);
+  assert.equal(sayfa.data.productCount, 1);
+  assert.ok((await anon.get("/api/brands")).data.items.some((m: Row) => m.id === ilk.data.brand.id));
+
+  // CSV ile içe aktarma: var olan marka (farklı yazımla) kullanılır, olmayan açılır, boş olan markasız kalır.
+  const yeniAd = `Csv${Date.now()}`;
+  const aktar = await magazaci.post(`/api/stores/${storeId}/products/bulk`, {
+    products: [
+      { name: `${ad} CSV 1`, price: "10.00", brand: ad.toLowerCase() },
+      { name: `${ad} CSV 2`, price: "10.00", brand: yeniAd },
+      { name: `${ad} CSV 3`, price: "10.00", brand: yeniAd.toUpperCase() },
+      { name: `${ad} CSV 4`, price: "10.00" }
+    ]
+  });
+  assert.equal(aktar.status, 201, JSON.stringify(aktar.data));
+  const tumMarkalar = (await anon.get("/api/brands?tumu=1")).data.items as Row[];
+  assert.equal(tumMarkalar.filter((m) => m.slug === ilk.data.brand.slug).length, 1, "var olan marka yeniden açılmadı");
+  assert.equal(
+    tumMarkalar.filter((m) => String(m.name).toLowerCase() === yeniAd.toLowerCase()).length,
+    1,
+    "yeni marka bir kez açıldı"
+  );
+  const panel = (await magazaci.get(`/api/stores/${storeId}/products?pageSize=100&q=${encodeURIComponent(`${ad} CSV`)}`))
+    .data.items as Row[];
+  const markasi = (no: number) => panel.find((u) => u.name === `${ad} CSV ${no}`)?.brandId ?? null;
+  assert.equal(markasi(1), ilk.data.brand.id);
+  assert.ok(markasi(2) && markasi(2) === markasi(3), "aynı yeni marka iki satırda tek kayıt");
+  assert.equal(markasi(4), null, "marka boşsa ürün markasız");
+
+  // Müşteri marka açamaz; boş ad reddedilir.
+  const musteri = new Client(app.base);
+  assert.ok((await musteri.signIn("musteri@donanex.test", DEMO_PASSWORD)).ok);
+  assert.equal((await musteri.post(`/api/stores/${storeId}/brands`, { name: "Sahte" })).status, 403);
+  assert.equal((await magazaci.post(`/api/stores/${storeId}/brands`, { name: "  " })).status, 400);
 });
 
 test("öneriler tamamlayıcı: mouse alana mouse önerilmez", opts, async () => {

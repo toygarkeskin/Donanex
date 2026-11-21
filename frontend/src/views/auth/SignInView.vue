@@ -2,12 +2,20 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { api } from "../../lib/api";
-import { startLogin, pendingAuthRequestId } from "../../lib/oauth";
+import {
+  startLogin,
+  pendingAuthRequestId,
+  renewAuthRequest,
+  isAuthRequestExpired,
+  reloadWhenRestoredFromCache
+} from "../../lib/oauth";
+import { useAuthStore } from "../../stores/auth";
 import { useCartStore } from "../../stores/cart";
 import FormField from "../../components/FormField.vue";
 import AlertBox from "../../components/AlertBox.vue";
 
 const route = useRoute();
+const auth = useAuthStore();
 const cart = useCartStore();
 
 const form = reactive({ email: "", password: "" });
@@ -37,16 +45,46 @@ const kodTam = computed(() => /^\d{6}$/.test(kod.value.replace(/\s+/g, "")));
  * kodu akışıdır: sunucu bekleyen isteği tamamlar ve dönülecek adresi verir.
  *
  * Doğrudan /giris adresine gelindiyse (bekleyen istek yoksa) önce
- * /oauth/authorize başlatılır.
+ * /oauth/authorize başlatılır — adres DEĞİŞTİRİLEREK (replace): `/giris`
+ * geçmişte kalırsa geri tuşu buraya döner ve kullanıcı tekrar ileri atılır.
+ *
+ * Oturum zaten açıksa (girişten sonra geri tuşuyla dönüldü) form
+ * gösterilmez; kullanıcı gideceği yere gönderilir.
  */
+const kaldir = reloadWhenRestoredFromCache();
+
 onMounted(async () => {
+  if (auth.isSignedIn) {
+    window.location.replace(typeof route.query.donus === "string" ? route.query.donus : "/");
+    return;
+  }
   authRequestId.value = pendingAuthRequestId();
   if (!authRequestId.value) {
-    await startLogin({ returnTo: route.query.donus || "/" });
+    await startLogin({ returnTo: route.query.donus || "/", replace: true });
   }
 });
 
-onBeforeUnmount(() => clearInterval(sayac));
+onBeforeUnmount(() => {
+  clearInterval(sayac);
+  kaldir();
+});
+
+/**
+ * İsteği gönderir; bekleyen giriş isteğinin süresi dolmuşsa (sayfa 15
+ * dakikadan uzun açık kaldı) yenisini açıp BİR KEZ tekrarlar. Sunucu süreyi
+ * işlemden önce denetliyor: ilk deneme hiçbir şey değiştirmemiş oluyor.
+ */
+async function gonder(yol, govde) {
+  try {
+    return await api.post(yol, { ...govde, authRequestId: authRequestId.value });
+  } catch (hata) {
+    if (!isAuthRequestExpired(hata)) throw hata;
+    const yeni = await renewAuthRequest();
+    if (!yeni) return null; // açık oturum bulundu, sayfa yönlendiriliyor
+    authRequestId.value = yeni;
+    return api.post(yol, { ...govde, authRequestId: yeni });
+  }
+}
 
 function beklemeBaslat(saniye) {
   clearInterval(sayac);
@@ -68,11 +106,8 @@ async function submit() {
   info.value = "";
   submitting.value = true;
   try {
-    const result = await api.post("/auth/sign-in", {
-      email: form.email,
-      password: form.password,
-      authRequestId: authRequestId.value
-    });
+    const result = await gonder("/auth/sign-in", { email: form.email, password: form.password });
+    if (!result) return;
     if (result.verificationRequired) {
       challengeId.value = result.challengeId;
       maskedEmail.value = result.maskedEmail;
@@ -97,13 +132,12 @@ async function dogrula() {
   info.value = "";
   submitting.value = true;
   try {
-    const result = await api.post("/auth/sign-in/verify", {
+    const result = await gonder("/auth/sign-in/verify", {
       challengeId: challengeId.value,
       code: kod.value,
-      rememberDevice: hatirla.value,
-      authRequestId: authRequestId.value
+      rememberDevice: hatirla.value
     });
-    bitir(result);
+    if (result) bitir(result);
   } catch (requestError) {
     submitting.value = false;
     // Kod öldüyse (süre, deneme sınırı) parola adımına dönülüyor; mesaj kalıyor.

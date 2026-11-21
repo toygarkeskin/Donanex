@@ -39,25 +39,36 @@ export class PgNotificationReadModel implements NotificationReadModel {
    * Okunmamış sayısı listeyle BİRLİKTE dönüyor (ayrı istek değil): zil hem
    * sayıyı hem listeyi aynı anda gösteriyor, iki istek atmak bir ekranda iki
    * farklı anın verisini yan yana koymak olurdu.
+   *
+   * Sayı ve liste TEK SORGUDA (tek anlık görüntü). Önceden iki ayrı sorguydu:
+   * bildirimi işçi tam ikisinin arasında yazınca liste yeni bildirimi
+   * gösteriyor, sayaç onu saymıyordu — zil listedekinden bir eksik okunmamış
+   * gösteriyordu (entegrasyon testi ara sıra bu yüzden düşüyordu).
+   * LEFT JOIN LATERAL: sayfa boş olsa da sayım satırı dönüyor.
    */
   async list(target: NotificationTarget, paging: ListFilters): Promise<Row> {
-    const params = [target.scope, target.scopeId];
-
-    const sayim = await this.db.query(
-      `SELECT COUNT(*)::int AS total,
-              COUNT(*) FILTER (WHERE n.read_at IS NULL)::int AS unread
-         FROM notifications n WHERE ${ALICI}`,
-      params
-    );
     const { rows } = await this.db.query(
-      `SELECT ${BILDIRIM} FROM notifications n
-        WHERE ${ALICI}
-        ORDER BY n.created_at DESC, n.id
-        LIMIT $3 OFFSET $4`,
-      [...params, paging.limit, paging.offset]
+      `WITH sayim AS (
+         SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE n.read_at IS NULL)::int AS unread
+           FROM notifications n WHERE ${ALICI}
+       )
+       SELECT sayim.total AS "__total", sayim.unread AS "__unread", liste.*
+         FROM sayim
+         LEFT JOIN LATERAL (
+           SELECT ${BILDIRIM} FROM notifications n
+            WHERE ${ALICI}
+            ORDER BY n.created_at DESC, n.id
+            LIMIT $3 OFFSET $4
+         ) liste ON TRUE`,
+      [target.scope, target.scopeId, paging.limit, paging.offset]
     );
 
-    return { ...paginate(rows, sayim.rows[0].total, paging), unread: sayim.rows[0].unread };
+    const { __total: total, __unread: unread } = rows[0];
+    const bildirimler = rows
+      .filter((satir) => satir.id !== null)
+      .map(({ __total, __unread, ...bildirim }) => bildirim);
+    return { ...paginate(bildirimler, total, paging), unread };
   }
 
   async countUnread(target: NotificationTarget): Promise<number> {

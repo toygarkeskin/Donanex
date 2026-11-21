@@ -169,7 +169,16 @@ export class PgCatalogReadModel implements CatalogReadModel {
    * görünen ürünleri kapsar (aktif ürün, aktif mağaza) — taslak ürünler
    * marka sayfasında da görünmemeli.
    */
-  async listBrands(): Promise<Row[]> {
+  async listBrands({ tumu = false }: { tumu?: boolean } = {}): Promise<Row[]> {
+    /*
+     * Ürün formu BÜTÜN markaları ister: satışta ürünü olmayan bir marka
+     * (ör. tek ürünü taslakta) formda seçilemiyordu, çünkü form da bu vitrin
+     * listesini kullanıyordu.
+     */
+    if (tumu) {
+      const { rows } = await this.db.query("SELECT id, slug, name, verified FROM brands ORDER BY name");
+      return rows;
+    }
     const { rows } = await this.db.query(
       `SELECT b.id, b.slug, b.name, b.description, b.logo_url AS "logoUrl", b.verified,
               COUNT(p.id)::int AS "productCount"

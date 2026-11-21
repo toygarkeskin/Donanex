@@ -46,8 +46,9 @@ export function catalogRoutes({ queries }: Pick<RouteContext, "queries">): Route
     res.json({ items: await queries.ask(new ListCategoriesQuery()) });
   });
 
-  router.get("/brands", async (_req, res) => {
-    res.json({ items: await queries.ask(new ListBrandsQuery()) });
+  // ?tumu=1: ürün formu için ürünü olmayan markalar da.
+  router.get("/brands", async (req, res) => {
+    res.json({ items: await queries.ask(new ListBrandsQuery({ tumu: req.query.tumu === "1" })) });
   });
 
   router.get("/brands/:slug", async (req, res) => {

@@ -283,6 +283,16 @@ router.beforeEach(async (to) => {
     }
   }
 
+  /*
+   * Kişinin yetkili olmadığı bir mağazanın paneli (adres çubuğuna başka
+   * mağazanın adı yazıldı, eski bir bağlantı). Sunucu zaten 403 veriyor ama
+   * sayfa boş açılıyor, kenar menüde kişinin kendi mağazası görünüyordu.
+   * Kendi paneline gönderiliyor. Sistem yöneticisi her mağazayı görebilir.
+   */
+  if (to.meta.panel === "store" && anahtar && !auth.isSystemAdmin && !auth.stores.some((store) => store.slug === anahtar)) {
+    return { name: "store-panel", replace: true };
+  }
+
   return true;
 });
 

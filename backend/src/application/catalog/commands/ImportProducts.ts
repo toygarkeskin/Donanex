@@ -4,6 +4,7 @@ import { Command, type Handler } from "../../shared/cqrs/Message";
 import { ValidationError, ConflictError, NotFoundError } from "../../../domain/shared/errors";
 import { requireUuid, slugify } from "../../../domain/shared/guards";
 import { Product, type ImportRow } from "../../../domain/catalog/Product";
+import { createBrand } from "../../../domain/catalog/Brand";
 import { StoreStatus } from "../../../domain/stores/Store";
 import { assertCan, type UseCaseContext } from "../../shared/authorize";
 import type { Cache, IdGenerator, Row, UnitOfWork } from "../../shared/contracts";
@@ -97,12 +98,43 @@ export class ImportProductsHandler implements Handler<ImportProductsCommand, Imp
         return kategori.id;
       };
 
+      /**
+       * Marka adını kimliğe çevirir; katalogda yoksa AÇAR.
+       *
+       * Kategoriden farklı davranıyor, bilerek: kategori vitrinin iskeleti
+       * (filtreler, ana sayfa), yanlış yazılmış bir kategori ürünü
+       * kaybettirir. Marka ise üreticinin adı; mağaza "Kingston" yazdıysa
+       * Kingston'ı kastediyor. Ürün formundaki "yeni marka ekle" ile aynı
+       * kural: aynı kısa adla marka varsa o kullanılır ("KINGSTON" =
+       * "Kingston"), yoksa onaysız yeni marka açılır. Boşsa ürün markasız.
+       */
+      const markaKimlikleri = new Map<string, string>();
+      const markaKimligi = async (deger: unknown, satirNo: number): Promise<string | null> => {
+        if (typeof deger !== "string" || !deger.trim()) return null;
+        let marka;
+        try {
+          marka = createBrand({ name: deger.trim() });
+        } catch (error) {
+          throw new ValidationError(`${satirNo}. satır: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        const bilinen = markaKimlikleri.get(marka.slug);
+        if (bilinen) return bilinen;
+
+        const kayit =
+          (await repos.brands.findBySlug(marka.slug)) ??
+          (await repos.brands.create({ id: this.ids.uuid(), ...marka })) ??
+          (await repos.brands.findBySlug(marka.slug));
+        markaKimlikleri.set(marka.slug, kayit!.id as string);
+        return kayit!.id as string;
+      };
+
       const prepared: Row[] = [];
       for (const [index, product] of products.entries()) {
         prepared.push({
           ...product,
           id: this.ids.uuid(),
           categoryId: await kategoriKimligi(rows[index]?.category, index + 2),
+          brandId: await markaKimligi(rows[index]?.brand, index + 2),
           slug: await repos.products.reserveSlug(storeId, product.slug)
         });
       }

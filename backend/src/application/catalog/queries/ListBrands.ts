@@ -13,7 +13,15 @@ import type { CatalogReadModel, Cache, Row } from "../../shared/contracts";
  * açılışında sorgulanması gereksizdir. Katalog değiştiğinde "catalog:"
  * ön ekiyle birlikte silinir.
  */
-export class ListBrandsQuery extends Query {}
+export class ListBrandsQuery extends Query {
+  /** Ürün formu için: ürünü olmayan markalar da. */
+  readonly tumu: boolean;
+
+  constructor(input?: { tumu?: boolean }) {
+    super();
+    this.tumu = input?.tumu === true;
+  }
+}
 
 export class ListBrandsHandler implements Handler<ListBrandsQuery, Row[]> {
   private readonly readModel: CatalogReadModel;
@@ -24,12 +32,12 @@ export class ListBrandsHandler implements Handler<ListBrandsQuery, Row[]> {
     this.cache = cache;
   }
 
-  async handle(): Promise<Row[]> {
-    const key = "catalog:brands";
+  async handle({ tumu }: ListBrandsQuery): Promise<Row[]> {
+    const key = tumu ? "catalog:brands:tumu" : "catalog:brands";
     const cached = await this.cache.get<Row[]>(key);
     if (cached) return cached;
 
-    const brands = await this.readModel.listBrands();
+    const brands = await this.readModel.listBrands({ tumu });
     await this.cache.set(key, brands, 300);
     return brands;
   }

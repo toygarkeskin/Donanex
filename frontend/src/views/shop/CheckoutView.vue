@@ -66,7 +66,9 @@ async function submit() {
       `donanex.order.${result.orderId}`,
       JSON.stringify({ trackingCode: result.trackingCode, orderNumber: result.orderNumber })
     );
-    router.push({ name: "payment", params: { orderId: result.orderId } });
+    // replace: sipariş oluştu, sepet boşaldı. Geri tuşu boş "Siparişi tamamla"
+    // formuna değil, ondan önceki sayfaya (sepet) dönmeli.
+    router.replace({ name: "payment", params: { orderId: result.orderId } });
   } catch (requestError) {
     error.value = requestError.message;
     toast.error(requestError.message);

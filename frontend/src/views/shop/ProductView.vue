@@ -122,6 +122,7 @@ watch(() => route.fullPath, load);
 
   <EmptyState
     v-else-if="notFound"
+    baslik-etiketi="h1"
     title="Ürün bulunamadı"
     description="Ürün kaldırılmış ya da satıcı mağazasını kapatmış olabilir."
     icon="🔍"

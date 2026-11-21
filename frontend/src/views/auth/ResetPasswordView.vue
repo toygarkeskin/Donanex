@@ -33,7 +33,8 @@ async function submit() {
   try {
     await api.post("/auth/password/reset", { token: token.value, password: form.password });
     done.value = true;
-    setTimeout(() => router.push({ name: "sign-in" }), 2000);
+    // replace: bağlantı kullanıldı; geri tuşu tek kullanımlık formu yeniden açmamalı.
+    setTimeout(() => router.replace({ name: "sign-in" }), 2000);
   } catch (requestError) {
     error.value = requestError.message;
   } finally {

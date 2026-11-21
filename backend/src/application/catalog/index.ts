@@ -10,6 +10,7 @@ import * as ImportProducts from "./commands/ImportProducts";
 import * as UploadProductImage from "./commands/UploadProductImage";
 import * as CreateCategory from "./commands/CreateCategory";
 import * as AddStoreCategory from "./commands/AddStoreCategory";
+import * as AddStoreBrand from "./commands/AddStoreBrand";
 import * as ListProducts from "./queries/ListProducts";
 import * as GetProduct from "./queries/GetProduct";
 import * as ListCategories from "./queries/ListCategories";
@@ -34,6 +35,7 @@ export = defineContext({
     UploadProductImage,
     CreateCategory,
     AddStoreCategory,
+    AddStoreBrand,
   },
   queries: {
     ListProducts,

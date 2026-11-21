@@ -122,7 +122,9 @@ async function gonder() {
       imageUrl: s.imageUrl || undefined,
       // Boş bırakılabilir; yazılmışsa sunucu tanımadığı kategoride içe
       // aktarmayı durdurur, ürün sessizce kategorisiz kalmaz.
-      category: s.category || undefined
+      category: s.category || undefined,
+      // Katalogda yoksa sunucu markayı açar (ürün formundaki "yeni marka" gibi).
+      brand: s.brand || undefined
     }));
 
     const sonuc = await api.post(`/stores/${storeId.value}/products/bulk`, { products: yuk });
@@ -151,13 +153,17 @@ async function gonder() {
       <p class="text-sm text-ink-600">
         İlk satır başlık olmalı. Zorunlu sütunlar: <strong>ad</strong> ve <strong>fiyat</strong>.
         İsteğe bağlı: <strong>stok</strong>, <strong>stok kodu</strong>, <strong>kategori</strong>,
-        <strong>aciklama</strong>, <strong>gorsel</strong>. Ayraç olarak noktalı virgül, virgül ya da
+        <strong>marka</strong>, <strong>aciklama</strong>, <strong>gorsel</strong>. Ayraç olarak noktalı virgül, virgül ya da
         sekme kullanılabilir; fiyatta hem <code>1299,90</code> hem <code>1299.90</code> yazımı okunur.
       </p>
       <p class="mt-2 text-sm text-ink-600">
         Kategori sütununa katalogdaki kategori adını yazın (örneğin <code>Klavye</code>). Boş
         bırakabilirsiniz; ama yazdığınız kategori katalogda yoksa içe aktarma durur ve hiçbir ürün
         eklenmez — ürünün sessizce kategorisiz kalıp filtrelerde kaybolmaması için.
+      </p>
+      <p class="mt-2 text-sm text-ink-600">
+        Marka sütununa üreticinin adını yazın (örneğin <code>Kingston</code>). Katalogda yoksa yeni marka
+        olarak eklenir; büyük/küçük harf farkı yeni marka açmaz. Boş bırakılan ürün markasız kalır.
       </p>
       <p class="mt-2 text-sm text-ink-600">
         Aktarılan ürünler <strong>taslak</strong> olarak eklenir — kontrol edip yayına almanız gerekir.
@@ -209,6 +215,7 @@ async function gonder() {
               <th>Stok</th>
               <th>Stok kodu</th>
               <th>Kategori</th>
+              <th>Marka</th>
               <th>Durum</th>
             </tr>
           </thead>
@@ -220,6 +227,7 @@ async function gonder() {
               <td>{{ satir.stock || "0" }}</td>
               <td class="text-ink-500">{{ satir.sku || "—" }}</td>
               <td class="text-ink-500">{{ satir.category || "—" }}</td>
+              <td class="text-ink-500">{{ satir.brand || "—" }}</td>
               <td>
                 <span v-if="satir.hata" class="text-xs font-medium text-red-600">{{ satir.hata }}</span>
                 <span v-else class="text-xs font-medium text-green-600">Hazır</span>

@@ -14,6 +14,12 @@ export const ID_TOKEN_TTL_MS = 15 * MINUTE;
 /** Tarayıcıdaki tekil oturum (SSO): yeniden giriş istemeden jeton tazelemeye yarar. */
 export const SSO_SESSION_TTL_MS = 14 * DAY;
 export const AUTHORIZATION_CODE_TTL_MS = 2 * MINUTE;
+/**
+ * Bekleyen /oauth/authorize isteğinin süresi dolunca hata ayrıntısına yazılan
+ * neden. İstemci bunu görünce yeni bir istek açıp işlemi tekrarlar; kullanıcı
+ * formu baştan doldurmaz.
+ */
+export const AUTH_REQUEST_EXPIRED = "auth_request_expired";
 export const PASSWORD_RESET_TTL_MS = 30 * MINUTE;
 export const EMAIL_VERIFICATION_TTL_MS = 3 * DAY;
 /** Girişteki e-posta kodu: kısa ömürlü ve sınırlı deneme. */

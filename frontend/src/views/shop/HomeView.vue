@@ -50,6 +50,8 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-8">
+    <!-- Sayfanın ana başlığı (ekran okuyucu ve arama motoru için); görünen başlık slider'da. -->
+    <h1 class="sr-only">Donanex — çok satıcılı teknoloji mağazası</h1>
     <!--
       Tanıtım şeridi bilinçli olarak alçak tutuluyor: ekranın üst yarısını
       metin değil ÜRÜNLER doldurmalı. Önceden bu blok tek başına ~380px

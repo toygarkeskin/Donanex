@@ -13,7 +13,8 @@ import {
   CompleteAuthorizationCommand,
   RequestPasswordResetCommand,
   ResetPasswordCommand,
-  VerifyEmailCommand
+  VerifyEmailCommand,
+  GetAuthorizationRequestQuery
 } from "../../../application/identity";
 import { COOKIES, buildCookie, clearCookie, appendCookie } from "../support/cookies";
 
@@ -25,8 +26,26 @@ import { COOKIES, buildCookie, clearCookie, appendCookie } from "../support/cook
  * akışıdır. Giriş başarılı olunca bekleyen /oauth/authorize isteği
  * tamamlanır ve istemciye dönülecek adres verilir.
  */
-export function authRoutes({ commands, config, limiters }: Pick<RouteContext, "commands" | "config" | "limiters">): Router {
+export function authRoutes({
+  commands,
+  queries,
+  config,
+  limiters
+}: Pick<RouteContext, "commands" | "queries" | "config" | "limiters">): Router {
   const router = Router();
+
+  /*
+   * Bekleyen yetkilendirme isteği hâlâ geçerli mi? İŞLEMDEN ÖNCE bakılıyor.
+   * Önceden süre ancak oturum açıldıktan sonra fark ediliyordu: hesap
+   * oluşmuş, kod harcanmış, oturum çerezi yazılmış ama kullanıcı hata
+   * görüyordu; kayıtta tekrar denemek "bu e-posta kayıtlı" diyordu. Süresi
+   * dolmuşsa hiçbir şey yapılmadan reddediliyor (ayrıntıda neden yazıyor),
+   * istemci yeni istek açıp aynı işlemi tekrarlıyor.
+   */
+  const istegiDenetle = async (req: Request) => {
+    const authRequestId = req.body?.authRequestId;
+    if (authRequestId) await queries.ask(new GetAuthorizationRequestQuery({ authRequestId }));
+  };
 
   const setSsoCookie = (res: Response, session: { token: string; maxAgeSeconds: number }) =>
     appendCookie(
@@ -64,6 +83,7 @@ export function authRoutes({ commands, config, limiters }: Pick<RouteContext, "c
   }
 
   router.post("/register", limiters.register, async (req, res) => {
+    await istegiDenetle(req);
     const result = await commands.execute<SignInResult>(
       new RegisterUserCommand({ data: req.body, guestCartId: req.guestCartId }),
       req.context()
@@ -78,6 +98,7 @@ export function authRoutes({ commands, config, limiters }: Pick<RouteContext, "c
    * kod adımı atlanır, yanıt eskisi gibi oturumla döner.
    */
   router.post("/sign-in", limiters.signIn, async (req, res) => {
+    await istegiDenetle(req);
     const result = await commands.execute<SignInStepResult>(
       new SignInCommand({
         email: req.body?.email,
@@ -99,6 +120,7 @@ export function authRoutes({ commands, config, limiters }: Pick<RouteContext, "c
   });
 
   router.post("/sign-in/verify", limiters.signIn, async (req, res) => {
+    await istegiDenetle(req);
     const result = await commands.execute<VerifySignInCodeResult>(
       new VerifySignInCodeCommand({
         challengeId: req.body?.challengeId,

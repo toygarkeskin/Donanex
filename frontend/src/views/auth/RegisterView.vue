@@ -1,8 +1,14 @@
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { api } from "../../lib/api";
-import { buildAuthorizeUrl, pendingAuthRequestId } from "../../lib/oauth";
+import {
+  buildAuthorizeUrl,
+  pendingAuthRequestId,
+  renewAuthRequest,
+  isAuthRequestExpired,
+  reloadWhenRestoredFromCache
+} from "../../lib/oauth";
 import { useCartStore } from "../../stores/cart";
 import FormField from "../../components/FormField.vue";
 import AlertBox from "../../components/AlertBox.vue";
@@ -16,16 +22,37 @@ const error = ref("");
 const submitting = ref(false);
 const merged = ref(0);
 
+const kaldir = reloadWhenRestoredFromCache();
+onBeforeUnmount(kaldir);
+
 onMounted(() => {
   authRequestId.value = pendingAuthRequestId();
   if (!cart.loaded) cart.load().catch(() => {});
 });
 
+/*
+ * Bekleyen giriş isteğinin süresi dolduysa yenisi açılıp kayıt BİR KEZ
+ * tekrarlanıyor. Sunucu süreyi hesabı oluşturmadan önce denetliyor; ilk
+ * deneme hiçbir şey değiştirmemiş oluyor.
+ */
+async function kaydet() {
+  try {
+    return await api.post("/auth/register", { ...form, authRequestId: authRequestId.value });
+  } catch (hata) {
+    if (!isAuthRequestExpired(hata)) throw hata;
+    const yeni = await renewAuthRequest();
+    if (!yeni) return null;
+    authRequestId.value = yeni;
+    return api.post("/auth/register", { ...form, authRequestId: yeni });
+  }
+}
+
 async function submit() {
   error.value = "";
   submitting.value = true;
   try {
-    const result = await api.post("/auth/register", { ...form, authRequestId: authRequestId.value });
+    const result = await kaydet();
+    if (!result) return;
     merged.value = result.mergedCartItems || 0;
     cart.reset();
 

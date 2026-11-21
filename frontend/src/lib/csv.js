@@ -81,7 +81,8 @@ const BASLIK_ESLESME = {
   sku: ["stok kodu", "sku", "kod", "barkod", "code"],
   description: ["aciklama", "açıklama", "description", "detay"],
   imageUrl: ["gorsel", "görsel", "gorsel adresi", "görsel adresi", "resim", "imageurl", "image", "image url"],
-  category: ["kategori", "kategoriler", "category", "kategori adi", "kategori adı"]
+  category: ["kategori", "kategoriler", "category", "kategori adi", "kategori adı"],
+  brand: ["marka", "marka adi", "marka adı", "brand", "uretici", "üretici", "manufacturer"]
 };
 
 const sadelestir = (metin) =>
@@ -134,8 +135,8 @@ export function fiyatNormalize(ham) {
 
 /** Örnek şablon — kullanıcı indirip doldurabilsin diye. */
 export const ORNEK_CSV = [
-  "ad;fiyat;stok;stok kodu;kategori;aciklama;gorsel",
-  'Örnek Ekran Kartı;24999,90;5;EK-001;Ekran Kartı;8GB GDDR6, çift fanlı;/images/urunler/ekrankart.png',
-  'Örnek Klavye;1899,00;20;KL-002;Klavye;"Mekanik, RGB aydınlatmalı";',
-  "Örnek SSD 1TB;3100;30;SSD-1TB;Depolama;M.2 NVMe Gen4;"
+  "ad;fiyat;stok;stok kodu;kategori;marka;aciklama;gorsel",
+  'Örnek Ekran Kartı;24999,90;5;EK-001;Ekran Kartı;MSI;8GB GDDR6, çift fanlı;/images/urunler/ekrankart.png',
+  'Örnek Klavye;1899,00;20;KL-002;Klavye;Logitech;"Mekanik, RGB aydınlatmalı";',
+  "Örnek SSD 1TB;3100;30;SSD-1TB;Depolama;Samsung;M.2 NVMe Gen4;"
 ].join("\n");

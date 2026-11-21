@@ -68,6 +68,36 @@ async function kategoriEkle() {
   }
 }
 const brands = ref([]);
+
+/*
+ * Listede olmayan marka (ör. Kingston) da kategori gibi formdan ekleniyor;
+ * sunucu "bul ya da oluştur" çalışıyor ("KINGSTON" ile "Kingston" tek marka).
+ * Önceden marka listesi sabitti: listede olmayan markanın ürünü markasız
+ * kalıyor, ürün sayfasında marka bağlantısı çıkmıyordu.
+ */
+const markaEkleAcik = ref(false);
+const yeniMarkaAdi = ref("");
+const markaEkleniyor = ref(false);
+
+async function markaEkle() {
+  const ad = yeniMarkaAdi.value.trim();
+  if (!ad) return;
+  markaEkleniyor.value = true;
+  try {
+    const { brand, created } = await api.post(`/stores/${storeId.value}/brands`, { name: ad });
+    if (!brands.value.some((m) => m.id === brand.id)) {
+      brands.value = [...brands.value, brand].sort((a, b) => a.name.localeCompare(b.name, "tr"));
+    }
+    form.brandId = brand.id;
+    toast.success(created ? `"${brand.name}" markası eklendi ve seçildi.` : `"${brand.name}" zaten vardı, o seçildi.`);
+    yeniMarkaAdi.value = "";
+    markaEkleAcik.value = false;
+  } catch (error) {
+    toast.error(error.message);
+  } finally {
+    markaEkleniyor.value = false;
+  }
+}
 const yukleniyor = ref(false);
 const dosyaAlani = ref(null);
 const galeriAlani = ref(null);
@@ -168,7 +198,8 @@ const loading = ref(true);
 async function load() {
   try {
     categories.value = (await api.get("/categories")).items;
-    brands.value = (await api.get("/brands")).items ?? [];
+    // tumu=1: satışta ürünü olmayan markalar da seçilebilsin (vitrin listesi onları gizliyor).
+    brands.value = (await api.get("/brands?tumu=1")).items ?? [];
 
     if (isEdit.value) {
       // Panel listesi üzerinden ürünü bul: ayrı bir uç açmadan düzenleme.
@@ -370,6 +401,37 @@ onMounted(load);
             <option value="">Seçilmedi</option>
             <option v-for="marka in brands" :key="marka.id" :value="marka.id">{{ marka.name }}</option>
           </select>
+
+          <button
+            v-if="!markaEkleAcik"
+            type="button"
+            class="mt-1.5 text-xs font-medium text-brand-600 hover:underline"
+            @click="markaEkleAcik = true"
+          >
+            + Listede yok mu? Yeni marka ekle
+          </button>
+          <div v-else class="mt-2 flex gap-2">
+            <input
+              v-model="yeniMarkaAdi"
+              type="text"
+              class="field"
+              maxlength="120"
+              placeholder="Ör. Kingston"
+              aria-label="Yeni marka adı"
+              @keydown.enter.prevent="markaEkle"
+            />
+            <button
+              type="button"
+              class="btn-primary shrink-0"
+              :disabled="markaEkleniyor || !yeniMarkaAdi.trim()"
+              @click="markaEkle"
+            >
+              {{ markaEkleniyor ? "Ekleniyor…" : "Ekle" }}
+            </button>
+            <button type="button" class="btn-ghost shrink-0" @click="markaEkleAcik = false; yeniMarkaAdi = ''">
+              Vazgeç
+            </button>
+          </div>
         </FormField>
         <FormField id="status" label="Durum" hint="Taslak ürünler vitrinde görünmez.">
           <select id="status" v-model="form.status" class="field">

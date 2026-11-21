@@ -13,7 +13,12 @@ defineProps({
   title: { type: String, required: true },
   description: { type: String, default: "" },
   /** AppIcon adı. */
-  icon: { type: String, default: "bos" }
+  icon: { type: String, default: "bos" },
+  /**
+   * Başlık etiketi. Kutu bir sayfanın içindeyse h3; sayfanın KENDİSİYSE
+   * ("Ürün bulunamadı") h1 verilmeli, yoksa sayfanın ana başlığı olmuyor.
+   */
+  baslikEtiketi: { type: String, default: "h3", validator: (deger) => ["h1", "h2", "h3"].includes(deger) }
 });
 </script>
 
@@ -22,7 +27,7 @@ defineProps({
     <span class="flex size-12 items-center justify-center rounded-full bg-ink-100 text-ink-400" aria-hidden="true">
       <AppIcon :name="icon" :size="24" />
     </span>
-    <h3 class="text-base font-semibold text-ink-800">{{ title }}</h3>
+    <component :is="baslikEtiketi" class="text-base font-semibold text-ink-800">{{ title }}</component>
     <p v-if="description" class="max-w-md text-sm text-ink-500">{{ description }}</p>
     <div class="mt-2"><slot /></div>
   </div>

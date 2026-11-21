@@ -111,6 +111,8 @@ export interface ImportRow {
    * bu yüzden çözümleme handler'da yapılır.
    */
   category?: unknown;
+  /** Marka adı; yoksa açılır (ürün formundaki "yeni marka" gibi). Çözümleme handler'da. */
+  brand?: unknown;
 }
 
 export interface ImportDefaults {

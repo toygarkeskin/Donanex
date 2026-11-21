@@ -13,6 +13,7 @@ import {
   ImportProductsCommand,
   UploadProductImageCommand,
   AddStoreCategoryCommand,
+  AddStoreBrandCommand,
   ListStoreProductsQuery
 } from "../../../application/catalog";
 import {
@@ -139,6 +140,15 @@ export function storePanelRoutes({ commands, queries }: Pick<RouteContext, "comm
   router.post("/:storeId/categories", may("catalog:product:write"), async (req, res) => {
     const sonuc = await commands.execute<{ category: unknown; created: boolean }>(
       new AddStoreCategoryCommand({ storeId: yol(req, "storeId"), name: req.body?.name }),
+      req.context()
+    );
+    res.status(sonuc.created ? 201 : 200).json(sonuc);
+  });
+
+  /* Ürün formundan yeni marka ("Kingston" listede yoksa); kategorideki gibi bul ya da oluştur. */
+  router.post("/:storeId/brands", may("catalog:product:write"), async (req, res) => {
+    const sonuc = await commands.execute<{ brand: unknown; created: boolean }>(
+      new AddStoreBrandCommand({ storeId: yol(req, "storeId"), name: req.body?.name }),
       req.context()
     );
     res.status(sonuc.created ? 201 : 200).json(sonuc);

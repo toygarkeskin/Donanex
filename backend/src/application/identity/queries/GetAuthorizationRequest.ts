@@ -2,6 +2,7 @@
 
 import { Query, type Handler } from "../../shared/cqrs/Message";
 import { NotFoundError } from "../../../domain/shared/errors";
+import { AUTH_REQUEST_EXPIRED } from "../authPolicy";
 import type { PendingAuthRequest } from "../commands/Authorize";
 import type { Cache } from "../../shared/contracts";
 
@@ -38,7 +39,7 @@ export class GetAuthorizationRequestHandler
 
   async handle({ authRequestId }: GetAuthorizationRequestQuery): Promise<AuthorizationRequestView> {
     const request = await this.cache.get<PendingAuthRequest>(`authreq:${authRequestId}`);
-    if (!request) throw new NotFoundError("Giriş isteğinin süresi dolmuş. Lütfen baştan deneyin.");
+    if (!request) throw new NotFoundError("Giriş isteğinin süresi dolmuş. Lütfen baştan deneyin.", { reason: AUTH_REQUEST_EXPIRED });
 
     return {
       clientName: request.clientName ?? request.clientId,

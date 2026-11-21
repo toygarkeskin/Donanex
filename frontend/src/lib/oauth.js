@@ -44,8 +44,70 @@ export async function buildAuthorizeUrl({ returnTo = "/" } = {}) {
   return `/oauth/authorize?${params}`;
 }
 
-export async function startLogin(options) {
-  window.location.assign(await buildAuthorizeUrl(options));
+/**
+ * Girişi başlatır. `replace`: bulunulan adres geçmişten silinir. Giriş
+ * sayfası kendiliğinden akışı başlattığında bu şart; yoksa geri tuşu
+ * kullanıcıyı `/giris`'e döndürüyor, o sayfa akışı yeniden başlatıp
+ * kullanıcıyı tekrar ileri atıyordu (önbellekten açılınca da "Giriş ekranı
+ * hazırlanıyor…"da takılıyordu). Geri tuşu artık girişten önceki sayfaya gider.
+ */
+export async function startLogin({ replace = false, ...options } = {}) {
+  const url = await buildAuthorizeUrl(options);
+  if (replace) window.location.replace(url);
+  else window.location.assign(url);
+}
+
+/** Bekleyen girişin dönüş adresi (yeni istek açılırken korunur). */
+export function pendingReturnTo() {
+  try {
+    return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "{}").returnTo || "/";
+  } catch {
+    return "/";
+  }
+}
+
+/**
+ * Süresi dolmuş giriş isteğinin yerine sayfadan ayrılmadan yenisini açar.
+ *
+ * /oauth/authorize `Accept: application/json` ile çağrılınca 302 yerine
+ * gideceği adresi gövdede veriyor. Giriş gerekiyorsa adres `/giris?auth=…`
+ * olur: yeni istek kimliği döner ve adres çubuğu sessizce güncellenir
+ * (kullanıcının yazdığı e-posta, parola ve kod yerinde kalır). Tarayıcıda
+ * zaten açık bir oturum varsa adres doğrudan geri dönüş adresidir; o zaman
+ * oraya gidilir ve `null` döner.
+ */
+export async function renewAuthRequest() {
+  const url = await buildAuthorizeUrl({ returnTo: pendingReturnTo() });
+  const response = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.redirectTo) throw new Error(data.error_description || "Giriş başlatılamadı. Sayfayı yenileyin.");
+
+  const hedef = new URL(data.redirectTo, window.location.origin);
+  const yeni = hedef.searchParams.get("auth");
+  if (hedef.origin === window.location.origin && hedef.pathname === "/giris" && yeni) {
+    const adres = new URL(window.location.href);
+    adres.searchParams.set("auth", yeni);
+    window.history.replaceState(window.history.state, "", adres.pathname + adres.search + adres.hash);
+    return yeni;
+  }
+  window.location.assign(data.redirectTo);
+  return null;
+}
+
+/** Hata, bekleyen giriş isteğinin süresinin dolmasından mı? */
+export const isAuthRequestExpired = (error) => error?.details?.reason === "auth_request_expired";
+
+/**
+ * Tarayıcı sayfayı geri/ileri önbelleğinden (bfcache) açtıysa yeniden yükler.
+ * Giriş sayfaları tek kullanımlık durum taşıyor (istek kimliği, gönderiliyor
+ * bayrağı); dondurulmuş hâliyle gösterilirse takılı kalıyor.
+ */
+export function reloadWhenRestoredFromCache() {
+  const dinleyici = (olay) => {
+    if (olay.persisted) window.location.reload();
+  };
+  window.addEventListener("pageshow", dinleyici);
+  return () => window.removeEventListener("pageshow", dinleyici);
 }
 
 /** Geri dönüş adresindeki kodu jetona çevirir. */

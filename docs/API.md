@@ -61,6 +61,8 @@ Her limitin kendi Redis sayacı vardır; biri dolduğunda diğerleri etkilenmez.
 | `GET /api/products` | Ürün listesi. `q`, `category`, `store`, `minPrice`, `maxPrice`, `sort`, `page`, `pageSize` |
 | `GET /api/products/:storeSlug/:productSlug` | Ürün detayı |
 | `GET /api/categories` | Kategori ağacı |
+| `GET /api/brands` | Vitrindeki markalar (satışta ürünü olanlar). `?tumu=1`: bütün markalar (ürün formu için) |
+| `GET /api/brands/:slug` | Marka ve onu satan mağazalar |
 | `GET /api/storefront/stores` | Etkin mağazalar |
 | `GET /api/storefront/stores/:slug` | Mağaza vitrini |
 | `GET /api/oneriler` | `urun` (virgüllü ürün kimlikleri, en fazla 50), `adet` (≤30). Tamamlayıcı kategorilerden öneri; `basis`: `tamamlayici` ya da `genel` |
@@ -137,6 +139,8 @@ Tutar **sunucuda** hesaplanır; gövdede gönderilen fiyat ve toplam yok sayıl�
 
 `POST /api/stores/:storeId/categories` — `{ name }`: kategori **bul-ya-da-oluştur** (varsa 200, yeni ise 201). Ürün yazma yetkisi gerekir.
 
+`POST /api/stores/:storeId/brands` — `{ name }`: marka **bul-ya-da-oluştur**, aynı kurallar. Yeni marka onaysız (`verified: false`) açılır.
+
 Her uç izni **`{ storeId }` kapsamıyla** sorar: başka mağazanın kimliği 403 döner.
 
 | Uç | İzin |
@@ -145,7 +149,7 @@ Her uç izni **`{ storeId }` kapsamıyla** sorar: başka mağazanın kimliği 40
 | `PUT /api/stores/:storeId` | `store:write` |
 | `GET …/products` | `catalog:product:read` |
 | `POST …/products` · `PUT …/products/:productId` · `PATCH …/products/:productId/status` | `catalog:product:write` |
-| `POST …/products/bulk` | `catalog:product:write` (CSV ile toplu içe aktarma, en fazla 500 satır) |
+| `POST …/products/bulk` | `catalog:product:write` (CSV ile toplu içe aktarma, en fazla 500 satır; `brand` sütunu varsa marka bulunur ya da açılır) |
 | `POST …/gorseller` | `catalog:product:write` (ürün görseli yükleme) |
 | `DELETE …/products/:productId` | `catalog:product:delete` (siparişte geçen ürün arşivlenir, silinmez) |
 | `GET …/orders` · `GET …/orders/:packageId` | `order:read` |

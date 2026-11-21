@@ -2,7 +2,7 @@
 
 import { Command, type Handler } from "../../shared/cqrs/Message";
 import { ValidationError } from "../../../domain/shared/errors";
-import { AUTHORIZATION_CODE_TTL_MS } from "../authPolicy";
+import { AUTHORIZATION_CODE_TTL_MS, AUTH_REQUEST_EXPIRED } from "../authPolicy";
 import type { PendingAuthRequest } from "./Authorize";
 import type { Cache, Clock, OpaqueTokens, UnitOfWork } from "../../shared/contracts";
 
@@ -60,7 +60,7 @@ export class CompleteAuthorizationHandler
   }: CompleteAuthorizationCommand): Promise<AuthorizationCompleted> {
     const key = `authreq:${authRequestId}`;
     const request = await this.cache.get<PendingAuthRequest>(key);
-    if (!request) throw new ValidationError("Giriş isteğinin süresi dolmuş. Lütfen baştan deneyin.");
+    if (!request) throw new ValidationError("Giriş isteğinin süresi dolmuş. Lütfen baştan deneyin.", { reason: AUTH_REQUEST_EXPIRED });
     // Tek kullanımlık: aynı istekle ikinci bir kod üretilemez.
     await this.cache.delete(key);
 
