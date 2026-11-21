@@ -1,6 +1,8 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { api } from "../../lib/api";
+import { startLogin } from "../../lib/oauth";
 import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
 import { ROLE_LABELS } from "../../lib/format";
@@ -10,6 +12,8 @@ import AlertBox from "../../components/AlertBox.vue";
 
 const auth = useAuthStore();
 const toast = useToastStore();
+const route = useRoute();
+const router = useRouter();
 
 const profile = reactive({ fullName: "", phone: "" });
 const password = reactive({ currentPassword: "", newPassword: "", confirm: "" });
@@ -20,6 +24,11 @@ const passwordError = ref("");
 onMounted(() => {
   profile.fullName = auth.user?.fullName || "";
   profile.phone = auth.user?.phone || "";
+  // Parola değişikliğinden sonraki sessiz yeniden girişten dönüldü.
+  if (route.query.parola === "degisti") {
+    toast.success("Parolanız değiştirildi. Diğer cihazlardaki oturumlarınız kapatıldı.");
+    router.replace({ query: {} });
+  }
 });
 
 async function saveProfile() {
@@ -48,6 +57,19 @@ async function changePassword() {
       newPassword: password.newPassword
     });
     Object.assign(password, { currentPassword: "", newPassword: "", confirm: "" });
+    /*
+     * Sunucu parola değişince BÜTÜN yenileme jetonlarını iptal ediyor (bu
+     * tarayıcınınki dahil), bu tarayıcıya yalnızca yeni bir oturum çerezi
+     * veriyor ve reauthenticate: true dönüyor. Önceden bu yok sayılıyordu:
+     * erişim jetonu bitince (15 dk) yenileme başarısız oluyor, kullanıcı
+     * habersizce oturumdan düşmüş görünüyordu. Yeni oturum çereziyle giriş
+     * akışı sessizce yeniden yapılıyor (parola sorulmuyor), kullanıcı bu
+     * sayfaya geri dönüyor ve başarı mesajını orada görüyor.
+     */
+    if (result.reauthenticate) {
+      await startLogin({ returnTo: `${route.path}?parola=degisti`, replace: true });
+      return;
+    }
     toast.success(result.message);
   } catch (error) {
     passwordError.value = error.message;
